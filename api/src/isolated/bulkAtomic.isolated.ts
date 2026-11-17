@@ -282,6 +282,39 @@ describe("modelRouter bulk atomic mode (replica set)", () => {
       const single = await agent.post("/food").send({name: "bulk-b"}).expect(400);
       expect(entries[1].error).toEqual(single.body);
     });
+    it("keeps reporting later items when one item's responseHandler throws after the commit", async () => {
+      const postCreated: string[] = [];
+      mountFood({
+        bulk: true,
+        postCreate: (doc: Food) => {
+          postCreated.push(doc.name as string);
+        },
+        responseHandler: async (value: unknown) => {
+          const doc = value as {name?: string; toJSON: () => Record<string, unknown>};
+          if (doc.name === "bulk-a") {
+            throw new Error("serializer exploded");
+          }
+          return doc.toJSON() as never;
+        },
+      } as Partial<RouterOptions>);
+      const agent = await authAsUser(app, "notAdmin");
+      const res = await agent
+        .post("/food/bulk")
+        .send({
+          operations: [
+            {body: {name: "bulk-a"}, method: "create"},
+            {body: {name: "bulk-b"}, method: "create"},
+          ],
+        })
+        .expect(200);
+      const entries = res.body.data as BulkEntry[];
+      const single = await agent.post("/food").send({name: "bulk-a"});
+      expect(entries[0].status).toBe(single.status);
+      expect(entries[0].error).toEqual(single.body);
+      expect(entries[1].status).toBe(201);
+      expect(postCreated).toEqual(["bulk-a", "bulk-b", "bulk-a"]);
+      expect(await bulkFoodNames()).toEqual(["bulk-a", "bulk-a", "bulk-b"]);
+    });
   });
 
   describe("abort", () => {

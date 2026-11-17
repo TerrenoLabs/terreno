@@ -20,6 +20,7 @@ import type {authenticateMiddleware} from "./auth";
 import {bulkOpenApiMiddleware} from "./bulkOpenApi";
 import {
   enableTransactionAsyncLocalStorage,
+  isBulkCommitUnknownError,
   isTransientTransactionError,
   runInBulkTransaction,
   supportsTransactions,
@@ -602,12 +603,29 @@ const runAtomic = async <T>(
     if (isTransientTransactionError(error)) {
       throw transactionConflictError(error);
     }
+    if (isBulkCommitUnknownError(error)) {
+      throw new APIError({
+        cause: error,
+        code: "bulk-commit-unknown",
+        detail:
+          "The database did not confirm the commit. The writes may or may not have been applied; " +
+          "read the documents before retrying.",
+        status: 500,
+        title: "Bulk transaction outcome unknown",
+      });
+    }
     throw error;
   }
 
+  // The writes are committed: one item's post-commit failure (e.g. its responseHandler) must not
+  // hide the others' results or skip their post hooks and audit.
   const results: BulkItemResult[] = [];
-  for (const item of written) {
-    results.push(await item.finish());
+  for (const [position, item] of written.entries()) {
+    try {
+      results.push(await item.finish());
+    } catch (error: unknown) {
+      results.push(failedItemResult(error, operations[position], position));
+    }
   }
   res.json({data: results});
 };

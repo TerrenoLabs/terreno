@@ -20,8 +20,10 @@ type MongooseWithTransactionStore = Mongoose & {
 const transactionSupport = new WeakMap<Connection, Promise<boolean>>();
 
 /**
- * Turns on `transactionAsyncLocalStorage` for a Mongoose instance. It only affects operations
- * run inside a transaction store, so enabling it changes nothing outside atomic bulk requests.
+ * Turns on `transactionAsyncLocalStorage` for a Mongoose instance. This is app-wide: from then on
+ * every Mongoose operation inside any transaction store joins that transaction, including stores
+ * opened by the app's own `connection.transaction()` calls. Operations outside a store are
+ * unaffected.
  */
 export const enableTransactionAsyncLocalStorage = (base: Mongoose): void => {
   if (!base.get("transactionAsyncLocalStorage")) {
@@ -59,15 +61,13 @@ const hasErrorLabel = (error: unknown, label: string): boolean => {
 
 /**
  * Whether an error (or any error in its `cause` chain, since executors wrap driver errors in
- * APIErrors) is a transient transaction failure: a write conflict or an unknown commit result.
+ * APIErrors) is a transient transaction failure, such as a write conflict: the transaction was
+ * aborted and nothing it wrote is visible.
  */
 export const isTransientTransactionError = (error: unknown): boolean => {
   let current: unknown = error;
   for (let depth = 0; current && depth < 5; depth += 1) {
-    if (
-      hasErrorLabel(current, "TransientTransactionError") ||
-      hasErrorLabel(current, "UnknownTransactionCommitResult")
-    ) {
+    if (hasErrorLabel(current, "TransientTransactionError")) {
       return true;
     }
     current = (current as {cause?: unknown}).cause;
@@ -75,9 +75,42 @@ export const isTransientTransactionError = (error: unknown): boolean => {
   return false;
 };
 
+/** Thrown when a commit's outcome stays unknown after one retry: the writes may have landed. */
+export class BulkCommitUnknownError extends Error {
+  readonly isBulkCommitUnknown = true;
+
+  constructor(readonly cause: unknown) {
+    super("Bulk transaction commit outcome is unknown");
+  }
+}
+
+export const isBulkCommitUnknownError = (error: unknown): error is BulkCommitUnknownError =>
+  Boolean((error as {isBulkCommitUnknown?: unknown} | undefined)?.isBulkCommitUnknown);
+
+// The driver's guidance for UnknownTransactionCommitResult: retry the commit itself, which is
+// safe and runs no hooks again. A second unknown result is reported, never guessed.
+const commitWithOneRetry = async (session: ClientSession): Promise<void> => {
+  try {
+    await session.commitTransaction();
+  } catch (error: unknown) {
+    if (!hasErrorLabel(error, "UnknownTransactionCommitResult")) {
+      throw error;
+    }
+    try {
+      await session.commitTransaction();
+    } catch (retryError: unknown) {
+      if (hasErrorLabel(retryError, "UnknownTransactionCommitResult")) {
+        throw new BulkCommitUnknownError(retryError);
+      }
+      throw retryError;
+    }
+  }
+};
+
 /**
  * Runs `fn` inside one transaction on `connection`, with every Mongoose operation of `base`
- * joined to it. Commits when `fn` resolves; aborts and rethrows when it throws.
+ * joined to it. Commits when `fn` resolves; aborts and rethrows when it throws. Work `fn` starts
+ * without awaiting keeps the session after the transaction ends, so it must leave the store.
  */
 export const runInBulkTransaction = async <R>({
   base,
@@ -102,7 +135,7 @@ export const runInBulkTransaction = async <R>({
       await session.abortTransaction().catch(() => undefined);
       throw error;
     }
-    await session.commitTransaction();
+    await commitWithOneRetry(session);
     return result;
   } finally {
     await session.endSession();

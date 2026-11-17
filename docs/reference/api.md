@@ -427,18 +427,26 @@ the `PATCH` 409 body with the server's current document).
 
 All operations run inside one MongoDB transaction. Writes made inside `pre*` hooks join it
 too, through Mongoose's `transactionAsyncLocalStorage`, which `bulk` turns on for the
-model's Mongoose instance (it only affects code running inside a bulk transaction).
+model's Mongoose instance. That setting is app-wide: any `connection.transaction()` the app
+runs elsewhere also joins its Mongoose operations to that transaction. Operations outside a
+transaction are unaffected.
 
 - If any operation fails, the transaction aborts and nothing is written. The response is
   that operation's status and error body with `meta.index` set to its position. No other
   operation's data is returned.
 - After the commit, `postCreate` / `postUpdate` / `postDelete`, audit events, and
-  `responseHandler` run for each operation in order. A post hook that throws turns its
-  entry into the single route's error (for example 400 `post-create-hook-error`); the
-  writes stay committed.
+  `responseHandler` run for each operation in order. A post hook or `responseHandler` that
+  throws turns its entry into the single route's error (for example 400
+  `post-create-hook-error`); the writes stay committed and later entries still run.
 - There is no automatic retry, because a retry would run `pre*` hooks twice. A write
   conflict with another request returns 409 `bulk-transaction-conflict`; nothing was
   written, so the client can retry.
+- If the database does not confirm the commit, Terreno retries the commit once (no hooks
+  run again). If the outcome is still unknown it returns 500 `bulk-commit-unknown`: the
+  writes may or may not have landed, so read the documents before retrying.
+- A `pre*` hook that starts work without awaiting it (`void sendEmail()`) hands that work the
+  transaction's session, which ends with the request. Await it, or move it to a `post*`
+  hook, which runs after the commit outside the transaction.
 - Atomic mode needs a replica set. On a standalone MongoDB it returns 400
   `bulk-atomic-unsupported` before running any hook. Send `"atomic": false` instead.
 - MongoDB aborts transactions that run longer than 60 seconds by default, so keep `pre*`

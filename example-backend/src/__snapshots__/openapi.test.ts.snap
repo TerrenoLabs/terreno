@@ -17425,6 +17425,149 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
         ],
       },
     },
+    "/ai/observability/traces/{id}/feedback": {
+      "post": {
+        "description": "Thumbs (with an optional comment), outcome class, a passive signal, or flag-for-dataset. Only the trace's own user may call it.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "comment": {
+                    "description": "Free-text comment attached to the thumbs or outcome score (≤ 2000 chars)",
+                    "type": "string",
+                  },
+                  "flagDataset": {
+                    "description": "Flag the trace as a dataset candidate",
+                    "type": "boolean",
+                  },
+                  "outcome": {
+                    "enum": [
+                      "tp",
+                      "fp",
+                      "tn",
+                      "fn",
+                    ],
+                    "type": "string",
+                  },
+                  "signal": {
+                    "enum": [
+                      "accepted",
+                      "dismissed",
+                      "copied",
+                      "edited",
+                      "regenerated",
+                    ],
+                    "type": "string",
+                  },
+                  "thumbs": {
+                    "enum": [
+                      "up",
+                      "down",
+                    ],
+                    "nullable": true,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "flaggedForDataset": {
+                          "type": "boolean",
+                        },
+                        "reviewItemId": {
+                          "type": "string",
+                        },
+                        "scores": {
+                          "items": {
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "traceId": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Record the trace owner's feedback on an AI output",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
     "/ai/observability/traces/{id}/scores": {
       "post": {
         "parameters": [

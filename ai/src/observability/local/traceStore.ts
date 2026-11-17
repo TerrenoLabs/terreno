@@ -206,7 +206,11 @@ const countLookupStages = (from: string): mongoose.PipelineStage[] => {
         as: "_sortCounts",
         from,
         let: {traceId: "$_id"},
-        pipeline: [{$match: {$expr: {$eq: ["$traceId", "$$traceId"]}}}, {$count: "n"}],
+        pipeline: [
+          // Soft-deleted rows (e.g. a cleared thumbs vote) do not count.
+          {$match: {$expr: {$eq: ["$traceId", "$$traceId"]}, deleted: {$ne: true}}},
+          {$count: "n"},
+        ],
       },
     },
     {$addFields: {_sortValue: {$ifNull: [{$arrayElemAt: ["$_sortCounts.n", 0]}, 0]}}},
@@ -290,13 +294,29 @@ const countByTraceId = async (
     return counts;
   }
   const grouped = (await model.aggregate([
-    {$match: {traceId: {$in: ids}}},
+    {$match: {deleted: {$ne: true}, traceId: {$in: ids}}},
     {$group: {_id: "$traceId", n: {$sum: 1}}},
   ])) as Array<{_id: mongoose.Types.ObjectId; n: number}>;
   for (const row of grouped) {
     counts.set(String(row._id), row.n);
   }
   return counts;
+};
+
+/** Score sources written by end users; the local store keeps one live score per name. */
+const USER_SCORE_SOURCES: ReadonlySet<string> = new Set(["user-feedback", "user-signal"]);
+
+let obsScoreIndexes: Promise<unknown> | undefined;
+
+/** Builds ObsScore indexes once, so the unique user-score index exists before the first upsert. */
+const ensureObsScoreIndexes = (): Promise<unknown> => {
+  obsScoreIndexes ??= registerObsScore()
+    .init()
+    .catch((error: unknown) => {
+      obsScoreIndexes = undefined;
+      throw error;
+    });
+  return obsScoreIndexes;
 };
 
 export class LocalTraceStore {
@@ -358,6 +378,10 @@ export class LocalTraceStore {
     }
     const spanId = objectIdOrUndefined(score.spanId);
     const evaluatorId = objectIdOrUndefined(score.evaluatorId);
+    if (USER_SCORE_SOURCES.has(score.source)) {
+      await this.upsertUserScore({...score, traceId: String(traceId)});
+      return;
+    }
     await registerObsScore().create({
       comment: score.comment,
       confidence: score.confidence,
@@ -369,6 +393,64 @@ export class LocalTraceStore {
       ...(spanId ? {spanId} : {}),
       ...(evaluatorId ? {evaluatorId} : {}),
     });
+  }
+
+  /**
+   * Keeps one live score per (trace, source, name) for end-user sources, so a changed vote
+   * replaces the old one. One atomic upsert backed by a partial unique index, so concurrent
+   * taps cannot leave two live scores.
+   */
+  private async upsertUserScore(score: ScoreRecord): Promise<void> {
+    const ObsScore = registerObsScore();
+    await ensureObsScoreIndexes();
+    const filter = {
+      deleted: false,
+      name: score.name,
+      source: score.source,
+      traceId: new mongoose.Types.ObjectId(score.traceId),
+    };
+    const set: Record<string, unknown> = {
+      dataType: score.dataType,
+      updated: DateTime.utc().toJSDate(),
+      value: score.value,
+    };
+    const unset: Record<string, ""> = {};
+    if (score.comment) {
+      set.comment = score.comment;
+    } else {
+      unset.comment = "";
+    }
+    const update = {
+      $set: set,
+      $setOnInsert: {created: DateTime.utc().toJSDate()},
+      ...(Object.keys(unset).length > 0 ? {$unset: unset} : {}),
+    };
+    try {
+      await ObsScore.collection.updateOne(filter, update, {upsert: true});
+    } catch (error) {
+      // A concurrent upsert may insert first; the retry then matches and updates that row.
+      if ((error as {code?: number}).code !== 11000) {
+        throw error;
+      }
+      await ObsScore.collection.updateOne(filter, update, {upsert: true});
+    }
+  }
+
+  /** Soft-deletes the live end-user score for (trace, source, name), e.g. a cleared thumbs vote. */
+  async deleteFeedbackScore(params: {
+    name: string;
+    source: ScoreRecord["source"];
+    traceId: string;
+  }): Promise<void> {
+    await registerObsScore().collection.updateMany(
+      {
+        deleted: false,
+        name: params.name,
+        source: params.source,
+        traceId: new mongoose.Types.ObjectId(params.traceId),
+      },
+      {$set: {deleted: true, updated: DateTime.utc().toJSDate()}}
+    );
   }
 
   async list(
@@ -435,7 +517,7 @@ export class LocalTraceStore {
       };
     }
     if (query.hasScore !== undefined) {
-      const scoredIds = await registerObsScore().distinct("traceId");
+      const scoredIds = await registerObsScore().distinct("traceId", {deleted: {$ne: true}});
       if (query.hasScore) {
         filter._id = {$in: scoredIds};
       } else {

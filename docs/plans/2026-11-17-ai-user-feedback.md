@@ -129,7 +129,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: span export reads the trace `_id` for `traceId` on spans → span case in traceStore.test.ts; the multi-stage smoke route passes its own trace through `exportTrace` → existing testMultiStage tests must stay green.
   - Test skills: terreno-backend-tests
 
-- [ ] **T2** — Record thumbs and comments through an owner-scoped feedback route (tracer)
+- [x] **T2** — Record thumbs and comments through an owner-scoped feedback route (tracer)
   - Depends on: T1
   - Files: ai/src/observability/feedback.ts, ai/src/observability/feedback.test.ts, ai/src/observability/routes/traces.ts, ai/src/observability/routes/traces.test.ts, ai/src/observability/local/traceStore.ts, ai/src/index.ts, example-backend/src/__snapshots__/openapi.test.ts.snap, docs/reference/ai.md
   - Criteria: `POST /ai/observability/traces/:id/feedback` exists with the shared contract. Its OpenAPI request and response schemas declare the full contract (`thumbs`, `comment`, `outcome`, `signal`, `flagDataset`; `reviewItemId`) now, so T3 and T4 change behavior without touching the snapshot. This task implements thumbs and comment; the other fields get 400 `not supported yet` until T3. Only the trace's own user may call it. Thumbs writes `{name: "thumbs_up", dataType: "boolean", source: "user-feedback", value: thumbs === "up", comment}` to every ScoreSink, and the local store upserts on (traceId, source, name). `thumbs: null` soft-deletes the local `thumbs_up` score. The reference line that says the route records outcome and flag-for-dataset "(phase 2.6)" is replaced by the real contract for what ships.

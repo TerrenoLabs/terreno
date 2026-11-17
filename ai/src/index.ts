@@ -19,6 +19,13 @@ export {GptHistory} from "./models/gptHistory";
 export {getProjectModel, Project} from "./models/project";
 export {AI_OBSERVABILITY_GROUP, observabilityAdminScreens} from "./observability/adminScreens";
 export {
+  FEEDBACK_SIGNALS,
+  type FeedbackSignal,
+  recordTraceFeedback,
+  type TraceFeedbackInput,
+  type TraceFeedbackResult,
+} from "./observability/feedback";
+export {
   answersAgree,
   computeJudgeAgreement,
   type JudgeAgreement,

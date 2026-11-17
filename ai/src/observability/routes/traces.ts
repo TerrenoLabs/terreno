@@ -1,5 +1,6 @@
-import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
+import {FEEDBACK_SIGNALS, recordTraceFeedback, type TraceFeedbackInput} from "../feedback";
 import {
   DEFAULT_TRACE_LIST_SORT,
   type LocalTraceStore,
@@ -160,6 +161,52 @@ export const addObservabilityTraceRoutes = (
     ),
     asyncHandler(async (req, res) => {
       const data = await options.store.getDetail(req.params.id);
+      return res.json({data});
+    })
+  );
+
+  // End-user feedback: authenticated and owner-only, so it skips the admin observability
+  // middleware every other route here uses.
+  router.post(
+    `${BASE_PATH}/traces/:id/feedback`,
+    authenticateMiddleware(),
+    builder()
+      .withTags(["observability"])
+      .withSummary("Record the trace owner's feedback on an AI output")
+      .withDescription(
+        "Thumbs (with an optional comment), outcome class, a passive signal, or flag-for-dataset. " +
+          "Only the trace's own user may call it."
+      )
+      .withPathParameter("id", {type: "string"})
+      .withRequestBody({
+        comment: {
+          description: "Free-text comment attached to the thumbs or outcome score (≤ 2000 chars)",
+          type: "string",
+        },
+        flagDataset: {description: "Flag the trace as a dataset candidate", type: "boolean"},
+        outcome: {enum: ["tp", "fp", "tn", "fn"], type: "string"},
+        signal: {enum: [...FEEDBACK_SIGNALS], type: "string"},
+        thumbs: {enum: ["up", "down"], nullable: true, type: "string"},
+      })
+      .withResponse(200, {
+        data: {
+          properties: {
+            flaggedForDataset: {type: "boolean"},
+            reviewItemId: {type: "string"},
+            scores: {items: {type: "object"}, type: "array"},
+            traceId: {type: "string"},
+          },
+          type: "object",
+        },
+      })
+      .build(),
+    asyncHandler(async (req, res) => {
+      const user = req.user as {_id?: unknown; admin?: boolean} | undefined;
+      const data = await recordTraceFeedback({
+        input: req.body as TraceFeedbackInput,
+        traceId: req.params.id,
+        user: {admin: user?.admin, id: String(user?._id)},
+      });
       return res.json({data});
     })
   );

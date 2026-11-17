@@ -730,7 +730,26 @@ from the latest one. `version` is the judge prompt's production version when the
 compared it, otherwise the best-agreeing version. `stale` is true when the question set's
 fingerprint changed since the run.
 
-Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outcome class, and flag-for-dataset (phase 2.6).
+### End-user feedback
+
+`POST /ai/observability/traces/:id/feedback` records the trace owner's own feedback. It uses
+plain authentication, not the admin observability middleware: only the user whose id is on the
+trace may call it (**403** for anyone else, admins included; admins score through
+`POST /traces/:id/scores`). A trace with no `userId` is **403**, an unknown trace **404**, a
+malformed id **400**, no token **401**. `recordTraceFeedback({input, traceId, user})` is the
+same logic for server code.
+
+| Body field | Values | Effect |
+| --- | --- | --- |
+| `thumbs` | `"up"`, `"down"`, `null` | Writes `{name: "thumbs_up", dataType: "boolean", source: "user-feedback", value: thumbs === "up"}` to every ScoreSink. `null` soft-deletes the live `thumbs_up` score and sends nothing to other sinks |
+| `comment` | string, trimmed, 1–2000 chars | Stored as the thumbs score's `comment` and sent to every sink with it. Needs `thumbs` in the same request (**400** `comment needs thumbs or outcome`) |
+
+The body needs at least one field. Response: `{data: {traceId, scores, flaggedForDataset}}`,
+where `scores` are the scores this call wrote.
+
+The local store keeps one live `user-feedback` or `user-signal` score per (trace, source,
+name): a new vote replaces the old one in a single upsert backed by a partial unique index.
+Soft-deleted scores do not count toward `hasScore`, `scoreCount`, or the `scores` sort.
 
 ## Durable agent harness
 

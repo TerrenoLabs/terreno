@@ -107,6 +107,29 @@ describe("textFieldOscillationGuard user edits", () => {
     ).toBe(true);
   });
 
+  it("allows a spellcheck replacement the user accepted when acceptSpellcheckReplacement is set", () => {
+    const state = createTextFieldOscillationState();
+    let now = 6_000;
+
+    recordTextFieldOscillation({
+      currentValue: "colour",
+      now,
+      state,
+      text: "color",
+    });
+    now += 10;
+    expect(
+      shouldSuppressTextFieldOscillation({
+        acceptSpellcheckReplacement: true,
+        currentValue: "colour",
+        inputType: "insertReplacementText",
+        now,
+        state,
+        text: "color",
+      })
+    ).toBe(false);
+  });
+
   it("classifies typing, deleting, paste and undo as user edits", () => {
     for (const inputType of [
       "insertText",
@@ -121,5 +144,8 @@ describe("textFieldOscillationGuard user edits", () => {
     for (const inputType of [undefined, "", "insertReplacementText", "insertCompositionText"]) {
       expect(isUserEditInputType(inputType)).toBe(false);
     }
+    expect(isUserEditInputType("insertReplacementText", {acceptSpellcheckReplacement: true})).toBe(
+      true
+    );
   });
 });

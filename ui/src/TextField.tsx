@@ -134,6 +134,8 @@ export const TextField: FC<TextFieldProps> = ({
   type = "text",
   showVisibilityToggle = true,
   autoComplete,
+  spellCheck,
+  autoCorrect,
   inputRef,
   multiline,
   rows = 1,
@@ -259,15 +261,15 @@ export const TextField: FC<TextFieldProps> = ({
     console.warn(`${type} is not yet supported`);
   }
 
-  // RN Web browser autocorrect/spellcheck fights controlled `value` and can oscillate
-  // between variants (e.g. "reachthreshold" vs "reach threshold"), firing onChangeText forever.
-  const shouldAutocorrect =
-    Platform.OS !== "web" &&
-    ["text", "textarea"].includes(type) &&
-    (!autoComplete || autoComplete === "on");
+  const isProseField =
+    (type === "text" || type === "textarea") && (!autoComplete || autoComplete === "on");
+  const shouldSpellCheck = spellCheck ?? isProseField;
+  const shouldAutocorrect = autoCorrect ?? (Platform.OS !== "web" && isProseField);
 
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
+  const shouldSpellCheckRef = useRef(shouldSpellCheck);
+  shouldSpellCheckRef.current = shouldSpellCheck;
   const oscillationRef = useRef(createTextFieldOscillationState());
   // RN Web calls onChange with the DOM input event just before onChangeText, so this
   // carries the pending change's `inputType` across to handleChangeText.
@@ -293,6 +295,7 @@ export const TextField: FC<TextFieldProps> = ({
     const oscillationState = oscillationRef.current;
     if (
       shouldSuppressTextFieldOscillation({
+        acceptSpellcheckReplacement: shouldSpellCheckRef.current,
         currentValue,
         inputType,
         now,
@@ -314,6 +317,12 @@ export const TextField: FC<TextFieldProps> = ({
 
   const autofillProps = getAutofillProps({autoComplete, type: type || "text"});
   const keyboardType = keyboardMap[type];
+  const spellCheckProps =
+    Platform.OS === "web"
+      ? {spellCheck: shouldSpellCheck}
+      : spellCheck !== undefined
+        ? {spellCheck}
+        : {};
 
   return (
     <View
@@ -352,7 +361,7 @@ export const TextField: FC<TextFieldProps> = ({
           }}
         >
           <TextInput
-            {...(Platform.OS === "web" ? {spellCheck: false} : {})}
+            {...spellCheckProps}
             {...autofillProps}
             accessibilityHint="Enter text here"
             accessibilityState={{disabled}}

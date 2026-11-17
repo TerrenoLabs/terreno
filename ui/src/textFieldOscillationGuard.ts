@@ -11,8 +11,15 @@ export const TEXT_FIELD_OSCILLATION_WINDOW_MS = 500;
 const USER_EDIT_INPUT_TYPE =
   /^(insertText|insertFromPaste|insertFromDrop|insertLineBreak|insertParagraph|delete|history)/;
 
-export const isUserEditInputType = (inputType: string | undefined): boolean =>
-  Boolean(inputType && USER_EDIT_INPUT_TYPE.test(inputType));
+export const isUserEditInputType = (
+  inputType: string | undefined,
+  options?: {acceptSpellcheckReplacement?: boolean}
+): boolean => {
+  if (inputType === "insertReplacementText" && options?.acceptSpellcheckReplacement) {
+    return true;
+  }
+  return Boolean(inputType && USER_EDIT_INPUT_TYPE.test(inputType));
+};
 
 export interface TextFieldOscillationState {
   priorText: string | null;
@@ -47,6 +54,7 @@ const isOscillationHistoryStale = ({
 
 /** True when `text` completes a rapid prior → last → prior reversal (A→B→A). */
 export const shouldSuppressTextFieldOscillation = ({
+  acceptSpellcheckReplacement,
   currentValue,
   inputType,
   now,
@@ -54,6 +62,8 @@ export const shouldSuppressTextFieldOscillation = ({
   text,
   windowMs = TEXT_FIELD_OSCILLATION_WINDOW_MS,
 }: {
+  /** When true, a browser spell-check replacement (`insertReplacementText`) counts as a user edit. */
+  acceptSpellcheckReplacement?: boolean;
   currentValue: string;
   /** The DOM input event's `inputType`, on web; see `isUserEditInputType`. */
   inputType?: string;
@@ -62,7 +72,7 @@ export const shouldSuppressTextFieldOscillation = ({
   text: string;
   windowMs?: number;
 }): boolean => {
-  if (isUserEditInputType(inputType)) {
+  if (isUserEditInputType(inputType, {acceptSpellcheckReplacement})) {
     return false;
   }
 

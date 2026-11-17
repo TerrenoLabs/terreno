@@ -21,7 +21,7 @@ const obsScoreSchema = new mongoose.Schema<ObsScoreDocument, ObsScoreModel>(
     name: {description: "Score dimension or name", required: true, type: String},
     source: {
       description: "Who wrote the score",
-      enum: ["code", "human", "llm-judge", "user-feedback"],
+      enum: ["code", "human", "llm-judge", "user-feedback", "user-signal"],
       required: true,
       type: String,
     },

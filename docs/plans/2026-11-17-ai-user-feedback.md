@@ -150,7 +150,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: the trace list's `hasScore` filter and `scores` sort read `ObsScore` → a list case asserting a thumbs-scored trace matches `hasScore=true` and a deselected one does not; trace detail lists scores → detail case shows the comment.
   - Test skills: terreno-backend-tests
 
-- [ ] **T3** — Add outcome, flag-for-dataset, and passive signals
+- [x] **T3** — Add outcome, flag-for-dataset, and passive signals
   - Depends on: T2
   - Files: ai/src/observability/feedback.ts, ai/src/observability/feedback.test.ts, ai/src/observability/types.ts, ai/src/types/observability.ts, ai/src/observability/local/models/obsScore.ts, ai/src/observability/routes/traces.test.ts, docs/reference/ai.md
   - Criteria: `ScoreRecord.source` and the `ObsScore` enum gain `"user-signal"`. `outcome` writes a categorical `outcome` score (`user-feedback`, upserted, takes `comment`). `signal` writes a boolean `true` score named after the signal with `source: "user-signal"`, upserted. `flagDataset: true` sets `ObsTrace.flaggedForDataset`; `false` clears it. One request may combine fields. Reference docs list sources, names, and values.

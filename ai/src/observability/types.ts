@@ -71,7 +71,7 @@ export interface ScoreRecord {
   dataType: "boolean" | "categorical" | "numeric";
   evaluatorId?: string;
   name: string;
-  source: "code" | "human" | "llm-judge" | "user-feedback";
+  source: "code" | "human" | "llm-judge" | "user-feedback" | "user-signal";
   spanId?: string;
   traceId: string;
   value: boolean | number | string;

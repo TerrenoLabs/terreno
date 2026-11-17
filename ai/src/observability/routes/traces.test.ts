@@ -515,21 +515,131 @@ describe("POST /ai/observability/traces/:id/feedback", () => {
     expect(blank.status).toBe(400);
   });
 
-  it("returns 400 'not supported yet' for outcome, signal, and flagDataset", async () => {
+  it("signal dismissed returns and stores a boolean true user-signal score", async () => {
     const agent = await authAsUser(app, "notAdmin");
-    expectAPIError(await agent.post(feedbackPath(traceId)).send({outcome: "tp"}), {
-      status: 400,
-      title: "not supported yet",
+    const res = await agent.post(feedbackPath(traceId)).send({signal: "dismissed"});
+    expect(res.status).toBe(200);
+    expect(res.body.data.scores).toHaveLength(1);
+    expect(res.body.data.scores[0]).toMatchObject({
+      dataType: "boolean",
+      name: "dismissed",
+      source: "user-signal",
+      value: true,
     });
-    expectAPIError(await agent.post(feedbackPath(traceId)).send({signal: "dismissed"}), {
-      status: 400,
-      title: "not supported yet",
-    });
-    expectAPIError(await agent.post(feedbackPath(traceId)).send({flagDataset: true}), {
-      status: 400,
-      title: "not supported yet",
-    });
+    const scores = await liveScores(traceId);
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({name: "dismissed", source: "user-signal", value: true});
+  });
+
+  it("signal copied twice leaves one live copied score", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    expect((await agent.post(feedbackPath(traceId)).send({signal: "copied"})).status).toBe(200);
+    expect((await agent.post(feedbackPath(traceId)).send({signal: "copied"})).status).toBe(200);
+    const scores = await liveScores(traceId);
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({name: "copied", source: "user-signal"});
+  });
+
+  it("an unknown signal returns 400 listing the allowed signals", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    const res = await agent.post(feedbackPath(traceId)).send({signal: "liked"});
+    expectAPIError(res, {status: 400});
+    for (const signal of ["accepted", "dismissed", "copied", "edited", "regenerated"]) {
+      expect(res.body.title).toContain(signal);
+    }
     expect(await liveScores(traceId)).toHaveLength(0);
+  });
+
+  it("outcome fp with a comment writes a categorical outcome score with the comment", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    const res = await agent
+      .post(feedbackPath(traceId))
+      .send({comment: "Not a crisis", outcome: "fp"});
+    expect(res.status).toBe(200);
+    expect(res.body.data.scores[0]).toMatchObject({
+      comment: "Not a crisis",
+      dataType: "categorical",
+      name: "outcome",
+      source: "user-feedback",
+      value: "fp",
+    });
+    const scores = await liveScores(traceId);
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({comment: "Not a crisis", name: "outcome", value: "fp"});
+  });
+
+  it("outcome alone is valid and a later outcome replaces it", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    expect((await agent.post(feedbackPath(traceId)).send({outcome: "fp"})).status).toBe(200);
+    expect((await agent.post(feedbackPath(traceId)).send({outcome: "tn"})).status).toBe(200);
+    const scores = await liveScores(traceId);
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({name: "outcome", value: "tn"});
+  });
+
+  it("an invalid outcome returns 400 and keeps the earlier valid outcome", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    expect((await agent.post(feedbackPath(traceId)).send({outcome: "tp"})).status).toBe(200);
+    expectAPIError(await agent.post(feedbackPath(traceId)).send({outcome: "xx"}), {status: 400});
+    const scores = await liveScores(traceId);
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({name: "outcome", value: "tp"});
+  });
+
+  it("flagDataset true then false toggles the flag in the response and on the trace", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    const on = await agent.post(feedbackPath(traceId)).send({flagDataset: true});
+    expect(on.status).toBe(200);
+    expect(on.body.data.flaggedForDataset).toBe(true);
+    expect((await registerObsTrace().findById(traceId))?.flaggedForDataset).toBe(true);
+
+    const off = await agent.post(feedbackPath(traceId)).send({flagDataset: false});
+    expect(off.status).toBe(200);
+    expect(off.body.data.flaggedForDataset).toBe(false);
+    expect((await registerObsTrace().findById(traceId))?.flaggedForDataset).toBe(false);
+    expect(await liveScores(traceId)).toHaveLength(0);
+  });
+
+  it("thumbs, signal, and flagDataset combine in one 200", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    const res = await agent
+      .post(feedbackPath(traceId))
+      .send({flagDataset: true, signal: "regenerated", thumbs: "down"});
+    expect(res.status).toBe(200);
+    expect(res.body.data.flaggedForDataset).toBe(true);
+    expect(res.body.data.scores).toHaveLength(2);
+    const scores = await liveScores(traceId);
+    expect(scores.map((score) => `${score.source}:${score.name}`).sort()).toEqual([
+      "user-feedback:thumbs_up",
+      "user-signal:regenerated",
+    ]);
+  });
+
+  it("a stranger gets 403 for a signal and for flagDataset, and nothing is written", async () => {
+    const stranger = await exportTraceFor(adminId);
+    const agent = await authAsUser(app, "notAdmin");
+    expectAPIError(await agent.post(feedbackPath(stranger)).send({signal: "copied"}), {
+      status: 403,
+    });
+    expectAPIError(await agent.post(feedbackPath(stranger)).send({flagDataset: true}), {
+      status: 403,
+    });
+    expect(await liveScores(stranger)).toHaveLength(0);
+    expect((await registerObsTrace().findById(stranger))?.flaggedForDataset).toBeFalsy();
+  });
+
+  it("the admin scores route accepts source user-signal", async () => {
+    const admin = await authAsUser(app, "admin");
+    const res = await admin.post(`/ai/observability/traces/${traceId}/scores`).send({
+      dataType: "boolean",
+      name: "dismissed",
+      source: "user-signal",
+      value: true,
+    });
+    expect(res.status).toBe(201);
+    const scores = await liveScores(traceId);
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toMatchObject({name: "dismissed", source: "user-signal", value: true});
   });
 
   it("trace list hasScore matches a thumbs-scored trace and not a deselected one", async () => {

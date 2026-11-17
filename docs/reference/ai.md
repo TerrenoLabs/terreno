@@ -742,10 +742,17 @@ same logic for server code.
 | Body field | Values | Effect |
 | --- | --- | --- |
 | `thumbs` | `"up"`, `"down"`, `null` | Writes `{name: "thumbs_up", dataType: "boolean", source: "user-feedback", value: thumbs === "up"}` to every ScoreSink. `null` soft-deletes the live `thumbs_up` score and sends nothing to other sinks |
-| `comment` | string, trimmed, 1–2000 chars | Stored as the thumbs score's `comment` and sent to every sink with it. Needs `thumbs` in the same request (**400** `comment needs thumbs or outcome`) |
+| `comment` | string, trimmed, 1–2000 chars | Stored as the `comment` of the thumbs and/or outcome score in the same request and sent to every sink with it. Needs `thumbs` or `outcome` (**400** `comment needs thumbs or outcome`) |
+| `outcome` | `"tp"`, `"fp"`, `"tn"`, `"fn"` | Writes `{name: "outcome", dataType: "categorical", source: "user-feedback", value}` |
+| `signal` | `"accepted"`, `"dismissed"`, `"copied"`, `"edited"`, `"regenerated"` (`FEEDBACK_SIGNALS`) | Passive signal: writes `{name: signal, dataType: "boolean", source: "user-signal", value: true}`. Any other name is **400** listing the allowed ones |
+| `flagDataset` | boolean | Sets or clears `ObsTrace.flaggedForDataset`; operators filter on it in Traces. Moves no data |
 
-The body needs at least one field. Response: `{data: {traceId, scores, flaggedForDataset}}`,
-where `scores` are the scores this call wrote.
+The body needs at least one field, and fields combine in one request. Response:
+`{data: {traceId, scores, flaggedForDataset}}`, where `scores` are the scores this call wrote.
+
+Score sources: `user-feedback` is what the user said (thumbs, outcome, comment); `user-signal`
+is what the user did (passive signals). `ScoreRecord.source` and `ObsScore.source` accept both,
+including on the admin `POST /traces/:id/scores` route.
 
 The local store keeps one live `user-feedback` or `user-signal` score per (trace, source,
 name): a new vote replaces the old one in a single upsert backed by a partial unique index.

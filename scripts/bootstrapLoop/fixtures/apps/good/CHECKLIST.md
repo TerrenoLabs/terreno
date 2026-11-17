@@ -1,0 +1,5 @@
+- [ ] Rotate secrets
+- [ ] Deploy the app
+- [ ] Change the admin password
+- [ ] Review the consent text
+- [ ] Invite your team

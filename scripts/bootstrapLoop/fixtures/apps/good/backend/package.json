@@ -1,0 +1,1 @@
+{"scripts":{"seed":"bun run src/seed.ts"}}

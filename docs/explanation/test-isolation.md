@@ -31,6 +31,17 @@ bun run check:test-isolation            # vs merge-base with origin/master
 4. **Mark an identical mock.** When the call matches the preload exactly, put
    `// isolation-safe: <reason>` on the line above it.
 
+## Tests that need a specific Mongo topology
+
+The api preload connects to whatever Mongo the environment provides: a standalone server
+on CircleCI, and often a replica set on a dev machine. A test that depends on the
+topology (Mongo transactions need a replica set; a "transactions unsupported" path needs a
+standalone) goes in `api/src/isolated/<name>.isolated.ts` and calls
+`useMongoTopology({topology: "replicaSet" | "standalone"})` from
+`api/src/tests/mongoTopology.ts`. It swaps the default mongoose connection to a fresh
+in-memory server for that process only. `bun run test`, `test:ci`, `test:agent`, and
+`test:coverage` all run isolated files.
+
 ## Why a ratchet
 
 Terreno has about 80 existing shared-suite files that call `mock.module`. Most mock

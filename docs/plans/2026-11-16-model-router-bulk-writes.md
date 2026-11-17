@@ -96,17 +96,20 @@ None — backend only.
 
 ## Tasks
 
-- [ ] **T1** — Run api transaction tests on a replica set
+- [x] **T1** — Run api transaction tests on a replica set
   - Depends on: none
-  - Files: scripts/test-shards.ts, api/package.json, .circleci/continue-config.yml (or config.yml, whichever defines the api test job), api/src/tests/replSetCanary.atomic.test.ts
-  - Seam: the api test runner
-  - Interface: files named `*.atomic.test.ts` under `api/src` run in their own shard (or
-    extra `bun test` pass) with `TERRENO_TEST_USE_REPLSET=true`, so `registerSimpleMongoPreload`
-    starts a replica set for them only. Every other api test keeps the standalone preload.
-    The default pass excludes `*.atomic.test.ts`. Today `bunSetup.ts` uses
-    `registerSimpleMongoPreload` (standalone, `useTransactions:false`) unless
-    `TERRENO_TEST_USE_FIXTURE_CACHE=true`, and `mongoServer.ts:90` already honours
-    `TERRENO_TEST_USE_REPLSET`.
+  - Files: api/src/tests/mongoTopology.ts, api/src/isolated/mongoTopology.isolated.ts, api/package.json, docs/explanation/test-isolation.md, docs/explanation/test-sharding.md
+  - Seam: the api test runner's isolated lane
+  - Interface: an `api/src/isolated/*.isolated.ts` file calls
+    `useMongoTopology({topology: "replicaSet" | "standalone"})` from
+    `api/src/tests/mongoTopology.ts`, which swaps the default mongoose connection to a fresh
+    in-memory Mongo of that topology for that process only. The api `test`, `test:ci`, and
+    `test:agent` scripts pass `--isolated` so local runs include these files (`test:coverage`
+    already does). Every other api test keeps the standalone preload.
+  - Changed from the approved brief (T1): the brief named a `*.atomic.test.ts` lane with
+    `TERRENO_TEST_USE_REPLSET=true`, but `registerSimpleMongoPreload` ignores that variable
+    (it connects to `TERRENO_TEST_MONGODB_URI` or `127.0.0.1`, standalone on CircleCI), and the
+    repo already runs `*.isolated.ts` files one process each, so the swap reuses that lane.
   - Cases:
     - the canary opens `mongoose.connection.startSession()`, runs `startTransaction()`,
       inserts a doc, aborts, and the doc does not exist
@@ -235,7 +238,7 @@ None — backend only.
 
 - [ ] **T4** — Atomic mode by default, inside one transaction
   - Depends on: T1, T3
-  - Files: api/src/bulk.ts, api/src/bulkTransaction.ts, api/src/bulk.atomic.test.ts (on the T1 replica-set lane), api/src/bulk.test.ts (the standalone case), api/src/sync/syncSeqPlugin.ts + its test (only if the seq claim does not join the session)
+  - Files: api/src/bulk.ts, api/src/bulkTransaction.ts, api/src/isolated/bulkAtomic.isolated.ts (replica set via `useMongoTopology`), api/src/isolated/bulkStandalone.isolated.ts (the standalone case), api/src/sync/syncSeqPlugin.ts + its test (only if the seq claim does not join the session)
   - Seam: `POST /<route>/bulk` with `atomic` omitted or `true`
   - Interface:
     - `atomic` defaults to `true` (remove the T2 501).
@@ -263,7 +266,7 @@ None — backend only.
     - A post hook that throws after commit: the writes stay committed. The response is 200,
       and that item's entry carries the error the single route returns
       (`400 post-create-hook-error` etc.), the same as partial mode and `POST /` (see Q2).
-  - Cases (replica-set lane):
+  - Cases (bulkAtomic.isolated.ts unless noted):
     - 3 creates, no `atomic` key → 200, 3 docs exist
     - 3 creates where `preCreate` returns null on item 2 → 403, `meta.index: 1`; **0** docs exist; `postCreate` was called 0 times; 0 AuditEvents
     - update A + update B where B is 403 → 403 `meta.index: 1`; A is unchanged in Mongo
@@ -273,9 +276,9 @@ None — backend only.
     - a stale `_updatedAt` on one update → 409 with `meta.index`, body otherwise equal to the PATCH 409 body; no other item applied
     - item 2's `preCreate` runs `FoodModel.findById(<item 1's new id>)` → finds it (proves the hook joined the session and sees the uncommitted write)
     - a `postCreate` that throws on item 1 of a 2-create atomic batch → 200; both docs exist; `data[1].status` 400 `post-create-hook-error`; `data[0].status` 201
-    - standalone Mongo (in `bulk.test.ts`, default lane) → 400 `bulk-atomic-unsupported`, nothing written; `atomic: false` on the same server still works
+    - standalone Mongo (`bulkStandalone.isolated.ts`) → 400 `bulk-atomic-unsupported`, nothing written; `atomic: false` on the same server still works
   - Blast radius: synced models. An aborted transaction must not leave a claimed `_syncSeq`
-    that stalls the stream. Case on a synced test model in bulk.atomic.test.ts: an atomic
+    that stalls the stream. Case on a synced test model in bulkAtomic.isolated.ts: an atomic
     batch aborts on item 2, then a single `PATCH` on that stream succeeds and a sync
     delta/snapshot fetch from the pre-batch cursor returns the PATCHed doc. If the seq claim
     does not join the session (`syncSeqPlugin.ts` reads `this.$session()`), the task makes

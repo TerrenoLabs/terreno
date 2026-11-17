@@ -515,6 +515,24 @@ Passkey autofill (`"username webauthn"`) is web only; native gets the plain user
 - `"username webauthn"` asks the browser to offer saved passkeys in the field's autofill;
   `LoginScreen` sets it on the email field when `passkeyAutofill` is on.
 
+### TextField spell check
+
+Prose fields (`type="text"`, multiline `TextArea`, or `Field type="textarea"`) turn browser spell
+check on by default when `autoComplete` is unset or `"on"`. Misspelled words show the usual red
+underline. Picking a suggestion runs `onChange` with the corrected text. A replacement that flips
+the value straight back within 500ms is ignored, so spell check cannot loop a controlled field
+between two spellings (for example `reachthreshold` and `reach threshold`). Autocorrect stays off
+on web.
+
+| Prop | Web default | Native default |
+| --- | --- | --- |
+| `spellCheck` | `true` for prose | unset (platform default) |
+| `autoCorrect` | `false` for prose | `true` for prose |
+
+Pass `spellCheck={false}` to hide underlines on a specific field. Pass `autoCorrect={false}` on
+native when autocorrect is unwanted. Specialized types such as `email` and `password` do not enable
+spell check unless you set `spellCheck` explicitly.
+
 ### FormContainer
 
 Groups a form's fields. On web it renders a real `<form>` around them, so browsers and password

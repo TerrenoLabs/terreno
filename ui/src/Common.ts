@@ -1183,6 +1183,18 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
     | "one-time-code"
     | "username"
     | "username webauthn";
+  /**
+   * On web, enables browser spell check (red underlines and replacement suggestions). Prose
+   * fields (`type` `text` or multiline) default to on. Autocorrect stays off on web, and a
+   * replacement that flips the value straight back within 500ms is ignored, so a controlled
+   * value cannot loop. Pass `false` to turn spell check off.
+   */
+  spellCheck?: boolean;
+  /**
+   * Native autocorrect for prose fields. On web this stays off by default (use spell check
+   * instead). On iOS/Android prose fields default to on unless overridden.
+   */
+  autoCorrect?: boolean;
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;

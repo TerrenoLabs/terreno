@@ -18,6 +18,7 @@ import {
 } from "./humanAnswers";
 import {registerObsDataset} from "./models/obsDataset";
 import {registerObsDatasetItem} from "./models/obsDatasetItem";
+import {registerObsScore} from "./models/obsScore";
 import {registerObsTrace} from "./models/obsTrace";
 import {LocalPromptStore} from "./promptStore";
 
@@ -178,6 +179,57 @@ const computeDatasetCounts = async (datasetId: string): Promise<DatasetCounts> =
     needsReview,
     total,
   };
+};
+
+/** What the trace's user said and did, copied onto dataset items added from the trace. */
+export interface DatasetItemUserFeedback {
+  comment?: string;
+  outcome?: string;
+  signals: string[];
+  thumbs?: "down" | "up";
+}
+
+/**
+ * Reads a trace's live end-user scores. Negative feedback means the trace output is a known-bad
+ * answer, so the item must not be treated as a gold label until a human labels it.
+ */
+const readUserFeedback = async (
+  traceId: mongoose.Types.ObjectId
+): Promise<{feedback?: DatasetItemUserFeedback; negativeTags: string[]}> => {
+  const scores = await registerObsScore()
+    .find({source: {$in: ["user-feedback", "user-signal"]}, traceId})
+    .sort({created: 1});
+  if (scores.length === 0) {
+    return {negativeTags: []};
+  }
+  const feedback: DatasetItemUserFeedback = {signals: []};
+  const negativeTags: string[] = [];
+  for (const score of scores) {
+    if (score.source === "user-signal") {
+      feedback.signals.push(score.name);
+      if (score.name === "dismissed") {
+        negativeTags.push("user:dismissed");
+      }
+      continue;
+    }
+    if (score.name === "thumbs_up") {
+      feedback.thumbs = score.value === true ? "up" : "down";
+      if (score.value === false) {
+        negativeTags.push("user:thumbs-down");
+      }
+    } else if (score.name === "outcome") {
+      feedback.outcome = String(score.value);
+      if (score.value === "fp") {
+        negativeTags.push("user:false-positive");
+      } else if (score.value === "fn") {
+        negativeTags.push("user:false-negative");
+      }
+    }
+    if (score.comment && !feedback.comment) {
+      feedback.comment = score.comment;
+    }
+  }
+  return {feedback, negativeTags};
 };
 
 export class LocalDatasetStore {
@@ -408,14 +460,17 @@ export class LocalDatasetStore {
       }
       const input = trace.input ?? {};
       await this.validateItemInput(dataset, input, 1);
+      const {feedback, negativeTags} = await readUserFeedback(trace._id);
       const item = await registerObsDatasetItem().create({
         datasetId: dataset._id,
         expectedOutput: trace.output,
         input,
         origin: "trace",
-        proofread: !trace.sensitive,
+        // A user-rejected output is not a gold label: it waits for a human to relabel it.
+        proofread: !trace.sensitive && negativeTags.length === 0,
         sourceTraceId: trace._id,
-        tags: [],
+        tags: negativeTags,
+        ...(feedback ? {metadata: {userFeedback: feedback}} : {}),
       });
       created.push(toItemView(item));
     }

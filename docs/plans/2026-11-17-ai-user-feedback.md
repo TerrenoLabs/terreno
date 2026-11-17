@@ -215,7 +215,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: `gpt/histories` is a synced collection → `syncDbSdk` gets the new optional field after T11 regenerates; `GptHistory` `strict: "throw"` must accept `traceId` on create → model case; history PATCH by owners must not set `traceId` (drop it like `pendingAsk`) → route case.
   - Test skills: terreno-backend-tests
 
-- [ ] **T7** — Carry user feedback into dataset items
+- [x] **T7** — Carry user feedback into dataset items
   - Depends on: T3
   - Files: ai/src/observability/local/datasetStore.ts, ai/src/observability/local/datasetStore.test.ts, ai/src/observability/routes/datasets.test.ts, docs/explanation/ai-observability.md
   - Criteria: `addTracesToDataset` reads each trace's live `user-feedback` and `user-signal` scores. A trace with `thumbs_up = false`, `outcome` `fp`/`fn`, or a `dismissed` signal lands `proofread: false` with tag `user:thumbs-down`, `user:false-positive`, `user:false-negative`, or `user:dismissed` (each that applies). Every item from a trace that has user feedback gets `metadata.userFeedback: {thumbs?, outcome?, comment?, signals: string[]}`. Traces without feedback behave as today. The explanation page says why.

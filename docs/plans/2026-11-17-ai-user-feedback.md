@@ -167,7 +167,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: admin trace types render `source` (T10 owns the UI); the dataset store and review store do not read `source` today → none beyond the enum.
   - Test skills: terreno-backend-tests
 
-- [ ] **T4** — Enqueue thumbs-down traces for human review
+- [x] **T4** — Enqueue thumbs-down traces for human review
   - Depends on: T3
   - Files: ai/src/observability/feedback.ts, ai/src/observability/feedback.test.ts, ai/src/observability/types.ts, ai/src/observability/observabilityApp.ts, ai/src/observability/observabilityApp.test.ts, ai/src/observability/observabilityAppRegistry.ts, ai/src/observability/local/reviewStore.ts, ai/src/observability/local/reviewStore.test.ts, docs/how-to/observe-llm-calls.md
   - Criteria: `ObservabilityAppOptions.feedbackReview?: {evaluatorName: string}`. With it set, `thumbs: "down"` enqueues the trace (`reason: "feedback"`) for the named human evaluator and returns `reviewItemId`, unless a `pending` or `in_progress` item already exists for that trace and evaluator. Then it returns the existing item's id. Thumbs up, signals, and outcomes never enqueue. An unknown or non-human evaluator logs `logger.error` and the feedback still returns 200 without `reviewItemId`. Unset → no enqueue. The how-to documents the option.

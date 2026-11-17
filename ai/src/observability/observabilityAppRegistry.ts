@@ -12,6 +12,7 @@ import type {
 export interface RegisteredObservabilityApp {
   aiService?: ObservabilityGenerateClient;
   control: ObservabilityControlConfig;
+  feedbackReview?: ObservabilityAppOptions["feedbackReview"];
   plugins: ReadonlyArray<ObservabilityPlugin>;
   priceMap?: ObservabilityAppOptions["priceMap"];
   promptRegistry?: PromptRegistry;

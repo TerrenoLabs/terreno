@@ -1,7 +1,8 @@
-import {APIError} from "@terreno/api";
-
+import {APIError, logger} from "@terreno/api";
+import {LocalEvaluatorStore} from "./local/evaluatorStore";
 import {registerObsTrace} from "./local/models/obsTrace";
-import {LocalTraceStore} from "./local/traceStore";
+import {LocalReviewStore} from "./local/reviewStore";
+import {LocalScoreSink, LocalTraceStore} from "./local/traceStore";
 import {getObservabilityApp} from "./observabilityAppRegistry";
 import type {ScoreRecord, ScoreSink} from "./types";
 
@@ -120,10 +121,48 @@ const exportToSinks = async (score: ScoreRecord, store: LocalTraceStore): Promis
       return sink.export(score);
     })
   );
-  for (const result of results) {
-    if (result.status === "rejected") {
+  // The local store is the record the app reads, so its failure fails the request. Other sinks
+  // are best-effort, like trace export: a vendor outage must not stop review queueing.
+  results.forEach((result, index) => {
+    if (result.status === "fulfilled") {
+      return;
+    }
+    if (sinks[index] instanceof LocalScoreSink) {
       throw result.reason;
     }
+    logger.error("Feedback ScoreSink.export failed", {error: result.reason, name: score.name});
+  });
+};
+
+/**
+ * Queues a thumbs-down trace for human review against `feedbackReview.evaluatorName`, reusing an
+ * open item. Never fails the feedback request: a bad evaluator is logged and skipped.
+ */
+const enqueueFeedbackReview = async (traceId: string): Promise<string | undefined> => {
+  const evaluatorName = getObservabilityApp()?.feedbackReview?.evaluatorName;
+  if (!evaluatorName) {
+    return undefined;
+  }
+  try {
+    const evaluator = await new LocalEvaluatorStore().getByName(evaluatorName);
+    if (!evaluator) {
+      logger.error("feedbackReview evaluator not found; thumbs down not queued", {evaluatorName});
+      return undefined;
+    }
+    const reviewStore = new LocalReviewStore();
+    const open = await reviewStore.findOpen({evaluatorId: evaluator.id, traceId});
+    if (open) {
+      return open.id;
+    }
+    const [item] = await reviewStore.enqueue({
+      evaluatorId: evaluator.id,
+      reason: "feedback",
+      traceIds: [traceId],
+    });
+    return item?.id;
+  } catch (error) {
+    logger.error("Failed to queue thumbs-down trace for review", {error, evaluatorName, traceId});
+    return undefined;
   }
 };
 
@@ -201,8 +240,12 @@ export const recordTraceFeedback = async (args: {
     flaggedForDataset = input.flagDataset;
   }
 
+  const reviewItemId =
+    input.thumbs === "down" ? await enqueueFeedbackReview(args.traceId) : undefined;
+
   return {
     flaggedForDataset,
+    ...(reviewItemId ? {reviewItemId} : {}),
     scores,
     traceId: args.traceId,
   };

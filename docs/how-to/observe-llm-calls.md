@@ -19,10 +19,18 @@ server.register(new ObservabilityApp({
     prompts: process.env.AI_OBS_PROMPTS_PRIMARY ?? "local",
     reviewQueue: "local",
   },
+  feedbackReview: {evaluatorName: "output-quality-questions"},
   priceMap,
   sampleRate: Number(process.env.AI_OBS_SAMPLE_RATE ?? 0),
 }));
 ```
+
+`feedbackReview` is optional. With it set, an end user's thumbs down
+(`POST /ai/observability/traces/:id/feedback` with `thumbs: "down"`) queues the trace in
+**Review** with reason `feedback` against that human evaluator, and the response carries
+`reviewItemId`. A trace that already has a pending or in-progress item for the evaluator reuses
+it. Thumbs up, outcomes, and signals never queue. An unknown or non-human evaluator is logged
+with `logger.error` and the feedback still succeeds. Omit it and nothing is queued.
 
 For an admin playground that accepts a user-supplied provider key, add
 `requestAiServiceFactory: ({apiKey, modelId}) => ...`. The playground route passes

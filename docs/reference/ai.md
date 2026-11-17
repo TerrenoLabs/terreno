@@ -748,7 +748,7 @@ same logic for server code.
 | `flagDataset` | boolean | Sets or clears `ObsTrace.flaggedForDataset`; operators filter on it in Traces. Moves no data |
 
 The body needs at least one field, and fields combine in one request. Response:
-`{data: {traceId, scores, flaggedForDataset}}`, where `scores` are the scores this call wrote.
+`{data: {traceId, scores, flaggedForDataset, reviewItemId?}}`, where `scores` are the scores this call wrote and `reviewItemId` is the review item a thumbs down queued or reused when `ObservabilityApp` has `feedbackReview` set (see [Observe LLM calls](../how-to/observe-llm-calls.md)).
 
 Score sources: `user-feedback` is what the user said (thumbs, outcome, comment); `user-signal`
 is what the user did (passive signals). `ScoreRecord.source` and `ObsScore.source` accept both,

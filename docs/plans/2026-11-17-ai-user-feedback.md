@@ -198,7 +198,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: none (read-only filter).
   - Test skills: terreno-backend-tests
 
-- [ ] **T6** — Store trace ids on chat replies and turn chat ratings into scores
+- [x] **T6** — Store trace ids on chat replies and turn chat ratings into scores
   - Depends on: T2 (calls `recordTraceFeedback`), T4 (chat thumbs down must auto-enqueue through the registry), T5 (both write the OpenAPI snapshot and `docs/reference/ai.md`)
   - Files: ai/src/models/gptHistory.ts, ai/src/types/index.ts, ai/src/service/chatTurn.ts, ai/src/service/chatTurn.test.ts, ai/src/routes/gpt.ts, ai/src/routes/gpt.test.ts, ai/src/routes/gptHistories.ts, example-backend/src/__snapshots__/openapi.test.ts.snap, docs/reference/ai.md
   - Criteria: each assistant prompt row gains `traceId` (string, described). `chatTurn` mints one id per turn, passes it to `recordGenerate`, and writes it on the assistant row. `PATCH /gpt/histories/:id/rating` accepts optional `comment`. When the rated row has a `traceId` and the trace exists, it also calls `recordTraceFeedback` with `{thumbs, comment}` (so a down rating also auto-enqueues per T4). A missing trace never fails the rating. Reference docs cover the field and body.

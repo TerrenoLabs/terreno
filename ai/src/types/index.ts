@@ -122,6 +122,8 @@ export type GptHistoryPromptStatus = "streaming" | "complete" | "error";
 export interface GptHistoryPrompt {
   model?: string;
   rating?: "up" | "down";
+  /** Observability trace id of an assistant reply (written by the chat turn). */
+  traceId?: string;
   /** Set on assistant replies produced by /gpt/prompt. "streaming" while partial text is persisted. */
   status?: GptHistoryPromptStatus;
   /** Identifies one /gpt/prompt reply so resume clients can follow it. */

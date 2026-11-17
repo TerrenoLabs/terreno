@@ -276,7 +276,7 @@ GPT project with persistent context and memories. Registered lazily: `getProject
 |----------|--------|------|-------------|
 | `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat turn; [body](#gptprompt-body) and [events](#sse-events) below |
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
-| `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
+| `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null, comment?}`. Owner only (**403** otherwise). When the rated row has a `traceId` whose trace exists, also records the rating (and trimmed `comment`, ≤ 2000 chars) as `thumbs_up` feedback on that trace, so a `down` can queue review (`feedbackReview`). A missing trace never fails the rating |
 | `/gpt/histories/:id/stream` | GET | `IsAuthenticated` (owner) | SSE resume of an in-flight reply; query: optional `streamId`, `offset` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
 | `/gpt/datasets/:id` | GET | owner (`IsOwner`; another user is 404) | Read a stored dataset. Mounted only when `uiBlocks` is on. Query: `grain` (`hour` \| `day` \| `week` \| `month`), `limit` (default 500, max 1000), `page`. Response `data`: `{columns, rows, rowCount, page, more}`. `grain` buckets the first date column in UTC. An offset is converted before `startOf`. A date with no zone is that UTC day. Null date cells are skipped. Number columns are summed. Without `page`, a series longer than `limit` is LTTB-downsampled and `more` is false. With `page`, rows are a page and `more` is true when another page remains. |
@@ -731,6 +731,14 @@ compared it, otherwise the best-agreeing version. `stale` is true when the quest
 fingerprint changed since the run.
 
 ### End-user feedback
+
+Chat replies carry their trace: when an `ObservabilityApp` is registered, each `/gpt/prompt`
+turn mints a trace id, records the trace under it, and writes it as `traceId` on the
+assistant rows (it syncs to clients with the history). Only the chat turn sets it: a history
+create or update keeps a row's `traceId` only when the server already stored that id, and drops
+dotted `prompts.N.traceId` writes. Send feedback for a reply with its row's `traceId`. Every
+assistant row one turn writes (tool steps and the final reply) shares that turn's trace, so a
+rating or copy on any of them is feedback on the whole turn; the latest rating wins.
 
 `POST /ai/observability/traces/:id/feedback` records the trace owner's own feedback. It uses
 plain authentication, not the admin observability middleware: only the user whose id is on the

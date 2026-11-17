@@ -17509,6 +17509,7 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                     "enum": [
                       "up",
                       "down",
+                      null,
                     ],
                     "nullable": true,
                     "type": "string",
@@ -25937,6 +25938,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "description": "Name of the tool that was invoked",
                                   "type": "string",
                                 },
+                                "traceId": {
+                                  "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                                  "type": "string",
+                                },
                                 "type": {
                                   "description": "Role of this message in the conversation",
                                   "enum": [
@@ -26266,6 +26271,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Name of the tool that was invoked",
                           "type": "string",
                         },
+                        "traceId": {
+                          "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                          "type": "string",
+                        },
                         "type": {
                           "description": "Role of this message in the conversation",
                           "enum": [
@@ -26518,6 +26527,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "toolName": {
                             "description": "Name of the tool that was invoked",
+                            "type": "string",
+                          },
+                          "traceId": {
+                            "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
                             "type": "string",
                           },
                           "type": {
@@ -27154,6 +27167,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Name of the tool that was invoked",
                             "type": "string",
                           },
+                          "traceId": {
+                            "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                            "type": "string",
+                          },
                           "type": {
                             "description": "Role of this message in the conversation",
                             "enum": [
@@ -27472,6 +27489,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Name of the tool that was invoked",
                           "type": "string",
                         },
+                        "traceId": {
+                          "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                          "type": "string",
+                        },
                         "type": {
                           "description": "Role of this message in the conversation",
                           "enum": [
@@ -27726,6 +27747,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Name of the tool that was invoked",
                             "type": "string",
                           },
+                          "traceId": {
+                            "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                            "type": "string",
+                          },
                           "type": {
                             "description": "Role of this message in the conversation",
                             "enum": [
@@ -27838,10 +27863,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "application/json": {
               "schema": {
                 "properties": {
+                  "comment": {
+                    "description": "Optional comment on the rating (≤ 2000 chars), recorded on the reply's trace",
+                    "type": "string",
+                  },
                   "promptIndex": {
                     "type": "number",
                   },
                   "rating": {
+                    "enum": [
+                      "up",
+                      "down",
+                      null,
+                    ],
+                    "nullable": true,
                     "type": "string",
                   },
                 },

@@ -219,7 +219,13 @@ export const addObservabilityTraceRoutes = (
         flagDataset: {description: "Flag the trace as a dataset candidate", type: "boolean"},
         outcome: {enum: ["tp", "fp", "tn", "fn"], type: "string"},
         signal: {enum: [...FEEDBACK_SIGNALS], type: "string"},
-        thumbs: {enum: ["up", "down"], nullable: true, type: "string"},
+        thumbs: {
+          // `null` clears the vote. The request validator checks enum membership even for a
+          // nullable field, so null must be listed (the builder's types only allow strings).
+          enum: ["up", "down", null] as unknown as string[],
+          nullable: true,
+          type: "string",
+        },
       })
       .withResponse(200, {
         data: {

@@ -149,6 +149,56 @@ const withoutClientGcsKeys = async (
   ) as Partial<GptHistoryDocument>;
 };
 
+/** The trace ids the chat turn stored on a history's assistant rows. */
+const storedTraceIds = async (historyId: unknown): Promise<Set<string>> => {
+  if (typeof historyId !== "string") {
+    return new Set();
+  }
+  const history = await GptHistory.findById(historyId).select({"prompts.traceId": 1}).lean();
+  return new Set(
+    (history?.prompts ?? []).flatMap((prompt) => (prompt.traceId ? [prompt.traceId] : []))
+  );
+};
+
+const rowWithKnownTraceId = (row: unknown, known: Set<string>): unknown => {
+  if (!isFragment(row) || row.traceId === undefined || known.has(String(row.traceId))) {
+    return row;
+  }
+  const {traceId: _dropped, ...rest} = row;
+  return rest;
+};
+
+/**
+ * Only the chat turn writes a row's `traceId` (feedback is recorded against it), so a client may
+ * round-trip ids the server stored but never plant a new one, including through dotted paths.
+ */
+const withoutClientTraceIds = async (
+  body: Partial<GptHistoryDocument>,
+  historyId?: unknown
+): Promise<Partial<GptHistoryDocument>> => {
+  const entries = Object.entries(body);
+  if (!entries.some(([key]) => isPromptsKey(key))) {
+    return body;
+  }
+  const known = await storedTraceIds(historyId);
+  return Object.fromEntries(
+    entries.flatMap(([key, value]) => {
+      if (key === "prompts") {
+        return [
+          [key, Array.isArray(value) ? value.map((row) => rowWithKnownTraceId(row, known)) : value],
+        ];
+      }
+      if (/^prompts\.\d+\.traceId$/.test(key)) {
+        return [];
+      }
+      if (/^prompts\.\d+$/.test(key)) {
+        return [[key, rowWithKnownTraceId(value, known)]];
+      }
+      return [[key, value]];
+    })
+  ) as Partial<GptHistoryDocument>;
+};
+
 /** Server-only fields of `pendingAsk`: the paused turn's messages, replayed only to the model. */
 const SERVER_ONLY_PENDING_ASK_FIELDS = ["promptIndex", "responseMessages"];
 
@@ -359,12 +409,15 @@ export const addGptHistoryRoutes = (
     },
     preCreate: async (body, req): Promise<GptHistoryDocument> => {
       return {
-        ...(await withoutClientGcsKeys(withoutPendingAsk(body))),
+        ...(await withoutClientTraceIds(await withoutClientGcsKeys(withoutPendingAsk(body)))),
         userId: (req.user as {_id: unknown})?._id,
       } as GptHistoryDocument;
     },
     preUpdate: async (body, req): Promise<GptHistoryDocument> => {
-      const update = await withoutClientGcsKeys(withoutPendingAsk(body), req.params.id);
+      const update = await withoutClientTraceIds(
+        await withoutClientGcsKeys(withoutPendingAsk(body), req.params.id),
+        req.params.id
+      );
       // A host hook that returns null still refuses the update; modelRouter checks the value.
       return (
         routerOptions.preUpdate ? await routerOptions.preUpdate(update, req) : update

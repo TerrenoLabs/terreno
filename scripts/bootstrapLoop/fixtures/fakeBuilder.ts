@@ -8,8 +8,10 @@
  *   tserror  fixture plus a TypeScript error
  *   files    write the JSON map in BOOTSTRAP_LOOP_FAKE_FILES (path -> content)
  *   noop     exit 0 and write nothing
+ *   all      fixture plus every artifact the stage checks look for; edits the theme once the
+ *            app is a git repo, so the theming check sees a change from the scaffold baseline
  */
-import {mkdirSync, writeFileSync} from "node:fs";
+import {mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {dirname, join} from "node:path";
 
 const mode = process.env.BOOTSTRAP_LOOP_FAKE_MODE ?? "fixture";
@@ -59,6 +61,34 @@ if (mode === "files") {
 if (mode === "fail3") {
   console.error("fake builder failing");
   process.exit(3);
+}
+if (mode === "all") {
+  const {existsSync} = await import("node:fs");
+  if (!existsSync("backend/package.json")) {
+    writeFixture(false);
+  }
+  const pkg = JSON.parse(readFileSync("backend/package.json", "utf8")) as Record<string, unknown>;
+  pkg.scripts = {seed: "bun src/seed.ts"};
+  writeFileSync("backend/package.json", JSON.stringify(pkg));
+  writeFileSync(
+    "backend/src/features.ts",
+    'export const t = "AdminApp BetterAuthApp addGptRoutes dueDate seedDefaults consent";\n'
+  );
+  mkdirSync("frontend/constants", {recursive: true});
+  const themed = existsSync(".git");
+  writeFileSync(
+    "frontend/constants/theme.ts",
+    themed ? "export const t = 2;\n" : "export const t = 1;\n"
+  );
+  writeFileSync("backend/.env.example", "BETTER_AUTH_SECRET=\n");
+  writeFileSync(".mcp.json", "{}");
+  mkdirSync(".github/workflows", {recursive: true});
+  writeFileSync(".github/workflows/ci.yml", "name: ci\n");
+  mkdirSync(".circleci", {recursive: true});
+  writeFileSync(".circleci/config.yml", "version: 2.1\n");
+  writeFileSync("CHECKLIST.md", [1, 2, 3, 4, 5].map((n) => `- [ ] item ${n}`).join("\n"));
+  writeFileSync("deploy.json", JSON.stringify({url: "https://todo.example.test"}));
+  process.exit(0);
 }
 if (mode === "fixture" || mode === "tserror") {
   writeFixture(mode === "tserror");

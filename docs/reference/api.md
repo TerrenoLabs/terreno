@@ -373,6 +373,94 @@ or unknown fields run the normal update transform and `preUpdate` hook first so 
 authorization remains authoritative, then return `400` with code
 `array-operation-field-not-array` if the hook allows the request.
 
+## modelRouter bulk writes
+
+Opt a router into `POST /<route>/bulk` with `bulk`. It runs many create, update, and delete
+operations in one request. Each one goes through the same functions as `POST /`,
+`PATCH /:id`, and `DELETE /:id`, so it gets the router's permissions (405, 404, 403 in the
+same order), transformer, `preCreate` / `preUpdate` / `preDelete`, body validation, RBAC
+write guards, Mongoose validation, population, soft delete, post hooks, audit, and
+`responseHandler`.
+
+```typescript
+modelRouter("/todos", Todo, {
+  bulk: true, // or {maxItems: 50, methods: ["update", "delete"]}
+  permissions: {...},
+});
+```
+
+`bulk: true` allows all three methods and at most 100 operations per request. A router
+cannot also define a collection action named `bulk` (registration throws).
+
+Request:
+
+```jsonc
+{
+  "atomic": true, // optional, default true
+  "operations": [
+    {"method": "create", "body": {"title": "Buy milk"}},
+    {"method": "update", "id": "<id>", "body": {"completed": true, "_updatedAt": "<iso>"}},
+    {"method": "delete", "id": "<id>"}
+  ]
+}
+```
+
+A malformed envelope (missing or empty `operations`, more than `maxItems`, an unknown or
+disallowed `method`, update/delete without `id`, create/update without an object `body`, a
+non-boolean `atomic`) is a 400 `bulk-invalid-request` and nothing is written.
+
+Response (200, one entry per operation in input order):
+
+```jsonc
+{"data": [
+  {"index": 0, "method": "create", "id": "<new id>", "status": 201, "data": {...}},
+  {"index": 1, "method": "update", "id": "<id>", "status": 200, "data": {...}},
+  {"index": 2, "method": "delete", "id": "<id>", "status": 204}
+]}
+```
+
+`data` is what `responseHandler` returns for that document. A failed entry carries
+`error`: exactly the body the single route would have sent (for a `_updatedAt` conflict,
+the `PATCH` 409 body with the server's current document).
+
+### Atomic mode (default)
+
+All operations run inside one MongoDB transaction. Writes made inside `pre*` hooks join it
+too, through Mongoose's `transactionAsyncLocalStorage`, which `bulk` turns on for the
+model's Mongoose instance (it only affects code running inside a bulk transaction).
+
+- If any operation fails, the transaction aborts and nothing is written. The response is
+  that operation's status and error body with `meta.index` set to its position. No other
+  operation's data is returned.
+- After the commit, `postCreate` / `postUpdate` / `postDelete`, audit events, and
+  `responseHandler` run for each operation in order. A post hook that throws turns its
+  entry into the single route's error (for example 400 `post-create-hook-error`); the
+  writes stay committed.
+- There is no automatic retry, because a retry would run `pre*` hooks twice. A write
+  conflict with another request returns 409 `bulk-transaction-conflict`; nothing was
+  written, so the client can retry.
+- Atomic mode needs a replica set. On a standalone MongoDB it returns 400
+  `bulk-atomic-unsupported` before running any hook. Send `"atomic": false` instead.
+- MongoDB aborts transactions that run longer than 60 seconds by default, so keep `pre*`
+  hooks fast inside bulk requests.
+
+### Partial mode (`"atomic": false`)
+
+Operations run in order, each committed on its own. A failure is recorded in its entry and
+the batch continues. The response is always 200; read each entry's `status`.
+
+### Notes
+
+- Hooks receive a per-item request: `req.body` is that operation's body and `req.params.id`
+  its id. Everything else (`req.user`, headers) is the real request. Nested objects such as
+  `req.user` are shared across items, so a hook that mutates them affects later items.
+- A request costs one rate-limit token however many operations it carries; `maxItems` is
+  the bound.
+- On synced collections the route works, but its generated SDK hook is a plain request that
+  bypasses the local store. Local-first clients should keep writing through the sync outbox.
+- OpenAPI documents the route as `{tag}_bulk` (for example `todos_bulk`), so
+  `terreno-syncdb-codegen --api-out` emits a hook for it.
+
 ## MCP tools
 
 Opt a model into Model Context Protocol tools with `mcp` on `modelRouter`. `TerrenoApp` mounts `POST /mcp` when any model has `mcp` or a custom tool is registered.

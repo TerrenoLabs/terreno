@@ -308,9 +308,13 @@ None — backend only.
   - Test skills: terreno-backend-tests
   - Docs: none in this task (T6)
 
-- [ ] **T6** — Example router and docs for bulk writes
+- [x] **T6** — Example router and docs for bulk writes
   - Depends on: T4, T5
   - Files: example-backend/src/api/todos.ts, example-backend/src/api/todos.test.ts, example-frontend/store/apiSdk.ts (regenerated with `bun run sdk`, never hand-edited), docs/reference/api.md, docs/explanation/model-router-actions.md, .rulesync source of the api rules generated-endpoints table, api/src/api.ts (remove the `// Support bulk actions` TODO)
+  - Changed from the approved brief (T6): `store/apiSdk.ts` takes only the generator's
+    `todos_bulk` hook and the `APIError` interface it references. A full `bun run sdk` against a
+    local backend also emits ~1,100 lines of unrelated, environment-dependent admin hooks that
+    master's committed SDK does not have.
   - Seam: `POST /todos/bulk` on example-backend
   - Interface: `todoRouter` gets `bulk: true`.
   - Cases:

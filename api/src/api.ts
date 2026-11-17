@@ -112,7 +112,6 @@ export const addPopulateToQuery = (
 };
 
 // TODOS:
-// Support bulk actions
 // Support more complex query fields
 // Rate limiting
 

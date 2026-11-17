@@ -247,7 +247,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: `AiSuggestionBox` and `Popover` render `ThumbsUpDownFeedback` without the new prop → their existing tests stay green.
   - Test skills: terreno-frontend-tests
 
-- [ ] **T9** — Add rating comments and a copy signal to GPTChat
+- [x] **T9** — Add rating comments and a copy signal to GPTChat
   - Depends on: T8
   - Files: ui/src/GPTChat.tsx, ui/src/GPTChat.test.tsx, docs/reference/ui.md
   - Criteria: `GPTChat` gains `onRateComment?: (promptIndex: number, comment: string) => void | Promise<void>` and `onMessageSignal?: (promptIndex: number, signal: "copied") => void`. With `onRateComment`, a rated assistant message renders T8's `FeedbackCommentField` under GPTChat's own `RatingButtons` (`ui/src/GPTChat.tsx:893`), which stay as they are, so the existing rating testIDs do not change. `GPTChatMessage.ratingComment?: string` shows the sent state. The existing Copy message button (`handleCopyMessage`, `gpt-copy-msg-{index}`, `ui/src/GPTChat.tsx:926-946`) calls `onMessageSignal(index, "copied")` after a successful copy. Without the new props, rendering is unchanged.

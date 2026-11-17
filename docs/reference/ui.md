@@ -704,6 +704,13 @@ Each history row keeps rename and delete in a three-dot overflow menu (`gpt-hist
 
 Image content parts render copy-image and (web) download actions. The message copy button on an image-only reply copies the image, not text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
 
+Ratings and feedback: `onRateFeedback(promptIndex, rating)` shows thumbs under each stored
+assistant message. Pass `onRateComment(promptIndex, comment)` too and a rated message shows a
+`FeedbackCommentField` (`gpt-rating-comment-{index}-input` / `-send` / `-sent`) under those
+thumbs; set `GPTChatMessage.ratingComment` to show the sent state. `onMessageSignal(promptIndex,
+"copied")` fires after **Copy message** succeeds (never on a clipboard failure). `promptIndex` is
+the stored `prompts` row, so hidden ask rows keep it aligned with the history.
+
 The attach control (`FilePickerButton`) opens an anchored dropdown with **Photo Library** and **Document**. On web both open a browser file input from the press itself and return `data:` URLs, so attachments survive a reload; on native they use `expo-image-picker` and `expo-document-picker`.
 
 ```tsx

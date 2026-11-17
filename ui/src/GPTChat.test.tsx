@@ -1726,3 +1726,160 @@ blocks:
     assert.isNull(queryByText("The preview appears when this reply finishes."));
   });
 });
+
+describe("GPTChat rating comments and copy signal", () => {
+  const ratedDown: GPTChatMessage[] = [
+    {content: "It is Monday", rating: "down", role: "assistant"},
+  ];
+
+  it("shows the comment field for a message rated down and sends the comment with its index", async () => {
+    const onRateComment = mock((_index: number, _comment: string) => {});
+    const {getByTestId} = renderChat({
+      currentMessages: ratedDown,
+      onRateComment,
+      onRateFeedback: () => {},
+    });
+
+    fireEvent.changeText(getByTestId("gpt-rating-comment-0-input"), "Wrong date");
+    await press(getByTestId("gpt-rating-comment-0-send"));
+
+    assert.deepEqual(onRateComment.mock.calls, [[0, "Wrong date"]]);
+  });
+
+  it("shows the comment field for a message rated up", () => {
+    const {getByTestId} = renderChat({
+      currentMessages: [{content: "Nice", rating: "up", role: "assistant"}],
+      onRateComment: () => {},
+      onRateFeedback: () => {},
+    });
+
+    assert.isOk(getByTestId("gpt-rating-comment-0-input"));
+  });
+
+  it("keeps the existing rating buttons next to the comment field", () => {
+    const {getByTestId} = renderChat({
+      currentMessages: ratedDown,
+      onRateComment: () => {},
+      onRateFeedback: () => {},
+    });
+
+    assert.isOk(getByTestId("gpt-rate-up-0"));
+    assert.isOk(getByTestId("gpt-rate-down-0"));
+  });
+
+  it("shows no comment field on an unrated message", () => {
+    const {queryByTestId} = renderChat({
+      currentMessages: [{content: "Unrated", role: "assistant"}],
+      onRateComment: () => {},
+      onRateFeedback: () => {},
+    });
+
+    assert.isNull(queryByTestId("gpt-rating-comment-0-input"));
+  });
+
+  it("shows the sent state when the message already has a rating comment", () => {
+    const {getByTestId, queryByTestId} = renderChat({
+      currentMessages: [
+        {content: "It is Monday", rating: "down", ratingComment: "Wrong date", role: "assistant"},
+      ],
+      onRateComment: () => {},
+      onRateFeedback: () => {},
+    });
+
+    assert.isOk(getByTestId("gpt-rating-comment-0-sent"));
+    assert.isNull(queryByTestId("gpt-rating-comment-0-input"));
+  });
+
+  it("shows no comment field without onRateComment", () => {
+    const {queryByTestId} = renderChat({currentMessages: ratedDown, onRateFeedback: () => {}});
+
+    assert.isNull(queryByTestId("gpt-rating-comment-0-input"));
+  });
+
+  it("does not send an empty comment", async () => {
+    const onRateComment = mock((_index: number, _comment: string) => {});
+    const {getByTestId} = renderChat({
+      currentMessages: ratedDown,
+      onRateComment,
+      onRateFeedback: () => {},
+    });
+
+    fireEvent.changeText(getByTestId("gpt-rating-comment-0-input"), "   ");
+    await press(getByTestId("gpt-rating-comment-0-send"));
+
+    assert.equal(onRateComment.mock.calls.length, 0);
+  });
+
+  it("uses the stored prompt index when a hidden ask result row precedes the rated message", async () => {
+    const onRateComment = mock((_index: number, _comment: string) => {});
+    const messages: GPTChatMessage[] = [
+      {
+        content: "Tool result: ask_choice",
+        role: "tool-result",
+        toolResult: {result: {ok: true}, toolCallId: "c1", toolName: "ask_choice"},
+      },
+      {content: "Answer", rating: "down", role: "assistant"},
+    ];
+    const {getByTestId, queryByTestId} = renderChat({
+      currentMessages: messages,
+      onRateComment,
+      onRateFeedback: () => {},
+    });
+
+    assert.isNull(queryByTestId("gpt-rating-comment-0-input"));
+    fireEvent.changeText(getByTestId("gpt-rating-comment-1-input"), "Off");
+    await press(getByTestId("gpt-rating-comment-1-send"));
+
+    assert.deepEqual(onRateComment.mock.calls, [[1, "Off"]]);
+  });
+
+  it("calls onMessageSignal with copied once after Copy message succeeds", async () => {
+    mockedSetStringAsync.mockClear();
+    const onMessageSignal = mock((_index: number, _signal: "copied") => {});
+    const {getByTestId} = renderChat({
+      currentMessages: [{content: "Copy me", role: "assistant"}],
+      onMessageSignal,
+    });
+
+    await press(getByTestId("gpt-copy-msg-0"));
+
+    assert.deepEqual(mockedSetStringAsync.mock.calls, [["Copy me"]]);
+    assert.deepEqual(onMessageSignal.mock.calls, [[0, "copied"]]);
+  });
+
+  it("does not call onMessageSignal when the clipboard write fails", async () => {
+    mockedSetStringAsync.mockClear();
+    mockedSetStringAsync.mockImplementationOnce(async () => {
+      throw new Error("clipboard denied");
+    });
+    const onMessageSignal = mock((_index: number, _signal: "copied") => {});
+    const {getByTestId} = renderChat({
+      currentMessages: [{content: "Copy me", role: "assistant"}],
+      onMessageSignal,
+    });
+
+    try {
+      await press(getByTestId("gpt-copy-msg-0"));
+    } catch (error) {
+      // The failed copy may surface its rejection; only the signal matters here.
+      assert.instanceOf(error, Error);
+    }
+    assert.equal(onMessageSignal.mock.calls.length, 0);
+
+    // A later successful copy still signals, so the failure did not just disable the prop.
+    await press(getByTestId("gpt-copy-msg-0"));
+    assert.deepEqual(onMessageSignal.mock.calls, [[0, "copied"]]);
+  });
+
+  it("copies without onMessageSignal and shows no comment field", async () => {
+    mockedSetStringAsync.mockClear();
+    const {getByTestId, queryByTestId} = renderChat({
+      currentMessages: [{content: "Copy me", role: "assistant"}],
+    });
+
+    await press(getByTestId("gpt-copy-msg-0"));
+
+    assert.deepEqual(mockedSetStringAsync.mock.calls, [["Copy me"]]);
+    assert.isNull(queryByTestId("gpt-rating-comment-0-input"));
+  });
+});

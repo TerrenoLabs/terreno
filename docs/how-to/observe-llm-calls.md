@@ -19,7 +19,7 @@ server.register(new ObservabilityApp({
     prompts: process.env.AI_OBS_PROMPTS_PRIMARY ?? "local",
     reviewQueue: "local",
   },
-  feedbackReview: {evaluatorName: "output-quality-questions"},
+  feedbackReview: {evaluatorName: "correctness-human"},
   priceMap,
   sampleRate: Number(process.env.AI_OBS_SAMPLE_RATE ?? 0),
 }));

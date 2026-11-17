@@ -24,3 +24,4 @@ pages for features that shipped without one, run the `backfill-user-guide` skill
 | ai | [chat.md](ai/chat.md) | user | Chat with the AI assistant |
 | documents | [files.md](documents/files.md) | user | Store and organize files |
 | todos | [manage-todos.md](todos/manage-todos.md) | user | Add, complete, rename, and delete todos |
+| todos | [summarize-todos.md](todos/summarize-todos.md) | user | Summarize your todos and rate the summary |

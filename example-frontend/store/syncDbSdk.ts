@@ -6,7 +6,6 @@
 import {createCollectionHooks} from "@terreno/syncdb/react";
 
 export interface GptHistory {
-  _id: string;
   pendingAsk?: {
     approvalId?: string;
     created: string;
@@ -41,10 +40,12 @@ export interface GptHistory {
     text?: string;
     toolCallId?: string;
     toolName?: string;
+    traceId?: string;
     type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
   }[];
   title?: string;
   userId: string;
+  _id: string;
   updated: string;
   created: string;
   deleted?: boolean;
@@ -54,7 +55,6 @@ export interface GptHistory {
 }
 
 export interface CreateGptHistoryBody {
-  _id?: string;
   pendingAsk?: {
     approvalId?: string;
     created: string;
@@ -89,10 +89,12 @@ export interface CreateGptHistoryBody {
     text?: string;
     toolCallId?: string;
     toolName?: string;
+    traceId?: string;
     type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
   }[];
   title?: string;
   userId?: string;
+  _id?: string;
   updated?: string;
   created?: string;
   deleted?: boolean;
@@ -102,7 +104,6 @@ export interface CreateGptHistoryBody {
 }
 
 export interface UpdateGptHistoryBody {
-  _id?: string;
   pendingAsk?: {
     approvalId?: string;
     created: string;
@@ -137,10 +138,12 @@ export interface UpdateGptHistoryBody {
     text?: string;
     toolCallId?: string;
     toolName?: string;
+    traceId?: string;
     type: "user" | "assistant" | "system" | "tool-call" | "tool-result";
   }[];
   title?: string;
   userId?: string;
+  _id?: string;
   updated?: string;
   created?: string;
   deleted?: boolean;

@@ -77,7 +77,7 @@ None — no canvas. The visible changes are: a comment field and Send button tha
 - A comment attaches to the thumbs or outcome score sent in the same request. A comment with neither gets 400 (Q9). On a `sensitive` trace, admin trace detail collapses the comment the same way it collapses I/O (Q8). Comments are trimmed, capped at 2000 characters (400 above that), and stored as `ScoreRecord.comment`.
 - Permission: only the trace's own user may call the feedback route (`trace.userId === caller id`). Admins get 403 like any other non-owner and record scores through `POST /traces/:id/scores` instead, so a `user-feedback` score always means the end user said it and an admin vote never auto-enqueues review (Q6). A trace with no `userId` → 403. Missing trace → 404. No token → 401.
 - `createTraceId()` returns a new ObjectId hex string. A `traceId` that is not 24-character hex throws 400 before any model call. A duplicate id (the trace already exists) logs `logger.error` and drops the second trace, the same way sink failures are handled today.
-- `feedbackReview` is unset by default, so frameworks consumers opt in. The example backend sets it to `output-quality-questions`, the human question set its seed migrates legacy `correctness-human` queue items to (`seedAiObservabilityDemo.ts:739-742`).
+- `feedbackReview` is unset by default, so frameworks consumers opt in. The example backend sets it to `correctness-human`, the template the default seed (`seed-test-data.ts`, run with `SEED_DEFAULTS=true`) installs; `output-quality-questions` exists only after the optional demo seed. E2E backends run no seed, so E1 creates the `example-summarize` prompt and installs the `correctness-human` template through the admin API first (`e2e/helpers/aiObservabilityFixtures.ts`). Changed during T11.
 - Auto-enqueue failures (unknown evaluator, non-human evaluator) log an error and never fail the feedback request.
 - Chat: `chatTurn` mints the trace id before the model call and writes it on the assistant prompt row when the row is created, so it syncs to the client with the reply.
 
@@ -278,10 +278,10 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: none (UI reads only).
   - Test skills: terreno-frontend-tests
 
-- [ ] **T11** — Wire feedback into the example summary card and prove the loop end to end
+- [x] **T11** — Wire feedback into the example summary card and prove the loop end to end
   - Depends on: T4, T6, T8, T10
   - Files: example-frontend/components/TodoSummaryCard.tsx, example-frontend/components/TodoSummaryCard.test.tsx, example-frontend/store/apiSdk.ts, example-frontend/store/syncDbSdk.ts, example-backend/src/server.ts, example-frontend/e2e/ai-feedback.spec.ts, docs/user-guide/todos/summarize-todos.md, docs/user-guide/README.md
-  - Criteria: the backend passes `feedbackReview: {evaluatorName: "output-quality-questions"}`. After `bun run sdk` and `bun run sync-sdk`, the summary card shows, under a summary, thumbs plus the comment field and a row of **Keep**, **Dismiss**, and **Copy** buttons. They call the feedback route through a generated hook: thumbs, comment, `signal: "accepted"` (Keep), `signal: "dismissed"` (Dismiss, which also hides the summary), and `signal: "copied"` (Copy, via `expo-clipboard`, already a dependency of example-frontend). A new summary resets them. Feedback errors log `console.warn` and do not hide the summary. E1 passes. G1 is written to the guide bar and indexed.
+  - Criteria: the backend passes `feedbackReview: {evaluatorName: "correctness-human"}`. After `bun run sdk` and `bun run sync-sdk`, the summary card shows, under a summary, thumbs plus the comment field and a row of **Keep**, **Dismiss**, and **Copy** buttons. They call the feedback route through a generated hook: thumbs, comment, `signal: "accepted"` (Keep), `signal: "dismissed"` (Dismiss, which also hides the summary), and `signal: "copied"` (Copy, via `expo-clipboard`, already a dependency of example-frontend). A new summary resets them. Feedback errors log `console.warn` and do not hide the summary. E1 passes. G1 is written to the guide bar and indexed.
   - Seam: rendered `TodoSummaryCard` with a mocked request client; E1 in the browser
   - Interface: generated `usePostAiObservabilityTracesByIdFeedbackMutation` (name as generated); testIDs `todos-summary-feedback`, `todos-summary-keep`, `todos-summary-dismiss`, `todos-summary-copy`
   - Cases:
@@ -298,7 +298,7 @@ export const recordTraceFeedback = async (args: {
 
 - [ ] **T12** — Send rating comments and copy signals from the example chat
   - Depends on: T9, T11
-  - Files: example-frontend/app/(tabs)/ai.tsx, example-frontend/types/gptHistory.ts, example-frontend/e2e/ai-chat.spec.ts, docs/user-guide/ai/chat.md
+  - Files: example-frontend/app/(tabs)/ai.tsx, example-frontend/e2e/ai-chat.spec.ts, example-frontend/e2e/fixtures/testUsers.ts, ui/src/GPTChat.tsx (adds the `gpt-history-{id}` testID the no-trace copy case needs), docs/user-guide/ai/chat.md
   - Criteria: the chat screen passes `onRateComment` (re-posts the rating with `comment`) and `onMessageSignal` (posts `signal: "copied"` to the message's `traceId` when present). It maps `prompts[n].traceId` and the sent comment onto messages. E2 passes against the backend demo agent with no `mockGptStream*` helper. G2 adds the comment step.
   - Seam: E2 in the browser (the screen has no unit harness)
   - Interface: as T6 and T9

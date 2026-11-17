@@ -29,6 +29,8 @@ export interface RunBuildOptions {
   from?: string;
   only?: string[];
   keepGoing?: boolean;
+  /** Failure lines to append to a stage's prompt, keyed by stage id. */
+  failures?: Record<string, string[]>;
   /** Injected in tests; defaults to the real stage runner. */
   runStage?: (options: RunStageOptions) => Promise<StageResult>;
 }
@@ -82,13 +84,14 @@ export const runBuild = async ({
   from,
   only,
   keepGoing = false,
+  failures,
   runStage = defaultRunStage,
 }: RunBuildOptions): Promise<BuildResult> => {
   const selected = selectStages({from, only});
   mkdirSync(runDir, {recursive: true});
   const started = DateTime.now();
   for (const stageId of selected) {
-    const result = await runStage({runDir, stageId, version});
+    const result = await runStage({failures: failures?.[stageId], runDir, stageId, version});
     if (result.status === "FAIL" && !keepGoing) {
       break;
     }

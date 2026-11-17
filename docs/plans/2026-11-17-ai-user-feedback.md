@@ -306,7 +306,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: the existing rating test in `ai-chat.spec.ts` (mock stream, rating 400) must still pass.
   - Test skills: terreno-frontend-tests
 
-- [ ] **T13** — Document the feedback loop end to end
+- [x] **T13** — Document the feedback loop end to end
   - Depends on: T7, T11
   - Files: docs/how-to/ai-feature-development.md, docs/explanation/ai-observability.md, docs/reference/ai.md, docs/implementationPlans/ai-observability.md
   - Criteria: how-to steps 1, 7, and 8 describe the shipped route, sources, auto-review option, filters, and dataset intake rules, with one minimal client example (`createTraceId` → route returns `traceId` → feedback call). The explanation's 8-step loop names both sources and says why thumbs-down items land unproofread. Every "phase 2.6" or "filters land with task 2.6" placeholder is replaced or removed. `bun run check:links` (or the repo's docs check) passes.

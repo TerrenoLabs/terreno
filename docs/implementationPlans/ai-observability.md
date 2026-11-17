@@ -421,7 +421,7 @@ RBAC, the legacy `admin: true` check remains the compatibility path.
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| POST | `/traces/:id/feedback` | **IsAuthenticated** (owner or admin). Thumbs / outcome / flag-for-dataset → ScoreSinks; optional review enqueue |
+| POST | `/traces/:id/feedback` | **IsAuthenticated**, trace owner only (admins score through `/traces/:id/scores`; changed in `docs/plans/2026-11-17-ai-user-feedback.md`, Q6). Thumbs + comment / outcome / passive signal / flag-for-dataset → ScoreSinks; review enqueue with `feedbackReview` |
 | POST | `/traces/add-to-dataset` | `{datasetId, traceIds[]}`. Copies I/O; `origin: "trace"`; sensitive traces forced to `proofread: false` (Q43) |
 | CRUD | `/datasets` + `/datasets/:id/items` | Item PATCH for expectedOutput / tags / outcomeClass / proofread |
 | POST | `/datasets/:id/import` | JSON or CSV upload; validates against `inputSchemaPromptName` when set. CSV: `text/csv` body or `{format: "csv", content}` |
@@ -654,7 +654,7 @@ the traces and experiments that use it.
 - [ ] Import JSON and add-from-trace (single and bulk) validate against the bound prompt's `inputSchema` and retain `sourceTraceId`.
 - [ ] An experiment compares 2–3 versions on a dataset, always via `BackgroundTask` locally (even for one item), reports gate pass/fail plus outliers and low-confidence items, and floats failed items to the top of the side-by-side table.
 - [ ] Promote returns 409 and renders disabled while any gate fails; with gates passing it moves the production label after an explicit confirm.
-- [ ] Owner `POST feedback` (thumbs down + flagDataset) writes a `user-feedback` score and sets `flaggedForDataset`; a non-owner non-admin gets 403.
+- [x] Owner `POST feedback` (thumbs down + flagDataset) writes a `user-feedback` score and sets `flaggedForDataset`; a non-owner gets 403 (shipped by `docs/plans/2026-11-17-ai-user-feedback.md`).
 - [ ] The wizard's pre-run estimate reports generation count and USD before the run starts.
 
 ### Phase 3

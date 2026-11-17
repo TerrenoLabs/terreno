@@ -38,6 +38,10 @@ versions are immutable in admin (`Save as vN+1`); apps never inline the string.
 
 Flourish AI features follow an 8-step loop: gold dataset → labels → prompt versions → evaluators → experiments with gates → `production` label → live traces and in-app feedback → weak traces back into the dataset.
 
+In-app feedback is two kinds of score on the output's trace. `user-feedback` is what the user said: thumbs, an optional comment, or an outcome class. `user-signal` is what the user did: accepted, dismissed, copied, edited, or regenerated the output. They stay separate because signals are plentiful and ambiguous (a dismissal can mean "wrong" or "not now"), while a thumbs down is a judgement. Routes return the trace id with each output (`createTraceId()`; chat stores it on the reply), so the product can attach feedback without knowing anything about observability. A thumbs down can queue the trace for human review (`feedbackReview`), and operators find the rest with the Traces feedback filters.
+
+Feedback flows back into the loop through datasets, never straight into experiments. Adding a trace copies its output as the expected answer, so a trace the user rejected lands unproofread and tagged: a known-bad answer must be relabeled by a human before an experiment can score against it.
+
 That loop is the product requirement, not an optional dashboard. Operator steps: [Develop an AI feature](../how-to/ai-feature-development.md). Registration and env: [Observe LLM calls](../how-to/observe-llm-calls.md). Models and routes: [AI reference](../reference/ai.md). Design lock: [implementation plan](../implementationPlans/ai-observability.md).
 
 ## RBAC (domain-neutral)

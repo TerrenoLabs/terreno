@@ -213,7 +213,8 @@ describe("AiTracesListView table", () => {
     assert.equal(columnByTitle(columns, "Scores").filter?.field, "hasScore");
     assert.deepEqual(
       (table.props.additionalFilters as Array<{field: string}>).map((filter) => filter.field),
-      ["sensitive", "userId", "sessionId"]
+      // T10 (ai-user-feedback) adds the end-user feedback filters.
+      ["sensitive", "userId", "sessionId", "thumbs", "signal", "hasComment"]
     );
 
     // 32px cell padding plus about 9px per character keeps these values on one line.
@@ -356,6 +357,21 @@ describe("AiTracesScreenWidget table query", () => {
       status: ["error"],
       userId: "user-1",
     });
+
+    // End-user feedback filters (T10): one picked choice narrows; Any (nothing picked) is absent.
+    await fireTable("filterValuesChange", {
+      hasComment: true,
+      signal: ["dismissed"],
+      thumbs: ["down"],
+    });
+    assert.deepInclude(Object.fromEntries(lastListQuery(server).entries()), {
+      hasComment: "true",
+      signal: "dismissed",
+      thumbs: "down",
+    });
+    await fireTable("filterValuesChange", {signal: [], thumbs: []});
+    assert.isFalse(lastListQuery(server).has("thumbs"));
+    assert.isFalse(lastListQuery(server).has("signal"));
 
     await fireTable("filterValuesChange", {});
     // Cleared filters drop out of the request; sort and paging remain.

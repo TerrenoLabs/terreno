@@ -141,7 +141,7 @@ Feedback is a score (`source: "user-feedback"`) fanned out to every ScoreSink. N
 
 ## 8. Add weak production traces back to the dataset
 
-1. **Traces**: filter `thumbs=down`, `flaggedForDataset`, `failedEval`, or `lowConfidence` (filters land with task 2.6 feedback).
+1. **Traces** → **More filters**: set **Thumbs** to **Down**, pick a **Signal** such as **Dismissed**, or turn on **Has comment** (API: `thumbs=down`, `signal=dismissed`, `hasComment=true`; `flaggedForDataset=true` lists traces users flagged). Open a trace to read the user's comment under its score.
 2. **Add to dataset** (`POST /ai/observability/traces/add-to-dataset`, bulk allowed).
 3. Label the new items (step 2).
 4. Repeat steps 5–8.

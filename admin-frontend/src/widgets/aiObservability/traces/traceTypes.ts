@@ -72,15 +72,31 @@ export interface TraceListResponse {
   total: number;
 }
 
+/** Passive feedback signals the backend records as `user-signal` scores. */
+export const TRACE_FEEDBACK_SIGNALS = [
+  "accepted",
+  "dismissed",
+  "copied",
+  "edited",
+  "regenerated",
+] as const;
+export type TraceFeedbackSignal = (typeof TRACE_FEEDBACK_SIGNALS)[number];
+
 export interface TraceListFilters {
   flaggedForDataset?: boolean;
   from: string;
+  /** Traces with (or without) an end-user comment. */
+  hasComment?: boolean;
   hasScore?: boolean;
   /** Prompt names; a trace matches when it used any of them. */
   prompts: string[];
   sensitive?: boolean;
   sessionId: string;
+  /** A passive signal the user sent, e.g. `dismissed`. */
+  signal?: TraceFeedbackSignal;
   status: "" | "error" | "ok";
+  /** End-user thumbs direction. */
+  thumbs?: "down" | "up";
   to: string;
   userId: string;
 }
@@ -114,12 +130,15 @@ export const DEFAULT_TRACE_SORT = "-startedAt";
 
 /** DataTable filter field keys used by the Traces screen. */
 export const TRACE_FILTER_FIELDS = {
+  hasComment: "hasComment",
   hasScore: "hasScore",
   prompt: "prompt",
   sensitive: "sensitive",
   sessionId: "sessionId",
+  signal: "signal",
   startedAt: "startedAt",
   status: "status",
+  thumbs: "thumbs",
   userId: "userId",
 } as const;
 
@@ -178,6 +197,15 @@ export const traceFiltersToFilterValues = (filters: TraceListFilters): Record<st
   if (filters.hasScore !== undefined) {
     values[fields.hasScore] = filters.hasScore;
   }
+  if (filters.thumbs) {
+    values[fields.thumbs] = [filters.thumbs];
+  }
+  if (filters.signal) {
+    values[fields.signal] = [filters.signal];
+  }
+  if (filters.hasComment !== undefined) {
+    values[fields.hasComment] = filters.hasComment;
+  }
   if (filters.userId) {
     values[fields.userId] = filters.userId;
   }
@@ -214,6 +242,23 @@ export const filterValuesToTraceFilters = (
   const hasScore = optionalBoolean(values[fields.hasScore]);
   if (hasScore !== undefined) {
     filters.hasScore = hasScore;
+  }
+  // Choice filters: one picked value narrows; none (Any) or several means no filter.
+  const thumbs = stringList(values[fields.thumbs]).filter(
+    (entry): entry is "down" | "up" => entry === "down" || entry === "up"
+  );
+  if (thumbs.length === 1) {
+    filters.thumbs = thumbs[0];
+  }
+  const signals = stringList(values[fields.signal]).filter((entry): entry is TraceFeedbackSignal =>
+    (TRACE_FEEDBACK_SIGNALS as readonly string[]).includes(entry)
+  );
+  if (signals.length === 1) {
+    filters.signal = signals[0];
+  }
+  const hasComment = optionalBoolean(values[fields.hasComment]);
+  if (hasComment !== undefined) {
+    filters.hasComment = hasComment;
   }
   if (previous?.flaggedForDataset !== undefined) {
     filters.flaggedForDataset = previous.flaggedForDataset;

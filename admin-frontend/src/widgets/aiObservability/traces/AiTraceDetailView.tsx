@@ -74,6 +74,19 @@ const SpanRow: React.FC<{
   );
 };
 
+const SCORE_SOURCE_LABELS: Record<string, string> = {
+  code: "Code",
+  human: "Human",
+  "llm-judge": "Judge",
+  "user-feedback": "User",
+  "user-signal": "Signal",
+};
+
+/** Short badge text for who wrote a score. */
+const scoreSourceLabel = (source: string): string => {
+  return SCORE_SOURCE_LABELS[source] ?? source;
+};
+
 export const AiTraceDetailView: React.FC<AiTraceDetailViewProps> = ({detail, onBack}) => {
   const flat = useMemo(() => flattenSpans(detail.spans), [detail.spans]);
   const maxDuration = useMemo(() => {
@@ -175,13 +188,35 @@ export const AiTraceDetailView: React.FC<AiTraceDetailViewProps> = ({detail, onB
         {detail.scores.length === 0 ? (
           <Text color="secondaryDark">No scores on this trace.</Text>
         ) : (
-          detail.scores.map((score) => (
-            <Box direction="row" gap={2} key={`${score.name}-${score.source}`} wrap>
-              <Text bold>{score.name}</Text>
-              <Text>{String(score.value)}</Text>
-              <Text color="secondaryDark">{score.source}</Text>
-            </Box>
-          ))
+          detail.scores.map((score, index) => {
+            const comment = score.comment ? (
+              <Box testID={`ai-trace-score-comment-${index}`}>
+                <Text size="sm">{score.comment}</Text>
+              </Box>
+            ) : undefined;
+            return (
+              // Several human or code scores can share a name and source, so key by position.
+              <Box gap={1} key={`${index}-${score.name}-${score.source}`}>
+                <Box alignItems="center" direction="row" gap={2} wrap>
+                  <Text bold>{score.name}</Text>
+                  <Text>{String(score.value)}</Text>
+                  <Badge status="neutral" value={scoreSourceLabel(score.source)} />
+                </Box>
+                {comment && detail.sensitive ? (
+                  // A user's comment on a sensitive trace may hold PHI, so it starts collapsed like I/O.
+                  <Accordion
+                    isCollapsed
+                    testID={`ai-trace-score-comment-toggle-${index}`}
+                    title="Comment (sensitive)"
+                  >
+                    {comment}
+                  </Accordion>
+                ) : (
+                  comment
+                )}
+              </Box>
+            );
+          })
         )}
       </Box>
     </Box>

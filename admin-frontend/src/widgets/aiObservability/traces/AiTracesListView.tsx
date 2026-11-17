@@ -23,6 +23,7 @@ import {
   DEFAULT_TRACE_SORT,
   type EvaluatorOption,
   selectedSensitiveCount,
+  TRACE_FEEDBACK_SIGNALS,
   TRACE_FILTER_FIELDS,
   type TraceListItem,
   type TraceSortKey,
@@ -60,6 +61,25 @@ const ADDITIONAL_FILTERS: DataTableColumnFilter[] = [
   {field: TRACE_FILTER_FIELDS.sensitive, kind: "boolean", label: "Sensitive"},
   {field: TRACE_FILTER_FIELDS.userId, kind: "text", label: "User"},
   {field: TRACE_FILTER_FIELDS.sessionId, kind: "text", label: "Session"},
+  {
+    field: TRACE_FILTER_FIELDS.thumbs,
+    kind: "choice",
+    label: "Thumbs",
+    options: [
+      {label: "Up", value: "up"},
+      {label: "Down", value: "down"},
+    ],
+  },
+  {
+    field: TRACE_FILTER_FIELDS.signal,
+    kind: "choice",
+    label: "Signal",
+    options: TRACE_FEEDBACK_SIGNALS.map((signal) => ({
+      label: signal.charAt(0).toUpperCase() + signal.slice(1),
+      value: signal,
+    })),
+  },
+  {field: TRACE_FILTER_FIELDS.hasComment, kind: "boolean", label: "Has comment"},
 ];
 
 /** Two-line cells (name plus steps and user) need more than the default 54px row. */

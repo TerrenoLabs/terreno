@@ -121,7 +121,7 @@ None — backend only.
   - Docs: `docs/explanation/test-isolation.md` or `docs/reference/test.md`, saying how to opt
     a file into a replica set
 
-- [ ] **T2** — Mount `POST /bulk` with the request envelope and partial-mode create
+- [x] **T2** — Mount `POST /bulk` with the request envelope and partial-mode create
   - Depends on: none
   - Files: api/src/bulk.ts, api/src/bulk.test.ts, api/src/api.ts, api/src/errors.ts
   - Seam: `POST /<route>/bulk` (HTTP route via supertest; `getBaseServer` + `authAsUser`

@@ -378,7 +378,7 @@ export const getDisableExternalErrorTracking = (error: unknown): boolean | undef
 
 // Builds the client-facing JSONAPI body from any APIError-shaped error, including instances from
 // older/duplicate copies of @terreno/api that may not have toJSON.
-const serializeAPIError = (error: APIError): APIErrorBody => {
+export const serializeAPIError = (error: APIError): APIErrorBody => {
   const indexable = error as unknown as Record<string, unknown>;
   // Prefer an explicit title property for legacy/duplicate-package instances whose message was
   // polluted with detail/cause stacks but still carry a clean title field.
@@ -562,7 +562,7 @@ export const passthroughOrWrapWrite = (error: unknown, wrapper: APIErrorOptions)
 // Sentry unless external tracking is disabled. Fingerprints on the logical error type
 // (name + code/title + status) so unrelated errors constructed at the same framework lines don't
 // group together, while the `cause` chain preserves each occurrence's real origin stack.
-const logAndCaptureAPIError = (err: APIError): void => {
+export const logAndCaptureAPIError = (err: APIError): void => {
   const cause = err.cause;
   const causeStack = cause instanceof Error && cause.stack ? `\n${cause.stack}` : "";
   const logMessage = `${err.name}(${err.status}): ${err.message}${

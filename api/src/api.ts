@@ -24,6 +24,12 @@ import {
   snapshotAuditBefore,
 } from "./audit/record";
 import {authenticateMiddleware, omitUserRolesFromWriteBody, type User} from "./auth";
+import {
+  assertNoBulkCollision,
+  type BulkBodyValidator,
+  type ModelRouterBulkOptions,
+  registerBulkRoute,
+} from "./bulk";
 import {registerCollection, replaceCollectionOptions} from "./collectionRegistry";
 import {
   APIError,
@@ -253,6 +259,13 @@ export interface ModelRouterOptions<T> {
   instanceActions?: Record<string, InstanceActionConfig<T, unknown, unknown, unknown>>;
   /** Named collection-scoped operations at `/:actionName` (GET or POST). */
   collectionActions?: Record<string, CollectionActionConfig<unknown, unknown, unknown>>;
+  /**
+   * Opt in to `POST /bulk`: many create/update/delete operations in one request, each run
+   * through this router's permissions, hooks, validation, audit, and `responseHandler`.
+   * `true` allows all three methods with at most 100 operations per request.
+   * See docs/reference/api.md ("modelRouter bulk writes").
+   */
+  bulk?: boolean | ModelRouterBulkOptions;
   /**
    * Hook that runs after `transformer.transform` but before the object is created.
    * Can update the body fields based on the request or the user.
@@ -638,6 +651,48 @@ const getBodyValidationMiddleware = <T>(
   return validateModelRequestBody(model, validationOptions);
 };
 
+type BodyValidationMiddleware = (req: Request, res: Response, next: NextFunction) => void;
+
+// Runs a body validation middleware against one body outside the Express chain and returns the
+// cleaned body, throwing what the middleware would have passed to `next` or thrown.
+const runBodyValidator = (
+  middleware: BodyValidationMiddleware,
+  body: Record<string, unknown>,
+  req?: Request
+): Record<string, unknown> => {
+  const stub = (req ? Object.create(req) : {headers: {}}) as Request;
+  stub.body = cloneDeep(body);
+  let nextError: unknown;
+  middleware(stub, {} as Response, (error?: unknown) => {
+    nextError = error;
+  });
+  if (nextError) {
+    throw nextError;
+  }
+  return stub.body as Record<string, unknown>;
+};
+
+/**
+ * Validates one create or update body exactly as `POST /` or `PATCH /:id` validate theirs
+ * (OpenAPI schema, coercion, additional-property removal), returning the cleaned body or
+ * throwing the same 400. A no-op until validation is enabled globally or on the router.
+ */
+export const validateModelRouterBody = <T>({
+  model,
+  options,
+  method,
+  body,
+  req,
+}: {
+  model: ModelLike<T>;
+  options: ModelRouterOptions<T>;
+  method: "create" | "update";
+  body: Record<string, unknown>;
+  req?: Request;
+}): Record<string, unknown> => {
+  return runBodyValidator(getBodyValidationMiddleware(model, options, method), body, req);
+};
+
 // Get query validation middleware if validation is enabled
 const getQueryValidationMiddleware = <T>(
   model: ModelLike<T>,
@@ -810,12 +865,8 @@ const _buildModelRouter = <T>(
   }
 
   assertNoActionCollisions(model, options);
+  assertNoBulkCollision(options);
   registerActionRoutes(router, model, options);
-
-  // User endpoints run after actions; actions win on path conflicts.
-  if (options.endpoints) {
-    options.endpoints(router, options);
-  }
 
   const responseHandler = options.responseHandler ?? defaultResponseHandler;
 
@@ -823,6 +874,21 @@ const _buildModelRouter = <T>(
   const createValidation = getBodyValidationMiddleware(model, options, "create");
   const updateValidation = getBodyValidationMiddleware(model, options, "update");
   const queryValidation = getQueryValidationMiddleware(model, options);
+
+  const validateBulkBody: BulkBodyValidator = ({method, body, req}) =>
+    runBodyValidator(method === "create" ? createValidation : updateValidation, body, req);
+  registerBulkRoute({
+    model,
+    options,
+    responseHandler: responseHandler as NonNullable<ModelRouterOptions<T>["responseHandler"]>,
+    router,
+    validateBody: validateBulkBody,
+  });
+
+  // User endpoints run after actions and bulk; those win on path conflicts.
+  if (options.endpoints) {
+    options.endpoints(router, options);
+  }
 
   router.post(
     "/",

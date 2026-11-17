@@ -44,6 +44,12 @@ export interface TraceListQuery {
   /** One of `TRACE_LIST_SORT_KEYS`, optionally prefixed with `-` for descending. */
   sort?: string;
   status?: "error" | "ok";
+  /** Traces with a live end-user `thumbs_up` score in that direction. */
+  thumbs?: "down" | "up";
+  /** Traces with a live `user-signal` score of this name. */
+  signal?: string;
+  /** Traces with (or without) a live `user-feedback` score carrying a non-empty comment. */
+  hasComment?: boolean;
   to?: string;
   userId?: string;
 }
@@ -516,13 +522,33 @@ export class LocalTraceStore {
         ...(to ? {$lte: to} : {}),
       };
     }
+    // Score-based filters each narrow the trace ids; `$and` lets several apply at once.
+    const idConstraints: Array<Record<string, unknown>> = [];
+    const scoredTraceIds = (scoreFilter: Record<string, unknown>): Promise<unknown[]> => {
+      return registerObsScore().distinct("traceId", {deleted: {$ne: true}, ...scoreFilter});
+    };
     if (query.hasScore !== undefined) {
-      const scoredIds = await registerObsScore().distinct("traceId", {deleted: {$ne: true}});
-      if (query.hasScore) {
-        filter._id = {$in: scoredIds};
-      } else {
-        filter._id = {$nin: scoredIds};
-      }
+      const scoredIds = await scoredTraceIds({});
+      idConstraints.push({_id: query.hasScore ? {$in: scoredIds} : {$nin: scoredIds}});
+    }
+    if (query.thumbs) {
+      const ids = await scoredTraceIds({
+        name: "thumbs_up",
+        source: "user-feedback",
+        value: query.thumbs === "up",
+      });
+      idConstraints.push({_id: {$in: ids}});
+    }
+    if (query.signal) {
+      const ids = await scoredTraceIds({name: query.signal, source: "user-signal"});
+      idConstraints.push({_id: {$in: ids}});
+    }
+    if (query.hasComment !== undefined) {
+      const ids = await scoredTraceIds({comment: {$nin: [null, ""]}, source: "user-feedback"});
+      idConstraints.push({_id: query.hasComment ? {$in: ids} : {$nin: ids}});
+    }
+    if (idConstraints.length > 0) {
+      filter.$and = [...((filter.$and as unknown[] | undefined) ?? []), ...idConstraints];
     }
     const ObsTrace = registerObsTrace();
     const total = await ObsTrace.countDocuments(filter);

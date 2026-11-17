@@ -16985,6 +16985,41 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             },
           },
           {
+            "in": "query",
+            "name": "thumbs",
+            "required": false,
+            "schema": {
+              "enum": [
+                "up",
+                "down",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "signal",
+            "required": false,
+            "schema": {
+              "enum": [
+                "accepted",
+                "dismissed",
+                "copied",
+                "edited",
+                "regenerated",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "hasComment",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+            },
+          },
+          {
             "description": "Sort column, \`-\` prefix for descending. Defaults to \`-startedAt\`.",
             "in": "query",
             "name": "sort",

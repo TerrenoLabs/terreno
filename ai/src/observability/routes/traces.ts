@@ -72,6 +72,29 @@ const parseSort = (value: unknown): string | undefined => {
   return value;
 };
 
+const parseThumbs = (value: unknown): "down" | "up" | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "up" || value === "down") {
+    return value;
+  }
+  throw new APIError({status: 400, title: "thumbs must be up or down"});
+};
+
+const parseSignal = (value: unknown): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "string" && (FEEDBACK_SIGNALS as readonly string[]).includes(value)) {
+    return value;
+  }
+  throw new APIError({
+    status: 400,
+    title: `signal must be one of ${FEEDBACK_SIGNALS.join(", ")}`,
+  });
+};
+
 const parsePositiveInt = (value: unknown, fallback: number): number => {
   if (value === undefined) {
     return fallback;
@@ -103,6 +126,13 @@ export const addObservabilityTraceRoutes = (
         .withQueryParameter("prompt", {type: "string"}, {required: false})
         .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withQueryParameter("scope", {type: "string"}, {required: false})
+        .withQueryParameter("thumbs", {enum: ["up", "down"], type: "string"}, {required: false})
+        .withQueryParameter(
+          "signal",
+          {enum: [...FEEDBACK_SIGNALS], type: "string"},
+          {required: false}
+        )
+        .withQueryParameter("hasComment", {type: "boolean"}, {required: false})
         .withQueryParameter(
           "sort",
           {
@@ -122,6 +152,7 @@ export const addObservabilityTraceRoutes = (
       const listed = await options.store.list({
         flaggedForDataset: parseBoolean(req.query.flaggedForDataset),
         from: typeof req.query.from === "string" ? req.query.from : undefined,
+        hasComment: parseBoolean(req.query.hasComment),
         hasScore: parseBoolean(req.query.hasScore),
         limit: parsePositiveInt(req.query.limit, 20),
         page: parsePositiveInt(req.query.page, 1),
@@ -130,9 +161,11 @@ export const addObservabilityTraceRoutes = (
         scope: typeof req.query.scope === "string" ? req.query.scope : undefined,
         sensitive: parseBoolean(req.query.sensitive),
         sessionId: typeof req.query.sessionId === "string" ? req.query.sessionId : undefined,
+        signal: parseSignal(req.query.signal),
         sort: parseSort(req.query.sort),
         status:
           req.query.status === "ok" || req.query.status === "error" ? req.query.status : undefined,
+        thumbs: parseThumbs(req.query.thumbs),
         to: typeof req.query.to === "string" ? req.query.to : undefined,
         userId: typeof req.query.userId === "string" ? req.query.userId : undefined,
       });

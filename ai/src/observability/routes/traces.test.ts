@@ -670,3 +670,152 @@ describe("POST /ai/observability/traces/:id/feedback", () => {
     });
   });
 });
+
+describe("GET /ai/observability/traces feedback filters", () => {
+  let app: express.Application;
+  let store: LocalTraceStore;
+  let a: string;
+  let b: string;
+  let c: string;
+  let d: string;
+  const listPath = "/ai/observability/traces";
+
+  const addTrace = async (promptName: string): Promise<string> => {
+    const id = createTraceId();
+    await store.exportTrace({
+      id,
+      name: promptName,
+      prompts: [{name: promptName, version: 1}],
+      sensitive: false,
+      spans: [],
+      startedAt: DateTime.utc().toISO() ?? "",
+      status: "ok",
+    });
+    return id;
+  };
+
+  const rowIds = (res: {body: {data: {id: string}[]}}): string[] =>
+    res.body.data.map((row) => row.id).sort();
+
+  beforeAll(async () => {
+    await ensureTestUsers();
+  });
+
+  afterEach(() => {
+    resetObservabilityApp();
+  });
+
+  beforeEach(async () => {
+    await registerObsTrace().deleteMany({});
+    await registerObsSpan().deleteMany({});
+    await registerObsScore().collection.deleteMany({});
+    const plugin = createLocalObservabilityPlugin();
+    store =
+      plugin.traceSink && "store" in plugin.traceSink
+        ? (plugin.traceSink as {store: LocalTraceStore}).store
+        : new LocalTraceStore();
+    app = new TerrenoApp({skipListen: true, userModel: terrenoUserModel})
+      .register(new ObservabilityApp({plugins: [plugin]}))
+      .build();
+    a = await addTrace("example-summarize");
+    b = await addTrace("other");
+    c = await addTrace("other");
+    d = await addTrace("other");
+    await new LocalTraceStore().exportScore({
+      comment: "too long",
+      dataType: "boolean",
+      name: "thumbs_up",
+      source: "user-feedback",
+      traceId: a,
+      value: false,
+    });
+    await new LocalTraceStore().exportScore({
+      dataType: "boolean",
+      name: "thumbs_up",
+      source: "user-feedback",
+      traceId: b,
+      value: true,
+    });
+    await new LocalTraceStore().exportScore({
+      dataType: "boolean",
+      name: "dismissed",
+      source: "user-signal",
+      traceId: c,
+      value: true,
+    });
+  });
+
+  it("thumbs=down returns only the thumbs-down trace", async () => {
+    const agent = await authAsUser(app, "admin");
+    const res = await agent.get(`${listPath}?thumbs=down`);
+    expect(res.status).toBe(200);
+    expect(rowIds(res)).toEqual([a]);
+    expect(res.body.total).toBe(1);
+  });
+
+  it("thumbs=up returns only the thumbs-up trace", async () => {
+    const agent = await authAsUser(app, "admin");
+    expect(rowIds(await agent.get(`${listPath}?thumbs=up`))).toEqual([b]);
+  });
+
+  it("signal=dismissed returns only the dismissed trace", async () => {
+    const agent = await authAsUser(app, "admin");
+    expect(rowIds(await agent.get(`${listPath}?signal=dismissed`))).toEqual([c]);
+  });
+
+  it("hasComment=true returns only the commented trace", async () => {
+    const agent = await authAsUser(app, "admin");
+    expect(rowIds(await agent.get(`${listPath}?hasComment=true`))).toEqual([a]);
+  });
+
+  it("hasComment=false returns every trace without a comment", async () => {
+    const agent = await authAsUser(app, "admin");
+    const res = await agent.get(`${listPath}?hasComment=false`);
+    expect(res.status).toBe(200);
+    expect(rowIds(res)).toEqual([b, c, d].sort());
+  });
+
+  it("thumbs=down combines with prompt", async () => {
+    const agent = await authAsUser(app, "admin");
+    expect(rowIds(await agent.get(`${listPath}?thumbs=down&prompt=example-summarize`))).toEqual([
+      a,
+    ]);
+    expect(rowIds(await agent.get(`${listPath}?thumbs=down&prompt=other`))).toEqual([]);
+  });
+
+  it("a deselected thumbs score does not match thumbs=down", async () => {
+    await new LocalTraceStore().deleteFeedbackScore({
+      name: "thumbs_up",
+      source: "user-feedback",
+      traceId: a,
+    });
+    const agent = await authAsUser(app, "admin");
+    const res = await agent.get(`${listPath}?thumbs=down`);
+    expect(res.status).toBe(200);
+    expect(rowIds(res)).toEqual([]);
+  });
+
+  it("an invalid thumbs value returns 400", async () => {
+    const agent = await authAsUser(app, "admin");
+    expectAPIError(await agent.get(`${listPath}?thumbs=sideways`), {status: 400});
+  });
+
+  it("an unknown signal returns 400", async () => {
+    const agent = await authAsUser(app, "admin");
+    expectAPIError(await agent.get(`${listPath}?signal=liked`), {status: 400});
+  });
+
+  it("an invalid hasComment value returns 400", async () => {
+    const agent = await authAsUser(app, "admin");
+    expectAPIError(await agent.get(`${listPath}?hasComment=maybe`), {status: 400});
+  });
+
+  it("a non-admin gets 403 on a filtered list", async () => {
+    const agent = await authAsUser(app, "notAdmin");
+    expectAPIError(await agent.get(`${listPath}?thumbs=down`), {status: 403});
+  });
+
+  it("a request without a token gets 401 on a filtered list", async () => {
+    expectAPIError(await request(app).get(`${listPath}?thumbs=down`), {status: 401});
+  });
+});

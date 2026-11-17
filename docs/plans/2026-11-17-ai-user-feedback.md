@@ -184,7 +184,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: the review queue list and its counts read `ObsReviewItem` → a `GET /ai/observability/review` case shows the item under Pending with reason `feedback`.
   - Test skills: terreno-backend-tests
 
-- [ ] **T5** — Filter traces by thumbs, signal, and comment
+- [x] **T5** — Filter traces by thumbs, signal, and comment
   - Depends on: T3
   - Files: ai/src/observability/local/traceStore.ts, ai/src/observability/local/traceStore.test.ts, ai/src/observability/routes/traces.ts, ai/src/observability/routes/traces.test.ts, example-backend/src/__snapshots__/openapi.test.ts.snap, docs/reference/ai.md
   - Criteria: `GET /ai/observability/traces` accepts `thumbs=up|down`, `signal=<FeedbackSignal>`, and `hasComment=true|false` (a live `user-feedback` score with a non-empty comment). They combine with every existing filter. Invalid values get 400. Reference docs list them.

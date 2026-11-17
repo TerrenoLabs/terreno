@@ -1000,6 +1000,50 @@ describe("TextField", () => {
       }
     });
 
+    it("drops a spellcheck replacement that flips a prose field back and forth", async () => {
+      const savedOS = PlatformModule.OS;
+      const originalNow = performance.now.bind(performance);
+      let fakeNow = 30_000;
+      const withoutSpace = "reachthreshold";
+      const withSpace = "reach threshold";
+
+      try {
+        PlatformModule.OS = "web";
+        performance.now = () => fakeNow;
+
+        let value = withoutSpace;
+        const onChange = mock((next: string) => {
+          value = next;
+        });
+        const renderField = (): ReactElement => (
+          <TextField onChange={onChange} type="text" value={value} />
+        );
+        const view = renderWithTheme(renderField());
+
+        const replace = async (text: string): Promise<void> => {
+          const input = view.getByDisplayValue(value);
+          await act(async () => {
+            fireEvent(input, "change", {
+              nativeEvent: {inputType: "insertReplacementText", text},
+            });
+            fireEvent.changeText(input, text);
+          });
+          view.rerender(renderField());
+          fakeNow += 10;
+        };
+
+        await replace(withSpace);
+        await replace(withoutSpace);
+        await replace(withSpace);
+
+        expect(onChange.mock.calls.map((call) => call[0])).toEqual([withSpace]);
+        expect(value).toBe(withSpace);
+      } finally {
+        performance.now = originalNow;
+        PlatformModule.OS = savedOS;
+      }
+    });
+
     it("does not recurse when synthetic onChange alternates by a single-space autocorrect delta", async () => {
       const savedOS = PlatformModule.OS;
       const withoutSpace =

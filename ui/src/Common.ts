@@ -1185,8 +1185,9 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
     | "username webauthn";
   /**
    * On web, enables browser spell check (red underlines and replacement suggestions). Prose
-   * fields (`type` `text` or multiline) default to on; autocorrect stays off on web so a
-   * controlled value cannot loop. Pass `false` to turn spell check off.
+   * fields (`type` `text` or multiline) default to on. Autocorrect stays off on web, and a
+   * replacement that flips the value straight back within 500ms is ignored, so a controlled
+   * value cannot loop. Pass `false` to turn spell check off.
    */
   spellCheck?: boolean;
   /**

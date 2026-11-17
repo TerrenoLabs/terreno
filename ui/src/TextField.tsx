@@ -268,8 +268,6 @@ export const TextField: FC<TextFieldProps> = ({
 
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
-  const shouldSpellCheckRef = useRef(shouldSpellCheck);
-  shouldSpellCheckRef.current = shouldSpellCheck;
   const oscillationRef = useRef(createTextFieldOscillationState());
   // RN Web calls onChange with the DOM input event just before onChangeText, so this
   // carries the pending change's `inputType` across to handleChangeText.
@@ -295,7 +293,6 @@ export const TextField: FC<TextFieldProps> = ({
     const oscillationState = oscillationRef.current;
     if (
       shouldSuppressTextFieldOscillation({
-        acceptSpellcheckReplacement: shouldSpellCheckRef.current,
         currentValue,
         inputType,
         now,

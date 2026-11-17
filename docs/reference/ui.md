@@ -519,9 +519,10 @@ Passkey autofill (`"username webauthn"`) is web only; native gets the plain user
 
 Prose fields (`type="text"`, multiline `TextArea`, or `Field type="textarea"`) turn browser spell
 check on by default when `autoComplete` is unset or `"on"`. Misspelled words show the usual red
-underline; when the user picks a suggestion the field's `onChange` runs with the corrected text.
-Autocorrect stays off on web so a controlled value cannot loop between two spellings (for example
-`reachthreshold` and `reach threshold`).
+underline. Picking a suggestion runs `onChange` with the corrected text. A replacement that flips
+the value straight back within 500ms is ignored, so spell check cannot loop a controlled field
+between two spellings (for example `reachthreshold` and `reach threshold`). Autocorrect stays off
+on web.
 
 | Prop | Web default | Native default |
 | --- | --- | --- |

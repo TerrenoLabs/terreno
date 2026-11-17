@@ -23,6 +23,7 @@ Technical reference for Terreno packages and APIs. Information-oriented, precise
 - [@terreno/mcp](mcp-server.md) — AI coding assistant integration (MCP)
 - [@terreno/cli](cli.md) — `terreno` CLI for docs, codegen, bootstrap, and OpenAPI REST
 - [create-terreno-app](create-terreno-app.md) — Scaffold CLI (`bunx create-terreno-app`)
+- [Bootstrap loop](bootstrap-loop.md) — Repo-only harness that builds, scores and regression-tests the todo app per version
 - [@terreno/test](test.md) — Bun test helpers and in-memory MongoDB
 
 ## Legacy

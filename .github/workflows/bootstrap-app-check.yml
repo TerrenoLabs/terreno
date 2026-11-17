@@ -12,6 +12,8 @@ on:
     paths:
       - ".github/workflows/bootstrap-app-check.yml"
       - "scripts/ci/check-bootstrap-app.sh"
+      - "scripts/bootstrapLoop/e2e/**"
+      - "scripts/bootstrapLoop/stages/scaffold.ts"
   workflow_dispatch:
 
 permissions:
@@ -35,3 +37,6 @@ jobs:
 
       - name: Generate and build the app
         run: scripts/ci/check-bootstrap-app.sh
+
+      - name: Run the bootstrap loop e2e tests
+        run: bun run test:bootstrap-loop:e2e

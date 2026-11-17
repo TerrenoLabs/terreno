@@ -85,6 +85,8 @@ workflows:
             knip\.jsonc run-repo-policies true
             scripts/static-analysis/.* run-repo-policies true
             scripts/check-circleci-parity/.* run-repo-policies true
+            scripts/bootstrapLoop/.* run-bootstrap-loop true
+            scripts/check-circleci-parity/.* run-bootstrap-loop true
             api/.* run-api true
             admin-backend/.* run-admin-backend true
             admin-frontend/.* run-admin-frontend true

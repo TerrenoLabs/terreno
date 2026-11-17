@@ -322,6 +322,8 @@
     "test": "TERRENO_TEST_SHARDS=1 bun run --filter '*' test:ci",
     "test:agent": "AGENT=1 TERRENO_TEST_SHARDS=1 bun run --filter '*' --if-present test:agent",
     "test:ci-tools": "bun test scripts/ci/",
+    "test:bootstrap-loop": "bun test scripts/bootstrapLoop/ --path-ignore-patterns='**/e2e/**'",
+    "test:bootstrap-loop:e2e": "bun test scripts/bootstrapLoop/e2e/",
     "test:compile": "bun run --filter '@terreno/test' compile",
     "test:lint": "bun run --filter '@terreno/test' lint",
     "test:test": "bun run --filter '@terreno/test' test:ci",

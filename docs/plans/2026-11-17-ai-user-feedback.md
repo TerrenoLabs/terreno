@@ -296,7 +296,7 @@ export const recordTraceFeedback = async (args: {
   - Blast radius: `apiSdk.ts` / `syncDbSdk.ts` regeneration touches every generated hook → `bun run --cwd example-frontend compile` and the existing unit suite stay green; the seed's review items are unaffected (seed writes directly).
   - Test skills: terreno-frontend-tests
 
-- [ ] **T12** — Send rating comments and copy signals from the example chat
+- [x] **T12** — Send rating comments and copy signals from the example chat
   - Depends on: T9, T11
   - Files: example-frontend/app/(tabs)/ai.tsx, example-frontend/e2e/ai-chat.spec.ts, example-frontend/e2e/fixtures/testUsers.ts, ui/src/GPTChat.tsx (adds the `gpt-history-{id}` testID the no-trace copy case needs), docs/user-guide/ai/chat.md
   - Criteria: the chat screen passes `onRateComment` (re-posts the rating with `comment`) and `onMessageSignal` (posts `signal: "copied"` to the message's `traceId` when present). It maps `prompts[n].traceId` and the sent comment onto messages. E2 passes against the backend demo agent with no `mockGptStream*` helper. G2 adds the comment step.

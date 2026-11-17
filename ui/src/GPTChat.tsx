@@ -1799,6 +1799,7 @@ export const GPTChat = ({
               onClick={() => onSelectHistory(history.id)}
               padding={2}
               rounding="md"
+              testID={`gpt-history-${history.id}`}
             >
               <HistoryItemTitle
                 currentHistoryId={currentHistoryId}

@@ -11,7 +11,6 @@
  */
 import type express from "express";
 import type {Request, Response} from "express";
-import {DateTime} from "luxon";
 import type {Document, Model} from "mongoose";
 
 import type {JSONValue, ModelRouterOptions} from "./api";
@@ -36,9 +35,13 @@ import {
   passthroughOrWrap,
   serializeAPIError,
 } from "./errors";
+import {
+  conflictResponseBody,
+  methodPermissionDeniedError,
+  timestampConcurrencyCheck,
+} from "./modelRouterWrites";
 import type {checkPermissions} from "./permissions";
 import type {
-  ExecutorConcurrencyCheck,
   executeCreate,
   executeDelete,
   executeUpdate,
@@ -270,25 +273,11 @@ const assertMethodPermission = async <T>(
   if (await ctx.deps.checkPermissions(method, ctx.options.permissions[method], ctx.req.user)) {
     return;
   }
-  throw new APIError({
-    status: 405,
-    title: `Access to ${method.toUpperCase()} on ${ctx.model.modelName} denied for ${ctx.req.user?.id}`,
+  throw methodPermissionDeniedError({
+    method,
+    modelName: ctx.model.modelName,
+    userId: ctx.req.user?.id,
   });
-};
-
-// The same `_updatedAt` last-write-wins check PATCH /:id builds from the body.
-const concurrencyCheckFromBody = (
-  body: Record<string, unknown>
-): ExecutorConcurrencyCheck | undefined => {
-  const bodyUpdatedAt = body._updatedAt;
-  if (!bodyUpdatedAt) {
-    return undefined;
-  }
-  return {
-    ifUnmodifiedSince: DateTime.fromISO(String(bodyUpdatedAt)).toJSDate(),
-    invalidTimestampDetail: "_updatedAt body field could not be parsed as an ISO date",
-    type: "timestamp",
-  };
 };
 
 const hookErrorResult = (
@@ -352,8 +341,13 @@ const writeCreateItem = async <T>(
       req: itemReq,
       verb: "created",
     });
-    const data = await serializeItem(ctx, doc, "create", itemReq);
-    return {data, id, index, method: "create", status: 201};
+    try {
+      const data = await serializeItem(ctx, doc, "create", itemReq);
+      return {data, id, index, method: "create", status: 201};
+    } catch (error: unknown) {
+      // The doc is written: keep its id so the client knows what exists before any retry.
+      return {...failedResult(error, "create", index), id};
+    }
   };
   return {finish};
 };
@@ -373,7 +367,7 @@ const writeUpdateItem = async <T>(
   try {
     result = await ctx.deps.executeUpdate<T>({
       body,
-      concurrencyCheck: concurrencyCheckFromBody(body),
+      concurrencyCheck: timestampConcurrencyCheck({bodyUpdatedAt: body._updatedAt}),
       id,
       model: ctx.model,
       options: ctx.options,
@@ -394,7 +388,7 @@ const writeUpdateItem = async <T>(
     );
     return {
       refused: {
-        error: {data, error: "Conflict", message: "Document was modified since your last read"},
+        error: conflictResponseBody(data),
         id,
         index,
         method: "update",
@@ -437,8 +431,12 @@ const writeUpdateItem = async <T>(
       req: itemReq,
       verb: "updated",
     });
-    const data = await serializeItem(ctx, doc, "update", itemReq);
-    return {data, id, index, method: "update", status: 200};
+    try {
+      const data = await serializeItem(ctx, doc, "update", itemReq);
+      return {data, id, index, method: "update", status: 200};
+    } catch (error: unknown) {
+      return {...failedResult(error, "update", index), id};
+    }
   };
   return {finish};
 };
@@ -505,14 +503,18 @@ const writeItem = <T>(
   return writeDeleteItem(ctx, operation, index);
 };
 
+const failedResult = (error: unknown, method: BulkMethod, index: number): BulkItemResult => {
+  const {body, status} = toBulkItemError(error);
+  return {error: body, index, method, status};
+};
+
 const failedItemResult = (
   error: unknown,
   operation: BulkOperation,
   index: number
 ): BulkItemResult => {
-  const {body, status} = toBulkItemError(error);
-  const id = operation.method === "create" ? undefined : operation.id;
-  return {error: body, index, method: operation.method, status, ...(id ? {id} : {})};
+  const result = failedResult(error, operation.method, index);
+  return operation.method === "create" ? result : {...result, id: operation.id};
 };
 
 /** Partial mode: each item commits on its own; a failure is recorded and the batch continues. */

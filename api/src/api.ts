@@ -44,6 +44,7 @@ import {
 import {logger} from "./logger";
 import {registerMCPActionModel, registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
 import type {MCPConfig} from "./mcp/types";
+import {conflictResponseBody, timestampConcurrencyCheck} from "./modelRouterWrites";
 import {
   createOpenApiMiddleware,
   deleteOpenApiMiddleware,
@@ -64,7 +65,6 @@ import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
 import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
-  type ExecutorConcurrencyCheck,
   executeCreate,
   executeDelete,
   executeUpdate,
@@ -1184,27 +1184,11 @@ const _buildModelRouter = <T>(
         ? httpUnmodifiedSince[0]
         : httpUnmodifiedSince;
 
-      let concurrencyCheck: ExecutorConcurrencyCheck | undefined;
-      if (timestampValue || httpTimestampValue || bodyUpdatedAt) {
-        const usingPreciseHeader = Boolean(timestampValue);
-        const usingHttpHeader = !usingPreciseHeader && Boolean(httpTimestampValue);
-        const clientTimestamp = timestampValue
-          ? DateTime.fromISO(timestampValue)
-          : httpTimestampValue
-            ? DateTime.fromHTTP(httpTimestampValue)
-            : DateTime.fromISO(bodyUpdatedAt);
-        concurrencyCheck = {
-          // An unparseable value round-trips as an invalid Date; the executor turns it into
-          // the 400 "Invalid conflict-detection timestamp" error after preUpdate has run.
-          ifUnmodifiedSince: clientTimestamp.toJSDate(),
-          invalidTimestampDetail: usingPreciseHeader
-            ? "X-Unmodified-Since-ISO header could not be parsed as an ISO date"
-            : usingHttpHeader
-              ? "If-Unmodified-Since header could not be parsed as an HTTP date"
-              : "_updatedAt body field could not be parsed as an ISO date",
-          type: "timestamp",
-        };
-      }
+      const concurrencyCheck = timestampConcurrencyCheck({
+        bodyUpdatedAt,
+        httpHeader: httpTimestampValue,
+        preciseHeader: timestampValue,
+      });
 
       let doc: Document<unknown, unknown, unknown> & T;
       const previous = snapshotAuditBefore({audit: options.audit, doc: existingDoc});
@@ -1228,11 +1212,7 @@ const _buildModelRouter = <T>(
             req,
             options
           );
-          return res.status(409).json({
-            data: serialized,
-            error: "Conflict",
-            message: "Document was modified since your last read",
-          });
+          return res.status(409).json(conflictResponseBody(serialized));
         }
         throw error;
       }

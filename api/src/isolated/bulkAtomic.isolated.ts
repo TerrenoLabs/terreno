@@ -311,6 +311,7 @@ describe("modelRouter bulk atomic mode (replica set)", () => {
       const single = await agent.post("/food").send({name: "bulk-a"});
       expect(entries[0].status).toBe(single.status);
       expect(entries[0].error).toEqual(single.body);
+      expect(entries[0].id).toEqual(expect.any(String));
       expect(entries[1].status).toBe(201);
       expect(postCreated).toEqual(["bulk-a", "bulk-b", "bulk-a"]);
       expect(await bulkFoodNames()).toEqual(["bulk-a", "bulk-a", "bulk-b"]);

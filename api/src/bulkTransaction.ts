@@ -39,11 +39,12 @@ export const supportsTransactions = (connection: Connection): Promise<boolean> =
   if (cached) {
     return cached;
   }
+  const db = connection.db;
+  if (!db) {
+    // Not connected yet: answer for now, but probe again once the connection opens.
+    return Promise.resolve(false);
+  }
   const check = (async (): Promise<boolean> => {
-    const db = connection.db;
-    if (!db) {
-      return false;
-    }
     const hello = await db.admin().command({hello: 1});
     return Boolean(hello.setName) || hello.msg === "isdbgrid";
   })();

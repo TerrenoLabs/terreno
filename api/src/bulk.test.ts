@@ -349,6 +349,9 @@ describe("modelRouter bulk", () => {
         .expect(200);
       expect(res.body.data[0].status).toBe(500);
       expect(res.body.data[0].index).toBe(0);
+      // The create was written before responseHandler failed: its id is still reported.
+      const [created] = await FoodModel.find({name: "bulk-a"});
+      expect(res.body.data[0].id).toBe(created.id);
       expect(typeof res.body.data[0].error.title).toBe("string");
     });
 

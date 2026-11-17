@@ -277,6 +277,10 @@ None — backend only.
     - item 2's `preCreate` runs `FoodModel.findById(<item 1's new id>)` → finds it (proves the hook joined the session and sees the uncommitted write)
     - a `postCreate` that throws on item 1 of a 2-create atomic batch → 200; both docs exist; `data[1].status` 400 `post-create-hook-error`; `data[0].status` 201
     - standalone Mongo (`bulkStandalone.isolated.ts`) → 400 `bulk-atomic-unsupported`, nothing written; `atomic: false` on the same server still works
+  - Changed from the approved brief (T4, after branch review): an `UnknownTransactionCommitResult`
+    is not a conflict, because the commit may have landed. The commit is retried once (no hooks
+    run again); a second unknown result returns 500 `bulk-commit-unknown`. Only
+    `TransientTransactionError` returns 409 `bulk-transaction-conflict`.
   - Blast radius: synced models. An aborted transaction must not leave a claimed `_syncSeq`
     that stalls the stream. Case on a synced test model in bulkAtomic.isolated.ts: an atomic
     batch aborts on item 2, then a single `PATCH` on that stream succeeds and a sync
@@ -311,10 +315,9 @@ None — backend only.
 - [x] **T6** — Example router and docs for bulk writes
   - Depends on: T4, T5
   - Files: example-backend/src/api/todos.ts, example-backend/src/api/todos.test.ts, example-frontend/store/apiSdk.ts (regenerated with `bun run sdk`, never hand-edited), docs/reference/api.md, docs/explanation/model-router-actions.md, .rulesync source of the api rules generated-endpoints table, api/src/api.ts (remove the `// Support bulk actions` TODO)
-  - Changed from the approved brief (T6): `store/apiSdk.ts` takes only the generator's
-    `todos_bulk` hook and the `APIError` interface it references. A full `bun run sdk` against a
-    local backend also emits ~1,100 lines of unrelated, environment-dependent admin hooks that
-    master's committed SDK does not have.
+  - Changed from the approved brief (T6): `store/apiSdk.ts` is a full `bun run sdk`. master's
+    copy was last regenerated 2026-11-06, so the regen also brings in hooks for admin and AI
+    observability routes added since then.
   - Seam: `POST /todos/bulk` on example-backend
   - Interface: `todoRouter` gets `bulk: true`.
   - Cases:

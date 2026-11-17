@@ -161,8 +161,11 @@ describe("isTransientTransactionError", () => {
 });
 
 describe("supportsTransactions", () => {
-  it("is false for a connection with no database", async () => {
-    expect(await supportsTransactions({db: undefined} as unknown as Connection)).toBe(false);
+  it("is false for a connection with no database, and probes again once it connects", async () => {
+    const connection = {db: undefined} as unknown as {db: unknown};
+    expect(await supportsTransactions(connection as unknown as Connection)).toBe(false);
+    connection.db = {admin: () => ({command: async () => ({setName: "rs0"})})};
+    expect(await supportsTransactions(connection as unknown as Connection)).toBe(true);
   });
 
   it("is true for a replica set and false for a standalone server", async () => {

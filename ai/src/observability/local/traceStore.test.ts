@@ -417,3 +417,48 @@ describe("LocalTraceStore", () => {
     await expect(store.list({prompt: [operator]})).rejects.toMatchObject({status: 400});
   });
 });
+
+describe("LocalTraceStore caller-supplied trace ids", () => {
+  let store: LocalTraceStore;
+
+  afterEach(() => {
+    resetObservabilityApp();
+  });
+
+  beforeEach(async () => {
+    new ObservabilityApp({plugins: [createLocalObservabilityPlugin()]});
+    store = new LocalTraceStore();
+    await registerObsTrace().deleteMany({});
+    await registerObsSpan().deleteMany({});
+    await registerObsScore().deleteMany({});
+  });
+
+  it("uses a valid ObjectId trace.id as _id and returns it", async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+
+    const exported = await store.exportTrace(baseTrace({id}));
+
+    expect(String(exported.id)).toBe(id);
+    expect(await registerObsTrace().findById(id)).not.toBeNull();
+  });
+
+  it("stores a uuid trace.id under a generated ObjectId and ignores the uuid", async () => {
+    const uuid = "123e4567-e89b-42d3-a456-426614174000";
+
+    const exported = await store.exportTrace(baseTrace({id: uuid}));
+
+    expect(String(exported.id)).not.toBe(uuid);
+    expect(String(exported.id)).toMatch(/^[0-9a-f]{24}$/);
+    expect(await registerObsTrace().countDocuments({})).toBe(1);
+  });
+
+  it("spans exported with a caller-supplied id carry that trace id as traceId", async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+
+    await store.exportTrace(baseTrace({id}));
+
+    const spans = await registerObsSpan().find({});
+    expect(spans.length).toBe(1);
+    expect(String(spans[0]?.traceId)).toBe(id);
+  });
+});

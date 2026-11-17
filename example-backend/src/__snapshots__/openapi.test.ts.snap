@@ -14102,6 +14102,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "output": {
                           "type": "string",
                         },
+                        "traceId": {
+                          "description": "Trace id of this run, for POST /ai/observability/traces/{id}/feedback",
+                          "type": "string",
+                        },
                       },
                       "type": "object",
                     },

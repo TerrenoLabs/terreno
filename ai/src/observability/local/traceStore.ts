@@ -304,7 +304,12 @@ export class LocalTraceStore {
     const ObsTrace = registerObsTrace();
     const ObsSpan = registerObsSpan();
     const userId = objectIdOrUndefined(trace.userId);
+    // Only a 24-hex id is a caller-chosen trace id; other ids (uuids from older callers) are ignored.
+    const traceId = /^[0-9a-f]{24}$/i.test(trace.id ?? "")
+      ? new mongoose.Types.ObjectId(trace.id)
+      : undefined;
     const created = await ObsTrace.create({
+      ...(traceId ? {_id: traceId} : {}),
       endedAt: parseDate(trace.endedAt),
       errorSummary: firstErrorSummary(trace),
       flaggedForDataset: trace.flaggedForDataset ?? false,

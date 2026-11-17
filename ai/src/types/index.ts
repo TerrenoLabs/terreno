@@ -219,6 +219,8 @@ export interface GenerateObservabilityOptions {
   sensitive?: boolean;
   sessionId?: string;
   skipTrace?: boolean;
+  /** Id to store the trace under (from `createTraceId()`), so the caller can return it for feedback. */
+  traceId?: string;
 }
 
 export interface GenerateTextOptions extends GenerateObservabilityOptions {

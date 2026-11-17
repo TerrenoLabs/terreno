@@ -174,7 +174,9 @@ the next chat message uses the new version.
 The example app also calls this route from the UI: **Todos → Summarize** sends the user's todo
 list, so each press produces a trace with the production prompt reference, `userId`, and a
 per-app-run `x-ai-session-id`. Without server credentials the screen forwards the Gemini key
-saved in **Profile** as `x-ai-api-key`; otherwise the route answers **503**.
+saved in **Profile** as `x-ai-api-key`; with neither, the scripted demo model answers, so
+the trace still lands. The response is `{data: {output, traceId}}`; send feedback for that
+`traceId`.
 
 The route sends `text` as the user prompt. The labelled registry version supplies the
 system prompt and the route uses `TemperaturePresets.LOW`.

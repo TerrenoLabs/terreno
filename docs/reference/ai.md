@@ -568,8 +568,10 @@ fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
 `POST /ai/example-summarize` (example backend) runs that seeded prompt with
 `promptLabel: "production"`, `userId`, and `sessionId` from `x-ai-session-id`. It uses the
 server `AIService` when configured, otherwise a request-scoped service built from
-`x-ai-api-key`, and returns **503** when neither exists. The example frontend calls it from
-**Todos → Summarize**.
+`x-ai-api-key`, otherwise the scripted demo model (`createDemoAgentService`), so the loop runs
+with no provider key. It mints a trace id with `createTraceId()` and responds
+`{data: {output, traceId}}`; the client sends feedback for that `traceId`. The example frontend
+calls it from **Todos → Summarize**.
 
 ### Local observability models
 
@@ -609,6 +611,7 @@ rows. The local score store remains the fallback when no external score sink is 
 | `skipTrace` | `false` | Skip `TraceSink.export` only; prompt resolve and `AIRequest` still run |
 | `sensitive` | inherited | Explicit value wins; otherwise the resolved prompt version's `sensitive` |
 | `sessionId` / `userId` | unset | Copied onto the exported trace |
+| `traceId` | generated | Id the trace is stored under. Mint it with `createTraceId()` (24-hex ObjectId string) before the call so the route can return it to the client for feedback. Anything else is **400** `traceId must be an object id`, before the model is called. A second trace with the same id is dropped and logged as a sink failure |
 | `priceMap` | app `priceMap` | Per-call override; `costUsd` is omitted when the model is unpriced |
 
 Missing registry, missing prompt, or missing label throws `APIError` 400 and does not call the model. Sink `export` failures are logged and never fail generate.

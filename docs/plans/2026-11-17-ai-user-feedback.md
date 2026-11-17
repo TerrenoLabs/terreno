@@ -110,9 +110,9 @@ export const recordTraceFeedback = async (args: {
 // POST /ai/observability/traces/:id/feedback → 200 {data: TraceFeedbackResult}
 ```
 
-- [ ] **T1** — Let callers choose the trace id and return it from example summarize
+- [x] **T1** — Let callers choose the trace id and return it from example summarize
   - Depends on: none
-  - Files: ai/src/types/index.ts, ai/src/service/aiService.ts, ai/src/service/aiService.observability.test.ts (new if absent), ai/src/observability/local/traceStore.ts, ai/src/observability/local/traceStore.test.ts, ai/src/index.ts, example-backend/src/api/ai.ts, example-backend/src/api/exampleSummarize.test.ts (new), example-backend/src/__snapshots__/openapi.test.ts.snap, docs/reference/ai.md
+  - Files: ai/src/types/index.ts, ai/src/service/aiService.ts, ai/src/service/aiService.observability.test.ts (new if absent), ai/src/observability/local/traceStore.ts, ai/src/observability/local/traceStore.test.ts, ai/src/index.ts, example-backend/src/api/ai.ts, example-backend/src/api/exampleSummarize.test.ts (new; resets the cached server service with a new `setAiService` export), docs/how-to/observe-llm-calls.md, example-backend/src/__snapshots__/openapi.test.ts.snap, docs/reference/ai.md
   - Criteria: `GenerateObservabilityOptions` gains `traceId?: string`; `createTraceId()` is exported from `@terreno/ai`. Every `generate*` method and `recordGenerate` (via its `observability` argument, so `resolveGenerateObservability({traceId})` carries it) pass it through to `TraceRecord.id` for the root trace. `LocalTraceStore.exportTrace` uses a valid ObjectId `trace.id` as `_id` and returns it; it keeps today's behavior when `id` is not an ObjectId. `/ai/example-summarize` mints an id and responds `{data: {output, traceId}}`. With no server model and no `x-ai-api-key`, it uses `createDemoAgentService()` instead of returning 503, the way chat already does. The OpenAPI snapshot is updated. Reference docs list the option and the response field.
   - Seam: `AIService.generateText` with the local plugin registered; `POST /ai/example-summarize` (HTTP)
   - Interface: `createTraceId(): string` (24 hex chars). `generateText({prompt, traceId, userId})` → string, unchanged. `POST /ai/example-summarize {text}` → `200 {data: {output: string, traceId: string}}`.

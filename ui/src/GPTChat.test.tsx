@@ -1728,6 +1728,12 @@ blocks:
 });
 
 describe("GPTChat rating comments and copy signal", () => {
+  // The clipboard mock is shared through the preload; leave it clean for later suites.
+  afterEach(() => {
+    mockedSetStringAsync.mockClear();
+    mockedSetStringAsync.mockImplementation(async () => undefined);
+  });
+
   const ratedDown: GPTChatMessage[] = [
     {content: "It is Monday", rating: "down", role: "assistant"},
   ];

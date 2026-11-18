@@ -695,7 +695,14 @@ const AiScreen: React.FC = () => {
   // Passive signal: a copied reply is recorded on its trace when it has one.
   const handleMessageSignal = useCallback(
     (promptIndex: number, signal: "copied"): void => {
-      const traceId = (currentMessages[promptIndex] as ChatMessageWithTrace | undefined)?.traceId;
+      // A reply streamed in this session has no traceId on the transcript yet; the synced
+      // history row the turn saved does.
+      const syncedRow = historyRows.find((row) => historyIdOf(row) === currentHistoryId)?.prompts[
+        promptIndex
+      ];
+      const traceId =
+        (currentMessages[promptIndex] as ChatMessageWithTrace | undefined)?.traceId ??
+        syncedRow?.traceId;
       if (!traceId) {
         return;
       }
@@ -705,7 +712,7 @@ const AiScreen: React.FC = () => {
           console.warn("Failed to record copy signal", error);
         });
     },
-    [currentMessages, sendTraceFeedback]
+    [currentHistoryId, currentMessages, historyRows, sendTraceFeedback]
   );
 
   /**

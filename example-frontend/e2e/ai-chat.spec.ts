@@ -900,6 +900,18 @@ test.describe("AI chat feedback", () => {
   test.describe("copy signal", () => {
     test.use({permissions: ["clipboard-read", "clipboard-write"]});
 
+    // A reply streamed in this session carries its trace through the synced history row.
+    test("copying a just-streamed reply sends the copied signal for its trace", async ({page}) => {
+      await page.getByTestId("gpt-input").fill("Say hello for the copy test");
+      await page.getByTestId("gpt-submit").click();
+      await page.getByTestId("gpt-copy-msg-1").waitFor({state: "visible"});
+      const feedback = page.waitForRequest(
+        (sent) => sent.url().includes("/feedback") && sent.method() === "POST"
+      );
+      await page.getByTestId("gpt-copy-msg-1").click();
+      expect((await feedback).postDataJSON()).toEqual({signal: "copied"});
+    });
+
     // An older history row has no traceId, so copying it must not call the feedback route.
     test("copying a reply with no trace id sends no feedback request", async ({page, request}) => {
       const token = await signUpOrSignInBetterAuth(request, {

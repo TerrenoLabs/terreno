@@ -1,4 +1,4 @@
-import {APIError} from "@terreno/api";
+import {APIError, logger} from "@terreno/api";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
@@ -316,13 +316,26 @@ let obsScoreIndexes: Promise<unknown> | undefined;
 
 /** Builds ObsScore indexes once, so the unique user-score index exists before the first upsert. */
 const ensureObsScoreIndexes = (): Promise<unknown> => {
+  // A database that already holds duplicate live end-user scores (written through the admin
+  // scores route before these indexes existed) cannot build them. Feedback must keep working:
+  // log once and upsert without the uniqueness guarantee until the duplicates are removed.
   obsScoreIndexes ??= registerObsScore()
     .init()
     .catch((error: unknown) => {
-      obsScoreIndexes = undefined;
-      throw error;
+      logger.error(
+        "ObsScore indexes failed to build; remove duplicate live user-feedback/user-signal scores per trace and name",
+        {error}
+      );
     });
   return obsScoreIndexes;
+};
+
+/**
+ * Forgets the index build so a test can simulate a failed build.
+ * @internal Test seam. Production builds the indexes once per process.
+ */
+export const resetObsScoreIndexBuild = (): void => {
+  obsScoreIndexes = undefined;
 };
 
 export class LocalTraceStore {

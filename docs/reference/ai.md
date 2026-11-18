@@ -766,6 +766,12 @@ The local store keeps one live `user-feedback` or `user-signal` score per (trace
 name): a new vote replaces the old one in a single upsert backed by a partial unique index.
 Soft-deleted scores do not count toward `hasScore`, `scoreCount`, or the `scores` sort.
 
+Upgrading: the unique index needs at most one live `user-feedback` / `user-signal` score per
+(trace, name). A database where the admin scores route wrote duplicates of those sources cannot
+build it; feedback then keeps working without the guarantee and logs `ObsScore indexes failed
+to build` once per process. Soft-delete the older duplicates (`deleted: true`) and restart to
+build the index.
+
 ## Durable agent harness
 
 `@terreno/ai/harness` runs multi-phase tasks that survive restarts. Each phase commits a

@@ -1,4 +1,5 @@
-import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, spyOn} from "bun:test";
+import {logger} from "@terreno/api";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
@@ -14,6 +15,7 @@ import {
   MemoryScoreSink,
   MemoryTraceSink,
   parseTraceListSort,
+  resetObsScoreIndexBuild,
 } from "./traceStore";
 
 const iso = (msAgo: number): string => {
@@ -582,5 +584,46 @@ describe("LocalTraceStore caller-supplied trace ids", () => {
       expect(page.data).toHaveLength(1);
       expect(page.meta.page * page.meta.limit < page.meta.total).toBe(true);
     });
+  });
+});
+
+describe("LocalTraceStore score index build failure", () => {
+  afterEach(() => {
+    resetObsScoreIndexBuild();
+  });
+
+  it("logs a failed index build and still upserts end-user scores", async () => {
+    resetObsScoreIndexBuild();
+    const ObsScore = registerObsScore();
+    const initSpy = spyOn(ObsScore, "init").mockImplementation((() =>
+      Promise.reject(new Error("E11000 duplicate key"))) as unknown as typeof ObsScore.init);
+    const errorSpy = spyOn(logger, "error").mockImplementation(() => logger);
+    const traceId = new mongoose.Types.ObjectId().toHexString();
+    try {
+      const store = new LocalTraceStore();
+      await store.exportScore({
+        dataType: "boolean",
+        name: "thumbs_up",
+        source: "user-feedback",
+        traceId,
+        value: false,
+      });
+      await store.exportScore({
+        dataType: "boolean",
+        name: "thumbs_up",
+        source: "user-feedback",
+        traceId,
+        value: true,
+      });
+      expect(
+        errorSpy.mock.calls.filter((call) => String(call[0]).startsWith("ObsScore indexes"))
+      ).toHaveLength(1);
+      const live = await ObsScore.find({traceId});
+      expect(live).toHaveLength(1);
+      expect(live[0]?.value).toBe(true);
+    } finally {
+      initSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
   });
 });

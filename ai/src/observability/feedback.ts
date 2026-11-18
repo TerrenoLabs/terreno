@@ -1,5 +1,6 @@
 import {APIError, logger} from "@terreno/api";
 import {LocalEvaluatorStore} from "./local/evaluatorStore";
+import {registerObsReviewItem} from "./local/models/obsReviewItem";
 import {registerObsTrace} from "./local/models/obsTrace";
 import {LocalReviewStore} from "./local/reviewStore";
 import {LocalScoreSink, LocalTraceStore} from "./local/traceStore";
@@ -154,12 +155,22 @@ const enqueueFeedbackReview = async (traceId: string): Promise<string | undefine
     if (open) {
       return open.id;
     }
-    const [item] = await reviewStore.enqueue({
-      evaluatorId: evaluator.id,
-      reason: "feedback",
-      traceIds: [traceId],
-    });
-    return item?.id;
+    // The pending-feedback unique index must exist before the first insert can race.
+    await registerObsReviewItem().init();
+    try {
+      const [item] = await reviewStore.enqueue({
+        evaluatorId: evaluator.id,
+        reason: "feedback",
+        traceIds: [traceId],
+      });
+      return item?.id;
+    } catch (error) {
+      // A concurrent thumbs down queued it first; return that item.
+      if ((error as {code?: number}).code !== 11000) {
+        throw error;
+      }
+      return (await reviewStore.findOpen({evaluatorId: evaluator.id, traceId}))?.id;
+    }
   } catch (error) {
     logger.error("Failed to queue thumbs-down trace for review", {error, evaluatorName, traceId});
     return undefined;

@@ -444,6 +444,14 @@ describe("thumbs down enqueues human review (feedbackReview)", () => {
     expect(await reviewItems()).toHaveLength(1);
   });
 
+  it("concurrent thumbs downs queue one item and both return its id", async () => {
+    const results = await Promise.all([down(), down(), down()]);
+    expect(await reviewItems()).toHaveLength(1);
+    const ids = new Set(results.map((result) => result.reviewItemId));
+    expect(ids.size).toBe(1);
+    expect([...ids][0]).toBeDefined();
+  });
+
   it("down, up, down keeps one open item", async () => {
     const first = await down();
     await recordTraceFeedback({input: {thumbs: "up"}, traceId, user: {id: ownerId}});

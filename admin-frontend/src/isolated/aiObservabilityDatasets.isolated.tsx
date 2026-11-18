@@ -6,6 +6,7 @@ import React from "react";
 import {renderWithTheme} from "../../../ui/src/test-utils";
 import type {AdminConfigResponse} from "../types";
 import {AiDatasetDetailScreenWidget as AiDatasetDetailScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetDetailScreen";
+import {AiDatasetItemScreenWidget as AiDatasetItemScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetItemScreen";
 import {AiDatasetsScreenWidget as AiDatasetsScreenWidgetBase} from "../widgets/aiObservability/datasets/AiDatasetsListScreen";
 import {AiDatasetsListView} from "../widgets/aiObservability/datasets/AiDatasetsListView";
 import type {
@@ -28,12 +29,15 @@ import {AiTraceDetailScreenWidget as AiTraceDetailScreenWidgetBase} from "../wid
 import {AiTracesScreenWidget as AiTracesScreenWidgetBase} from "../widgets/aiObservability/traces/AiTracesListScreen";
 import {
   createObservabilityServer,
+  type FakeObservabilityRoute,
   type FakeObservabilityServer,
+  type FakeQueryState,
   flushObservabilityRequests,
   withObservabilityServer,
 } from "./observabilityFakeApi.isolated";
 
 const AiDatasetDetailScreenWidget = withObservabilityServer(AiDatasetDetailScreenWidgetBase);
+const AiDatasetItemScreenWidget = withObservabilityServer(AiDatasetItemScreenWidgetBase);
 const AiDatasetsScreenWidget = withObservabilityServer(AiDatasetsScreenWidgetBase);
 const _AiEvaluatorDetailScreenWidget = withObservabilityServer(AiEvaluatorDetailScreenWidgetBase);
 const _AiEvaluatorNewScreenWidget = withObservabilityServer(AiEvaluatorNewScreenWidgetBase);
@@ -285,6 +289,280 @@ describe("AiDatasetDetailScreen", () => {
       await flushObservabilityRequests();
       expect(errored.getByText("Failed to load dataset.")).toBeTruthy();
     });
+  });
+});
+
+describe("AiDatasetItemScreen", () => {
+  const ITEM_ROUTE = "PATCH /ai/observability/datasets/:id/items/:itemId";
+  const CREATE_ROUTE = "POST /ai/observability/datasets/:id/items";
+  const OPEN_TRACE_HREF = "ai-trace-detail?id=trace-1";
+  const emptyConfig: AdminConfigResponse = {customScreens: [], models: [], scripts: []};
+
+  const schemaDataset: DatasetRecord = {
+    counts: {auto: 0, human: 1, needsReview: 0, total: 1},
+    created: "2026-01-01T00:00:00.000Z",
+    expectedOutputSchema: {
+      properties: {
+        crisis: {type: "boolean"},
+        route: {enum: ["none", "988"], type: "string"},
+      },
+      type: "object",
+    },
+    id: "ds-1",
+    name: "gold",
+    tags: [],
+    updated: "2026-01-02T00:00:00.000Z",
+  };
+  const plainDataset: DatasetRecord = {
+    ...schemaDataset,
+    expectedOutputSchema: undefined,
+    id: "ds-2",
+  };
+
+  const existingItem: DatasetItemRecord = {
+    created: "2026-01-01T00:00:00.000Z",
+    datasetId: "ds-1",
+    expectedOutput: {crisis: true, route: "988"},
+    id: "item-1",
+    input: {q: "hi"},
+    origin: "trace",
+    outcomeClass: "tp",
+    proofread: false,
+    sourceTraceId: "trace-1",
+    tags: [],
+    updated: "2026-01-01T00:00:00.000Z",
+  };
+
+  const statusWith = (canUpdate: boolean): Record<string, unknown> => ({
+    localOn: true,
+    permissions: {
+      aiDataset: {create: true, list: true, read: true, update: canUpdate},
+      aiExperiment: {create: true, list: true, read: true},
+    },
+    plugins: [],
+    primaries: {
+      datasets: "local",
+      experiments: "local",
+      prompts: "local",
+      reviewQueue: "local",
+    },
+  });
+
+  const renderItemScreen = (
+    server: FakeObservabilityServer
+  ): ReturnType<typeof renderWithTheme> => {
+    return renderWithTheme(
+      <AiDatasetItemScreenWidget
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-dataset-item"
+        server={server}
+      />
+    );
+  };
+
+  const buildServer = ({
+    canUpdate = true,
+    dataset = schemaDataset,
+    datasetState,
+    items = [existingItem],
+    itemsState,
+    itemRoute,
+    createRoute,
+  }: {
+    canUpdate?: boolean;
+    createRoute?: FakeObservabilityRoute;
+    dataset?: DatasetRecord;
+    datasetState?: FakeQueryState;
+    itemRoute?: FakeObservabilityRoute;
+    items?: DatasetItemRecord[];
+    itemsState?: FakeQueryState;
+  } = {}): FakeObservabilityServer => {
+    return createObservabilityServer({
+      [CREATE_ROUTE]: createRoute ?? (async () => ({})),
+      "GET /ai/observability/datasets/:id": datasetState ?? {data: dataset},
+      "GET /ai/observability/datasets/:id/items": itemsState ?? {data: items},
+      "GET /ai/observability/status": {data: statusWith(canUpdate)},
+      [ITEM_ROUTE]: itemRoute ?? (async () => ({})),
+    });
+  };
+
+  beforeEach(() => {
+    routerPush.mockClear();
+    setExpoSearchParams(() => ({datasetId: "ds-1", itemId: "item-1"}));
+  });
+
+  it("shows the missing dataset message without a dataset id", async () => {
+    setExpoSearchParams(() => ({}));
+    const view = renderItemScreen(buildServer());
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Missing dataset id."));
+  });
+
+  it("shows a loader while the dataset or its items load", async () => {
+    const datasetLoading = renderItemScreen(buildServer({datasetState: {isLoading: true}}));
+    await flushObservabilityRequests();
+    assert.exists(datasetLoading.getByTestId("ai-dataset-item-loading"));
+    datasetLoading.unmount();
+
+    const itemsLoading = renderItemScreen(buildServer({itemsState: {isLoading: true}}));
+    await flushObservabilityRequests();
+    assert.exists(itemsLoading.getByTestId("ai-dataset-item-loading"));
+  });
+
+  it("shows load failures for the dataset and for a missing item", async () => {
+    const datasetFailed = renderItemScreen(buildServer({datasetState: {isError: true}}));
+    await flushObservabilityRequests();
+    assert.exists(datasetFailed.getByText("Failed to load dataset."));
+    datasetFailed.unmount();
+
+    setExpoSearchParams(() => ({datasetId: "ds-1", itemId: "missing-item"}));
+    const itemMissing = renderItemScreen(buildServer());
+    await flushObservabilityRequests();
+    assert.exists(itemMissing.getByText("Failed to load dataset item."));
+  });
+
+  it("edits an existing item as a form and saves the expected output back", async () => {
+    const server = buildServer();
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Edit expected output"));
+    assert.exists(view.getByTestId("ai-dataset-item-expected"));
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-proofread-clickable"));
+      await Promise.resolve();
+    });
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    const patches = server.callsTo(ITEM_ROUTE);
+    assert.equal(patches.length, 1);
+    assert.deepEqual(patches[0]?.params, {id: "ds-1", itemId: "item-1"});
+    assert.deepEqual(patches[0]?.body, {
+      expectedOutput: {crisis: true, route: "988"},
+      outcomeClass: "tp",
+      proofread: true,
+    });
+    assert.include(String(routerPush.mock.calls.at(-1)?.[0]), "ai-dataset-detail?id=ds-1");
+  });
+
+  it("starts a new item from the sibling input and the schema-shaped expected output", async () => {
+    setExpoSearchParams(() => ({datasetId: "ds-1"}));
+    const server = buildServer();
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("New dataset item"));
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    const created = server.callsTo(CREATE_ROUTE);
+    assert.equal(created.length, 1);
+    assert.deepEqual(created[0]?.body, {
+      expectedOutput: {crisis: false, route: ""},
+      input: {q: ""},
+      origin: "manual",
+      outcomeClass: null,
+      proofread: true,
+    });
+    assert.include(String(routerPush.mock.calls.at(-1)?.[0]), "ai-dataset-detail?id=ds-1");
+  });
+
+  it("starts a new item on a dataset without a schema or sibling items", async () => {
+    setExpoSearchParams(() => ({datasetId: "ds-2"}));
+    const server = createObservabilityServer({
+      [CREATE_ROUTE]: async () => ({}),
+      "GET /ai/observability/datasets/:id": {data: plainDataset},
+      "GET /ai/observability/datasets/:id/items": {data: []},
+      "GET /ai/observability/status": {data: statusWith(true)},
+    });
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    const created = server.callsTo(CREATE_ROUTE);
+    assert.equal(created.length, 1);
+    assert.deepEqual(created[0]?.body, {
+      expectedOutput: "",
+      input: "",
+      origin: "manual",
+      outcomeClass: null,
+      proofread: true,
+    });
+  });
+
+  it("copies the blank shape of a sibling item's expected output on a dataset without a schema", async () => {
+    setExpoSearchParams(() => ({datasetId: "ds-2"}));
+    const sibling: DatasetItemRecord = {
+      ...existingItem,
+      datasetId: "ds-2",
+      expectedOutput: {note: "hello", score: 4},
+    };
+    const server = buildServer({dataset: plainDataset, items: [sibling]});
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    assert.deepEqual(server.callsTo(CREATE_ROUTE)[0]?.body, {
+      expectedOutput: {note: "", score: null},
+      input: {q: ""},
+      origin: "manual",
+      outcomeClass: null,
+      proofread: true,
+    });
+  });
+
+  it("shows the server's error title when saving fails", async () => {
+    const server = buildServer({
+      itemRoute: () => {
+        throw {data: {title: "Route is required"}, status: 400};
+      },
+    });
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    assert.exists(view.getByTestId("ai-dataset-item-error"));
+    assert.exists(view.getByText("Route is required"));
+  });
+
+  it("opens the source trace of an existing item", async () => {
+    const view = renderItemScreen(buildServer());
+    await flushObservabilityRequests();
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-open-trace"));
+      await Promise.resolve();
+    });
+
+    assert.include(String(routerPush.mock.calls.at(-1)?.[0]), OPEN_TRACE_HREF);
+  });
+
+  it("shows a read-only item when the user cannot update datasets", async () => {
+    const server = buildServer({canUpdate: false});
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+
+    assert.exists(view.getByText("You can view this item. Saving needs dataset update."));
+    assert.isNull(view.queryByTestId("ai-dataset-item-save"));
   });
 });
 

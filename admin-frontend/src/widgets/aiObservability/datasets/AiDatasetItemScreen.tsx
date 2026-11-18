@@ -80,7 +80,11 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
 
   // Fill the form once, after the dataset and its items have loaded.
   useEffect(() => {
-    if (formReady || isLoading || isItemsLoading || !dataset) {
+    if (formReady || isLoading || isItemsLoading) {
+      return;
+    }
+    if (!dataset) {
+      setFormReady(true);
       return;
     }
     if (isNew) {

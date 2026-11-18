@@ -35,6 +35,37 @@ describe("DataTable", () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
+  it("stripes odd rows with neutral100 instead of neutralLight", () => {
+    const {toJSON} = renderWithTheme(
+      <DataTable alternateRowBackground columns={sampleColumns} data={sampleData} />
+    );
+    const backgrounds = new Set<string>();
+    const walk = (node: unknown): void => {
+      if (!node || typeof node !== "object") {
+        return;
+      }
+      if (Array.isArray(node)) {
+        for (const child of node) {
+          walk(child);
+        }
+        return;
+      }
+      const record = node as {
+        children?: unknown;
+        props?: {style?: {backgroundColor?: string; height?: number}};
+      };
+      const style = record.props?.style;
+      if (style?.height === 54 && typeof style.backgroundColor === "string") {
+        backgrounds.add(style.backgroundColor);
+      }
+      walk(record.children);
+    };
+    walk(toJSON());
+    expect(backgrounds.has("#E6E6E6")).toBe(true);
+    expect(backgrounds.has("#CDCDCD")).toBe(false);
+    expect(backgrounds.has("#FFFFFF")).toBe(true);
+  });
+
   it("renders without alternate row background", () => {
     const {toJSON} = renderWithTheme(
       <DataTable alternateRowBackground={false} columns={sampleColumns} data={sampleData} />

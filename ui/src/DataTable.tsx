@@ -77,10 +77,12 @@ const DATA_TABLE_VERTICAL_SCROLL_SYNC_RELEASE_MS = 50;
 type SizedDataTableColumn = DataTableColumn & {width: number};
 
 /** Inverted text when primary text falls below WCAG AA on the cell's highlight fill. */
+// Light neutralLight is neutral300 (#CDCDCD), which reads as a solid grey band between rows.
+// neutral100 (#E6E6E6) is enough to separate a row from the white base.
 // Dark neutralLight (#686868) is too light for a stripe: ghost and link text drop near 2:1 on it.
 const useStripeColor = (): string => {
   const {colorScheme, theme} = useTheme();
-  return colorScheme === "dark" ? theme.primitives.neutral900 : theme.surface.neutralLight;
+  return colorScheme === "dark" ? theme.primitives.neutral900 : theme.primitives.neutral100;
 };
 
 const useHighlightTextColor = (cellData: DataTableCellData): "inverted" | undefined => {

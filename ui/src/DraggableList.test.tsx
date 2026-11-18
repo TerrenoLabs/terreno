@@ -396,6 +396,43 @@ describe("DraggableList", () => {
 
       expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
     });
+
+    it("does not reorder a tall row dragged a short distance past the row under it", () => {
+      const callbackNewDataIds = mock(() => {});
+      const {getByTestId} = render(
+        <DraggableList
+          callbackNewDataIds={callbackNewDataIds}
+          dataIDs={["a", "b"]}
+          itemHeight={50}
+          itemsGap={10}
+          renderItem={renderItem}
+          variableHeight
+        />
+      );
+
+      act(() => {
+        fireEvent(getByTestId("draggable-item-a"), "layout", layout(300));
+        fireEvent(getByTestId("draggable-item-b"), "layout", layout(40));
+      });
+
+      const dragA = capturedGestures.at(-2);
+      act(() => {
+        dragA?.onBegin?.();
+        dragA?.onChange?.({translationY: 30});
+        dragA?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).not.toHaveBeenCalled();
+
+      const dragAAgain = capturedGestures.at(-2);
+      act(() => {
+        dragAAgain?.onBegin?.();
+        dragAAgain?.onChange?.({translationY: 200});
+        dragAAgain?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
+    });
   });
 
   describe("DragItem", () => {

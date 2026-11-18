@@ -336,11 +336,11 @@ const offsetOfId = (
 };
 
 /**
- * Drop index for a dragged row. Other rows keep their order, so the midpoints
- * used here do not move when the dragged row changes slot.
+ * Drop index for a dragged row. `order` is the drag-start order laid out in full, so
+ * the dragged row's center and the other rows' midpoints share one coordinate space.
  */
 const insertIndexForDrag = (
-  draggedTop: number,
+  draggedCenter: number,
   draggedId: string,
   order: string[],
   measured: Record<string, number>,
@@ -350,15 +350,14 @@ const insertIndexForDrag = (
   let y = 0;
   let index = 0;
   for (const id of order) {
-    if (id === draggedId) {
-      continue;
-    }
     const height = measuredRowHeight(measured, id, fallback);
-    if (draggedTop < y + height / 2) {
-      return index;
+    if (id !== draggedId) {
+      if (draggedCenter < y + height / 2) {
+        return index;
+      }
+      index += 1;
     }
     y += height + gap;
-    index += 1;
   }
   return index;
 };
@@ -548,11 +547,12 @@ const VariableHeightDraggableList: React.FC<DragListProps> = (props) => {
       if (from < 0) {
         return;
       }
-      const draggedTop = startOffset.value + translationY;
+      const draggedHeight = measuredRowHeight(measuredRef.current, id, itemHeight);
+      const draggedCenter = startOffset.value + translationY + draggedHeight / 2;
       const nextIndex = insertIndexForDrag(
-        draggedTop,
+        draggedCenter,
         id,
-        current,
+        orderAtStartRef.current,
         measuredRef.current,
         itemHeight,
         itemsGap

@@ -5,8 +5,8 @@
 // MIT License
 // Copyright Patryk Jaworski @gerwld
 
-import React, {useMemo, useState} from "react";
-import {Platform, type StyleProp, View, type ViewStyle} from "react-native";
+import React, {useCallback, useMemo, useRef, useState} from "react";
+import {type LayoutChangeEvent, Platform, type StyleProp, View, type ViewStyle} from "react-native";
 import {Gesture, GestureDetector} from "react-native-gesture-handler";
 import Animated, {
   runOnJS,
@@ -63,8 +63,14 @@ interface DragListProps {
   backgroundOnHold?: string; // Background color when item is being dragged
   dataIDs?: string[]; // Array of item IDs (preferred over data)
   itemsGap?: number; // Spacing between items
-  itemHeight?: number; // Height of each item
+  itemHeight?: number; // Height of each item. With `variableHeight`, the placeholder until a row is measured.
   itemBorderRadius?: number; // Border radius for items
+  /**
+   * Size each row to its content and stack the next row underneath.
+   * `itemHeight` stays the placeholder until measurement. Use this for rows whose
+   * height changes (nested forms, user lists) so later rows are not painted on top.
+   */
+  variableHeight?: boolean;
 }
 
 /**
@@ -299,11 +305,333 @@ export const DragItem: React.FC<DragItemProps> = (props) => {
   );
 };
 
+const measuredRowHeight = (
+  measured: Record<string, number>,
+  id: string,
+  fallback: number
+): number => {
+  const height = measured[id];
+  if (typeof height === "number" && height > 0) {
+    return height;
+  }
+  return fallback;
+};
+
+/** Y offset of `id` inside `order`, using measured row heights. */
+const offsetOfId = (
+  id: string,
+  order: string[],
+  measured: Record<string, number>,
+  fallback: number,
+  gap: number
+): number => {
+  let y = 0;
+  for (const other of order) {
+    if (other === id) {
+      return y;
+    }
+    y += measuredRowHeight(measured, other, fallback) + gap;
+  }
+  return y;
+};
+
 /**
- * Main draggable list component that renders a list of draggable items
- * Manages the order and positioning of items
+ * Drop index for a dragged row. Other rows keep their order, so the midpoints
+ * used here do not move when the dragged row changes slot.
  */
-export const DraggableList: React.FC<DragListProps> = (props) => {
+const insertIndexForDrag = (
+  draggedTop: number,
+  draggedId: string,
+  order: string[],
+  measured: Record<string, number>,
+  fallback: number,
+  gap: number
+): number => {
+  let y = 0;
+  let index = 0;
+  for (const id of order) {
+    if (id === draggedId) {
+      continue;
+    }
+    const height = measuredRowHeight(measured, id, fallback);
+    if (draggedTop < y + height / 2) {
+      return index;
+    }
+    y += height + gap;
+    index += 1;
+  }
+  return index;
+};
+
+interface VariableDragRowProps {
+  backgroundOnHold?: string;
+  dragMode: boolean;
+  dragTop: {value: number};
+  dragged: boolean;
+  id: string;
+  itemContainerStyle?: StyleProp<ViewStyle>;
+  offset: number;
+  onDragBegin: (id: string) => void;
+  onDragEnd: () => void;
+  onDragMove: (id: string, translationY: number) => void;
+  onMeasuredHeight: (id: string, height: number) => void;
+  passVibration?: () => void;
+  renderGrip?: React.ReactElement | (() => React.ReactElement);
+  renderItem: (props: {item: string}) => React.ReactElement;
+  startOffset: {value: number};
+}
+
+/**
+ * One variable-height row. At rest it sits in normal flow. During a drag every
+ * row is taken out of flow and positioned from measured heights.
+ */
+const VariableDragRow: React.FC<VariableDragRowProps> = ({
+  backgroundOnHold,
+  dragMode,
+  dragTop,
+  dragged,
+  id,
+  itemContainerStyle,
+  offset,
+  onDragBegin,
+  onDragEnd,
+  onDragMove,
+  onMeasuredHeight,
+  passVibration,
+  renderGrip,
+  renderItem,
+  startOffset,
+}) => {
+  const handleLayout = useCallback(
+    (event: LayoutChangeEvent): void => {
+      if (dragMode) {
+        return;
+      }
+      const nextHeight = Math.ceil(event.nativeEvent.layout.height);
+      if (nextHeight <= 0) {
+        return;
+      }
+      onMeasuredHeight(id, nextHeight);
+    },
+    [dragMode, id, onMeasuredHeight]
+  );
+
+  const animatedStyle = useAnimatedStyle(() => {
+    if (!dragMode) {
+      return {
+        position: "relative" as const,
+        top: 0,
+        width: "100%",
+        zIndex: 0,
+      };
+    }
+    return {
+      backgroundColor: dragged ? backgroundOnHold : "transparent",
+      left: 0,
+      position: "absolute" as const,
+      top: dragged ? dragTop.value : offset,
+      width: "100%",
+      zIndex: dragged ? 2 : 0,
+    };
+  });
+
+  const pan = Gesture.Pan()
+    .onBegin(() => {
+      startOffset.value = offset;
+      dragTop.value = offset;
+      if (passVibration) {
+        runOnJS(passVibration)();
+      }
+      runOnJS(onDragBegin)(id);
+    })
+    .onChange((event) => {
+      dragTop.value = startOffset.value + event.translationY;
+      runOnJS(onDragMove)(id, event.translationY);
+    })
+    .onFinalize(() => {
+      runOnJS(onDragEnd)();
+    });
+
+  return (
+    <Animated.View style={[itemContainerStyle, animatedStyle]}>
+      <View
+        collapsable={false}
+        onLayout={handleLayout}
+        style={{alignItems: "center", flexDirection: "row", width: "100%"}}
+        testID={`draggable-item-${id}`}
+      >
+        <GestureDetector gesture={pan}>
+          {renderGrip ? (
+            <View
+              style={{
+                alignItems: "center",
+                flexBasis: 45,
+                flexGrow: 0,
+                flexShrink: 0,
+                justifyContent: "center",
+                minWidth: 45,
+              }}
+            >
+              {typeof renderGrip === "function" ? renderGrip() : renderGrip}
+            </View>
+          ) : (
+            <Box justifyContent="center">
+              <Icon iconName="arrows-up-down-left-right" />
+            </Box>
+          )}
+        </GestureDetector>
+        <View style={{flex: 1, minWidth: 0}}>{renderItem({item: id})}</View>
+      </View>
+    </Animated.View>
+  );
+};
+
+/**
+ * Drag list whose rows keep their natural height. Resting layout is a column,
+ * so a tall row (a feature-flag rule with many users) pushes the next row down
+ * instead of letting it paint over the content.
+ */
+const VariableHeightDraggableList: React.FC<DragListProps> = (props) => {
+  const {
+    backgroundOnHold = "#e3e3e3",
+    callbackNewDataIds,
+    data,
+    itemContainerStyle,
+    passVibration,
+    renderGrip,
+    renderItem,
+  } = props;
+  const dataIDs = useMemo(() => props.dataIDs || data || [], [props.dataIDs, data]);
+  const itemsGap = props.itemsGap ?? 5;
+  const itemHeight = props.itemHeight ?? 50;
+
+  const [measured, setMeasured] = useState<Record<string, number>>({});
+  const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const measuredRef = useRef(measured);
+  const orderRef = useRef<string[]>(dataIDs);
+  const orderAtStartRef = useRef<string[]>(dataIDs);
+  const dragOpenRef = useRef(false);
+  const dragTop = useSharedValue(0);
+  const startOffset = useSharedValue(0);
+  const order = previewOrder ?? dataIDs;
+  measuredRef.current = measured;
+  orderRef.current = order;
+
+  const handleMeasuredHeight = useCallback((id: string, height: number): void => {
+    setMeasured((current) => {
+      if (current[id] === height) {
+        return current;
+      }
+      const next = {...current, [id]: height};
+      measuredRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handleDragBegin = useCallback((id: string): void => {
+    if (!dragOpenRef.current) {
+      orderAtStartRef.current = [...orderRef.current];
+      dragOpenRef.current = true;
+    }
+    setDraggingId(id);
+  }, []);
+
+  const handleDragMove = useCallback(
+    (id: string, translationY: number): void => {
+      if (!dragOpenRef.current) {
+        orderAtStartRef.current = [...orderRef.current];
+        dragOpenRef.current = true;
+      }
+      const current = orderRef.current;
+      const from = current.indexOf(id);
+      if (from < 0) {
+        return;
+      }
+      const draggedTop = startOffset.value + translationY;
+      const nextIndex = insertIndexForDrag(
+        draggedTop,
+        id,
+        current,
+        measuredRef.current,
+        itemHeight,
+        itemsGap
+      );
+      if (nextIndex === from) {
+        return;
+      }
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      if (!moved) {
+        return;
+      }
+      next.splice(nextIndex, 0, moved);
+      orderRef.current = next;
+      setPreviewOrder(next);
+      if (passVibration) {
+        passVibration();
+      }
+    },
+    [itemHeight, itemsGap, passVibration, startOffset]
+  );
+
+  const handleDragEnd = useCallback((): void => {
+    const next = orderRef.current;
+    const previous = orderAtStartRef.current;
+    dragOpenRef.current = false;
+    setDraggingId(null);
+    setPreviewOrder(null);
+    if (!callbackNewDataIds || next.join("\u0000") === previous.join("\u0000")) {
+      return;
+    }
+    callbackNewDataIds(next);
+  }, [callbackNewDataIds]);
+
+  const dragMode = draggingId !== null;
+  const totalHeight = order.reduce((sum, id, index) => {
+    return sum + measuredRowHeight(measured, id, itemHeight) + (index > 0 ? itemsGap : 0);
+  }, 0);
+
+  return (
+    <View
+      style={{
+        gap: dragMode ? 0 : itemsGap,
+        minHeight: dragMode ? totalHeight : undefined,
+        position: "relative",
+        width: "100%",
+      }}
+      testID="draggable-list"
+    >
+      {order.map((id) => (
+        <VariableDragRow
+          backgroundOnHold={backgroundOnHold}
+          dragged={draggingId === id}
+          dragMode={dragMode}
+          dragTop={dragTop}
+          id={id}
+          itemContainerStyle={itemContainerStyle}
+          key={id}
+          offset={offsetOfId(id, order, measured, itemHeight, itemsGap)}
+          onDragBegin={handleDragBegin}
+          onDragEnd={handleDragEnd}
+          onDragMove={handleDragMove}
+          onMeasuredHeight={handleMeasuredHeight}
+          passVibration={passVibration}
+          renderGrip={renderGrip}
+          renderItem={renderItem}
+          startOffset={startOffset}
+        />
+      ))}
+    </View>
+  );
+};
+
+/**
+ * Main draggable list component that renders a list of draggable items.
+ * Fixed-height rows are positioned absolutely. `variableHeight` stacks rows
+ * in normal flow so content taller than `itemHeight` is not covered.
+ */
+const FixedDraggableList: React.FC<DragListProps> = (props) => {
   const {
     data,
     callbackNewDataIds,
@@ -424,4 +752,12 @@ export const DraggableList: React.FC<DragListProps> = (props) => {
       ))}
     </View>
   );
+};
+
+/** Fixed-height rows, or content-sized rows when `variableHeight` is set. */
+export const DraggableList: React.FC<DragListProps> = (props) => {
+  if (props.variableHeight) {
+    return <VariableHeightDraggableList {...props} />;
+  }
+  return <FixedDraggableList {...props} />;
 };

@@ -30,20 +30,26 @@ mock.module("@terreno/ui", () => {
     itemHeight,
     renderItem,
     callbackNewDataIds,
+    variableHeight,
   }: {
     dataIDs: string[];
     itemHeight: number;
     renderItem: (arg: {item: string}) => React.ReactElement;
     callbackNewDataIds: (ids: string[]) => void;
+    variableHeight?: boolean;
   }) => {
-    return ReactMod.createElement(RN.View, {itemHeight, testID: "mock-draggable-list"}, [
-      ...dataIDs.map((id) => ReactMod.cloneElement(renderItem({item: id}), {key: id})),
-      ReactMod.createElement(RN.Pressable, {
-        key: "__reorder",
-        onPress: () => callbackNewDataIds([...dataIDs].reverse()),
-        testID: "mock-reorder",
-      }),
-    ]);
+    return ReactMod.createElement(
+      RN.View,
+      {itemHeight, testID: "mock-draggable-list", variableHeight},
+      [
+        ...dataIDs.map((id) => ReactMod.cloneElement(renderItem({item: id}), {key: id})),
+        ReactMod.createElement(RN.Pressable, {
+          key: "__reorder",
+          onPress: () => callbackNewDataIds([...dataIDs].reverse()),
+          testID: "mock-reorder",
+        }),
+      ]
+    );
   };
   const Box = ({children, ...rest}: Record<string, unknown>) =>
     ReactMod.createElement(RN.View, rest, children);
@@ -338,6 +344,7 @@ describe("AdminNestedArrayField", () => {
       );
       // Header 44 + name 76 + media group (84 + port 76 + sonarr group (84 + 2 * 76)) + padding 24
       expect(getByTestId("mock-draggable-list").props.itemHeight).toBe(540);
+      expect(getByTestId("mock-draggable-list").props.variableHeight).toBe(true);
     });
 
     it("gives nested groups per-item test IDs in editable rows", () => {

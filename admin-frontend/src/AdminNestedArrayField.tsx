@@ -168,8 +168,9 @@ const renderNestedSubField = ({
 };
 
 /**
- * Estimated rendered height of an item's subfields. DraggableList positions rows at a fixed
- * height, so nested object groups count their own subfields plus the group's chrome.
+ * Placeholder height for a row before DraggableList measures it. Nested object groups
+ * count their own subfields plus the group's chrome. The list then sizes to the real
+ * content, so a tall value (a user list, a nested array) does not cover the next row.
  */
 const estimateSubFieldsHeight = (
   items: Record<string, AdminFieldConfig>,
@@ -428,6 +429,7 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
           itemHeight={itemHeight}
           itemsGap={ITEMS_GAP}
           renderItem={renderItem}
+          variableHeight
         />
       )}
     </Box>

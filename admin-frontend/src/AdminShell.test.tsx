@@ -642,6 +642,20 @@ describe("AdminShell", () => {
 
     assert.isNotNull(getByTestId("admin-shell-child"));
     assert.isNotNull(getByTestId("admin-shell-main"));
+
+    // react-native-web drops a multi-value `padding` string, so the inset has to be longhand.
+    const contentStyle = getByTestId("admin-shell-content").props.style as {
+      padding?: unknown;
+      paddingBottom?: number;
+      paddingLeft?: number;
+      paddingRight?: number;
+      paddingTop?: number;
+    };
+    assert.strictEqual(contentStyle.paddingTop, 24);
+    assert.strictEqual(contentStyle.paddingRight, 28);
+    assert.strictEqual(contentStyle.paddingBottom, 80);
+    assert.strictEqual(contentStyle.paddingLeft, 28);
+    assert.isUndefined(contentStyle.padding);
   });
 
   it("renders the sidebar footer when provided", () => {

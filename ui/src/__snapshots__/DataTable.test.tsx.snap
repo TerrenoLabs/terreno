@@ -451,7 +451,7 @@ exports[`DataTable renders correctly with basic data 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -514,7 +514,7 @@ exports[`DataTable renders correctly with basic data 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -552,7 +552,7 @@ exports[`DataTable renders correctly with basic data 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -1324,7 +1324,7 @@ exports[`DataTable renders with alternate row background (default) 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -1387,7 +1387,7 @@ exports[`DataTable renders with alternate row background (default) 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -1425,7 +1425,7 @@ exports[`DataTable renders with alternate row background (default) 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -2987,7 +2987,7 @@ exports[`DataTable renders with pinned columns 1`] = `
                               ],
                               "props": {
                                 "style": {
-                                  "backgroundColor": "#CDCDCD",
+                                  "backgroundColor": "#E6E6E6",
                                   "borderBottomColor": "#CDCDCD",
                                   "borderBottomWidth": 1,
                                   "borderRightColor": "#CDCDCD",
@@ -3328,7 +3328,7 @@ exports[`DataTable renders with pinned columns 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -3366,7 +3366,7 @@ exports[`DataTable renders with pinned columns 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -4075,7 +4075,7 @@ exports[`DataTable renders with custom row height 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 80,
@@ -4138,7 +4138,7 @@ exports[`DataTable renders with custom row height 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 80,
@@ -4176,7 +4176,7 @@ exports[`DataTable renders with custom row height 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 80,
@@ -4948,7 +4948,7 @@ exports[`DataTable renders with custom header height 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -5011,7 +5011,7 @@ exports[`DataTable renders with custom header height 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -5049,7 +5049,7 @@ exports[`DataTable renders with custom header height 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -5821,7 +5821,7 @@ exports[`DataTable renders with pagination 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -5884,7 +5884,7 @@ exports[`DataTable renders with pagination 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -5922,7 +5922,7 @@ exports[`DataTable renders with pagination 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -7771,7 +7771,7 @@ exports[`DataTable renders with different text sizes 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -7834,7 +7834,7 @@ exports[`DataTable renders with different text sizes 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -7872,7 +7872,7 @@ exports[`DataTable renders with different text sizes 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -8440,7 +8440,7 @@ exports[`DataTable renders with more content component 1`] = `
                                 "onPress": [Function],
                                 "style": {
                                   "alignItems": "center",
-                                  "backgroundColor": "#CDCDCD",
+                                  "backgroundColor": "#E6E6E6",
                                   "borderRadius": 360,
                                   "height": 32,
                                   "justifyContent": "center",
@@ -8490,7 +8490,7 @@ exports[`DataTable renders with more content component 1`] = `
                           "props": {
                             "style": {
                               "alignItems": "center",
-                              "backgroundColor": "#CDCDCD",
+                              "backgroundColor": "#E6E6E6",
                               "borderBottomColor": "#CDCDCD",
                               "borderBottomWidth": 1,
                               "height": 54,
@@ -8514,7 +8514,7 @@ exports[`DataTable renders with more content component 1`] = `
                                 "onPress": [Function],
                                 "style": {
                                   "alignItems": "center",
-                                  "backgroundColor": "#CDCDCD",
+                                  "backgroundColor": "#E6E6E6",
                                   "borderRadius": 360,
                                   "height": 32,
                                   "justifyContent": "center",
@@ -8832,7 +8832,7 @@ exports[`DataTable renders with more content component 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -8895,7 +8895,7 @@ exports[`DataTable renders with more content component 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -8933,7 +8933,7 @@ exports[`DataTable renders with more content component 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,
@@ -9442,7 +9442,7 @@ exports[`DataTable renders boolean cells correctly 1`] = `
                                   ],
                                   "props": {
                                     "style": {
-                                      "backgroundColor": "#CDCDCD",
+                                      "backgroundColor": "#E6E6E6",
                                       "borderBottomColor": "#CDCDCD",
                                       "borderBottomWidth": 1,
                                       "height": 54,

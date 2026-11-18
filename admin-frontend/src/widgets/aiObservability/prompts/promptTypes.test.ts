@@ -1,8 +1,10 @@
 import {describe, expect, it} from "bun:test";
 import {
   appendPromptReference,
+  childFolders,
   filterPrompts,
   folderCounts,
+  formatFolderPath,
   formatPlaygroundMetrics,
   formatProduction,
   judgeOutputSchemaFromDetail,
@@ -13,6 +15,8 @@ import {
   type PromptListItem,
   type PromptVersionDetail,
   productionVersionFromDetail,
+  promptInFolder,
+  promptLocation,
   schemaSummary,
   templateVariableKeys,
   unwrapPromptDetail,
@@ -92,6 +96,77 @@ describe("promptTypes helpers", () => {
     expect(
       filterPrompts({folder: "", prompts: sample, search: "sum"}).map((row) => row.name)
     ).toEqual(["summarize"]);
+  });
+
+  it("treats every slash in the folder or the name as a nested folder", () => {
+    const nested: PromptListItem[] = [
+      {
+        folder: "appointmentAI/intake",
+        latestVersion: 1,
+        name: "appointmentAI/intake/_preamble",
+        production: 1,
+        type: "text",
+      },
+      {
+        folder: "appointmentAI/intake/admission-safety-assessment",
+        latestVersion: 1,
+        name: "appointmentAI/intake/admission-safety-assessment/risk",
+        production: 1,
+        type: "text",
+      },
+      {
+        folder: "appointmentAI/intake/admission-safety-assessment",
+        latestVersion: 1,
+        name: "appointmentAI/intake/admission-safety-assessment/plan",
+        production: "—",
+        type: "text",
+      },
+      {
+        folder: "examples",
+        latestVersion: 1,
+        name: "summarize",
+        production: 1,
+        type: "chat",
+      },
+    ];
+
+    const preamble = nested[0];
+    const risk = nested[1];
+    const summarize = nested[3];
+    if (!preamble || !risk || !summarize) {
+      throw new Error("nested folder fixture is missing a prompt");
+    }
+
+    expect(formatFolderPath("appointmentAI/intake/")).toBe("appointmentAI / intake");
+    expect(promptLocation(preamble).leaf).toBe("_preamble");
+    expect(promptLocation(preamble).directory).toBe("appointmentAI/intake");
+    expect(promptLocation(risk).directory).toBe("appointmentAI/intake/admission-safety-assessment");
+    expect(promptLocation(risk).leaf).toBe("risk");
+    expect(promptLocation(summarize).directory).toBe("examples");
+    expect(promptLocation(summarize).leaf).toBe("summarize");
+
+    expect(childFolders(nested, "")).toEqual([
+      {count: 3, name: "appointmentAI", path: "appointmentAI"},
+      {count: 1, name: "examples", path: "examples"},
+    ]);
+    expect(childFolders(nested, "appointmentAI")).toEqual([
+      {count: 3, name: "intake", path: "appointmentAI/intake"},
+    ]);
+    expect(childFolders(nested, "appointmentAI/intake").map((entry) => entry.name)).toEqual([
+      "admission-safety-assessment",
+    ]);
+
+    expect(promptInFolder(preamble, "appointmentAI")).toBe(true);
+    expect(promptInFolder(preamble, "appointmentAI/intake")).toBe(true);
+    expect(promptInFolder(preamble, "appointmentAI/intake/admission-safety-assessment")).toBe(
+      false
+    );
+    expect(promptInFolder(summarize, "appointmentAI")).toBe(false);
+    expect(
+      filterPrompts({folder: "appointmentAI/intake", prompts: nested, search: "plan"}).map(
+        (row) => row.name
+      )
+    ).toEqual(["appointmentAI/intake/admission-safety-assessment/plan"]);
   });
 
   it("formats production as a version or em dash", () => {

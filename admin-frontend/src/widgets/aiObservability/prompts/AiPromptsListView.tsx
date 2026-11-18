@@ -4,16 +4,16 @@ import {
   DataTable,
   type DataTableCellData,
   Modal,
-  SegmentedControl,
+  SelectField,
   Spinner,
   Text,
   TextField,
 } from "@terreno/ui";
 import {DateTime} from "luxon";
-import React, {useCallback, useMemo} from "react";
+import React, {useMemo} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
-import {ALL_FOLDERS, filterPrompts, folderCounts, type PromptListItem} from "./promptTypes";
+import {filterPrompts, type PromptListItem, promptTags} from "./promptTypes";
 
 /** List rows can carry a description and labels when the backend sends them. */
 type PromptListRow = PromptListItem & {
@@ -181,7 +181,6 @@ export interface AiPromptsListViewProps {
   createOpen: boolean;
   createSystem: string;
   createTemplate: string;
-  folder: string;
   isCreating?: boolean;
   isLoading?: boolean;
   loadError?: string;
@@ -192,13 +191,14 @@ export interface AiPromptsListViewProps {
   onCreateSystemChange: (value: string) => void;
   onCreateTemplateChange: (value: string) => void;
   onDismissCreate: () => void;
-  onFolderChange: (folder: string) => void;
   onOpenCreate: () => void;
   onOpenPrompt: (name: string) => void;
   onRetry?: () => void;
   onSearchChange: (value: string) => void;
+  onTagChange: (tag: string) => void;
   prompts: PromptListItem[];
   search: string;
+  tag: string;
 }
 
 export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
@@ -210,7 +210,6 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   createOpen,
   createSystem,
   createTemplate,
-  folder,
   isCreating,
   isLoading,
   loadError,
@@ -221,31 +220,19 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   onCreateSystemChange,
   onCreateTemplateChange,
   onDismissCreate,
-  onFolderChange,
   onOpenCreate,
   onOpenPrompt,
   onRetry,
   onSearchChange,
+  onTagChange,
   prompts,
   search,
+  tag,
 }) => {
   const visible = useMemo((): PromptListRow[] => {
-    return filterPrompts({folder, prompts, search});
-  }, [folder, prompts, search]);
-  const folders = useMemo(() => {
-    return folderCounts(prompts);
-  }, [prompts]);
-  const folderKeys = useMemo(() => {
-    return [ALL_FOLDERS, ...folders.map((entry) => entry.folder)];
-  }, [folders]);
-  const selectedFolderIndex = Math.max(0, folderKeys.indexOf(folder));
-
-  const handleFolderIndexChange = useCallback(
-    (index: number): void => {
-      onFolderChange(folderKeys[index] ?? ALL_FOLDERS);
-    },
-    [folderKeys, onFolderChange]
-  );
+    return filterPrompts({folder: "", prompts, search, tag});
+  }, [prompts, search, tag]);
+  const tags = useMemo(() => promptTags(prompts), [prompts]);
 
   const customColumnComponentMap = useMemo(
     () => ({
@@ -315,7 +302,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
     if (visible.length === 0) {
       return (
         <ObservabilityEmptyState
-          description="Try another folder or clear the search."
+          description="Try another tag or clear the search."
           iconName="magnifying-glass"
           testID="ai-prompts-no-matches"
           title="No prompts match"
@@ -343,24 +330,24 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   return (
     <Box gap={4} testID="ai-prompts-list">
       {prompts.length > 0 ? (
-        <Box alignItems="end" direction="row" gap={4} justifyContent="between" wrap>
-          <Box testID="ai-prompts-folders">
-            <SegmentedControl
-              badges={[
-                {count: prompts.length, status: "neutral"},
-                ...folders.map((entry) => ({count: entry.count, status: "neutral" as const})),
-              ]}
-              items={["All", ...folders.map((entry) => entry.folder)]}
-              onChange={handleFolderIndexChange}
-              selectedIndex={selectedFolderIndex}
-              size="sm"
-            />
-          </Box>
+        <Box alignItems="end" direction="row" gap={4} wrap>
+          {tags.length > 0 ? (
+            <Box minWidth={200} width={240}>
+              <SelectField
+                onChange={onTagChange}
+                options={tags.map((entry) => ({label: entry, value: entry}))}
+                placeholder="All tags"
+                testID="ai-prompts-tag"
+                title="Tag"
+                value={tag}
+              />
+            </Box>
+          ) : null}
           <Box minWidth={240} width={320}>
             <TextField
               iconName="magnifying-glass"
               onChange={onSearchChange}
-              placeholder="Search by name or folder"
+              placeholder="Search by name, folder, or tag"
               testID="ai-prompts-search"
               type="search"
               value={search}

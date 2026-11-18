@@ -13,6 +13,7 @@ import {
   type PromptListItem,
   type PromptVersionDetail,
   productionVersionFromDetail,
+  promptTags,
   schemaSummary,
   templateVariableKeys,
   unwrapPromptDetail,
@@ -26,10 +27,11 @@ const sample: PromptListItem[] = [
     latestVersion: 2,
     name: "summarize",
     production: 1,
+    tags: ["gold"],
     type: "chat",
     usage7d: {calls: 4, costUsd: 0.0123},
   },
-  {folder: "ops", latestVersion: 1, name: "triage", production: "—", type: "text"},
+  {folder: "ops", latestVersion: 1, name: "triage", production: "—", tags: ["ops"], type: "text"},
 ];
 
 const version = (
@@ -92,6 +94,13 @@ describe("promptTypes helpers", () => {
     expect(
       filterPrompts({folder: "", prompts: sample, search: "sum"}).map((row) => row.name)
     ).toEqual(["summarize"]);
+    expect(promptTags(sample)).toEqual(["gold", "ops"]);
+    expect(
+      filterPrompts({folder: "", prompts: sample, search: "", tag: "gold"}).map((row) => row.name)
+    ).toEqual(["summarize"]);
+    expect(
+      filterPrompts({folder: "", prompts: sample, search: "ops"}).map((row) => row.name)
+    ).toEqual(["triage"]);
   });
 
   it("formats production as a version or em dash", () => {

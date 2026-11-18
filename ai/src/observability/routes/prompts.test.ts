@@ -312,6 +312,7 @@ describe("observability prompt routes", () => {
         latestVersion: 1,
         name: "summarize",
         production: "—",
+        tags: [],
         type: "text",
         usage7d: {calls: 0},
       },

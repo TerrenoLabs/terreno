@@ -6,12 +6,7 @@ import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {resolvePromptActionPermissions} from "../shell/observabilityPermissions";
 import {AiPromptsListView} from "./AiPromptsListView";
-import {
-  ALL_FOLDERS,
-  templateVariableKeys,
-  unwrapPromptList,
-  variablesFromKeys,
-} from "./promptTypes";
+import {templateVariableKeys, unwrapPromptList, variablesFromKeys} from "./promptTypes";
 import {useAiObservabilityPromptsApi} from "./useAiObservabilityPromptsApi";
 
 const PROMPTS_DESCRIPTION =
@@ -24,7 +19,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
   const statusQuery = useStatusQuery();
   const [createPrompt, createState] = useCreateMutation();
   const [search, setSearch] = useState("");
-  const [folder, setFolder] = useState(ALL_FOLDERS);
+  const [tag, setTag] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createFolder, setCreateFolder] = useState("examples");
   const [createName, setCreateName] = useState("");
@@ -120,7 +115,6 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
           createOpen={createOpen}
           createSystem={createSystem}
           createTemplate={createTemplate}
-          folder={folder}
           isCreating={createState.isLoading}
           loadError={loadError}
           onCreate={handleCreate}
@@ -130,13 +124,14 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
           onCreateSystemChange={setCreateSystem}
           onCreateTemplateChange={setCreateTemplate}
           onDismissCreate={handleDismissCreate}
-          onFolderChange={setFolder}
           onOpenCreate={handleOpenCreate}
           onOpenPrompt={handleOpen}
           onRetry={refetch}
           onSearchChange={setSearch}
+          onTagChange={setTag}
           prompts={prompts}
           search={search}
+          tag={tag}
         />
       )}
     </AiObservabilityChrome>

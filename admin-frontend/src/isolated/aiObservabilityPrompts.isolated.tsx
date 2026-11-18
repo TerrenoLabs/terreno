@@ -1006,7 +1006,16 @@ describe("AiPromptsListScreen", () => {
       latestVersion: 1,
       name: "summarize",
       production: "—",
+      tags: ["gold"],
       type: "chat",
+    },
+    {
+      folder: "ops",
+      latestVersion: 1,
+      name: "triage",
+      production: "—",
+      tags: ["ops"],
+      type: "text",
     },
   ];
 
@@ -1133,19 +1142,26 @@ describe("AiPromptsListScreen", () => {
       Object.assign(listState, {data: loaded, error: undefined, isError: false, isLoading: false});
     });
 
-    it("filters by folder and search and retries load errors", async () => {
+    it("filters by tag and retries load errors", async () => {
       Object.assign(listState, {data: loaded, error: undefined, isError: false, isLoading: false});
       const view = renderWithTheme(
         <AiPromptsScreenWidget {...widgetProps} server={createServer()} />
       );
       await flushObservabilityRequests();
-      fireEvent.changeText(view.getByTestId("ai-prompts-search"), "summ");
+      fireEvent.changeText(view.getByTestId("ai-prompts-search"), "");
+      const tagSelect = view.UNSAFE_root.findAllByType(SelectField).find(
+        (field) => field.props.title === "Tag"
+      );
+      assert.exists(tagSelect);
+      if (!tagSelect) {
+        return;
+      }
       await act(async () => {
-        // The folder picker renders above the table, so its segment is the first match.
-        fireEvent.press(view.getAllByText("examples")[0]!);
+        fireEvent(tagSelect, "onChange", "gold");
         await Promise.resolve();
       });
-      expect(view.getByTestId("ai-prompts-table")).toBeTruthy();
+      expect(view.getByText("summarize")).toBeTruthy();
+      expect(view.queryByText("triage")).toBeNull();
 
       Object.assign(listState, {
         data: undefined,
@@ -1198,6 +1214,7 @@ describe("AiPromptsListView", () => {
       latestVersion: 2,
       name: "summarize",
       production: 1,
+      tags: ["gold"],
       type: "chat",
       usage7d: {calls: 3, costUsd: 0.2},
     },
@@ -1211,10 +1228,11 @@ describe("AiPromptsListView", () => {
     onCreateSystemChange: () => undefined,
     onCreateTemplateChange: () => undefined,
     onDismissCreate: () => undefined,
-    onFolderChange: () => undefined,
     onOpenCreate: () => undefined,
     onOpenPrompt: () => undefined,
     onSearchChange: () => undefined,
+    onTagChange: () => undefined,
+    tag: "",
   };
 
   describe("AiPromptsListView", () => {
@@ -1227,7 +1245,6 @@ describe("AiPromptsListView", () => {
           createOpen={false}
           createSystem=""
           createTemplate=""
-          folder=""
           isLoading
           prompts={[]}
           search=""
@@ -1246,7 +1263,6 @@ describe("AiPromptsListView", () => {
           createOpen={false}
           createSystem=""
           createTemplate=""
-          folder=""
           prompts={[]}
           search=""
           {...idleHandlers}
@@ -1256,8 +1272,8 @@ describe("AiPromptsListView", () => {
       expect(getByText("No prompts yet")).toBeTruthy();
     });
 
-    it("renders a loaded table with folder counts and newest vs production columns", () => {
-      const {getAllByText, getByTestId, getByText} = renderWithTheme(
+    it("renders a loaded table with a tag filter and newest vs production columns", () => {
+      const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
           createDescription=""
           createFolder="examples"
@@ -1265,17 +1281,13 @@ describe("AiPromptsListView", () => {
           createOpen={false}
           createSystem=""
           createTemplate=""
-          folder=""
           prompts={prompts}
           search=""
           {...idleHandlers}
         />
       );
       expect(getByTestId("ai-prompts-table")).toBeTruthy();
-      expect(getByTestId("ai-prompts-folders")).toBeTruthy();
-      expect(getByText("All")).toBeTruthy();
-      // Folder segment plus the row's folder line.
-      assert.isAtLeast(getAllByText("examples").length, 2);
+      expect(getByTestId("ai-prompts-tag.label")).toBeTruthy();
       expect(getByText("summarize")).toBeTruthy();
       expect(getByText("v2")).toBeTruthy();
       expect(getByText("v1")).toBeTruthy();
@@ -1290,7 +1302,6 @@ describe("AiPromptsListView", () => {
           createOpen={false}
           createSystem=""
           createTemplate=""
-          folder=""
           prompts={prompts}
           search=""
           {...idleHandlers}
@@ -1299,12 +1310,12 @@ describe("AiPromptsListView", () => {
       expect(getByTestId("ai-prompt-open-summarize")).toBeTruthy();
     });
 
-    it("filters by folder and search and wires create modal fields", async () => {
-      const onFolderChange = mock(() => undefined);
+    it("wires search, tag, and create modal fields", async () => {
+      const onTagChange = mock(() => undefined);
       const onSearchChange = mock(() => undefined);
       const onCreate = mock(() => undefined);
       const onRetry = mock(() => undefined);
-      const {getAllByText, getByTestId, getByText} = renderWithTheme(
+      const {getByTestId, getByText} = renderWithTheme(
         <AiPromptsListView
           createDescription="Short summary"
           createError="Name required"
@@ -1313,7 +1324,6 @@ describe("AiPromptsListView", () => {
           createOpen
           createSystem="You are helpful"
           createTemplate="Hi {{name}}"
-          folder=""
           loadError="Could not load prompts."
           onCreate={onCreate}
           onCreateDescriptionChange={() => undefined}
@@ -1322,22 +1332,19 @@ describe("AiPromptsListView", () => {
           onCreateSystemChange={() => undefined}
           onCreateTemplateChange={() => undefined}
           onDismissCreate={() => undefined}
-          onFolderChange={onFolderChange}
           onOpenCreate={() => undefined}
           onOpenPrompt={() => undefined}
           onRetry={onRetry}
           onSearchChange={onSearchChange}
+          onTagChange={onTagChange}
           prompts={prompts}
           search="summ"
+          tag=""
         />
       );
       fireEvent.changeText(getByTestId("ai-prompts-search"), "note");
       assert.isAtLeast(onSearchChange.mock.calls.length, 1);
-      await act(async () => {
-        fireEvent.press(getAllByText("examples")[0]!);
-        await Promise.resolve();
-      });
-      assert.isAtLeast(onFolderChange.mock.calls.length, 1);
+      expect(getByTestId("ai-prompts-tag.label")).toBeTruthy();
       await act(async () => {
         fireEvent.press(getByText("Try again"));
         await Promise.resolve();

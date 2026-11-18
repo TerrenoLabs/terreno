@@ -9,6 +9,7 @@ export interface PromptListItem {
   latestVersion: number;
   name: string;
   production: number | "—";
+  tags?: string[];
   type: "chat" | "text";
   usage7d?: PromptUsage7d;
 }
@@ -182,6 +183,20 @@ export const unwrapPromptDetail = (raw: unknown): PromptDetail | undefined => {
   return normalizePromptDetail(payload);
 };
 
+/** Sorted unique tags across the loaded prompts. Blank tags are dropped. */
+export const promptTags = (prompts: PromptListItem[]): string[] => {
+  const tags = new Set<string>();
+  for (const prompt of prompts) {
+    for (const tag of prompt.tags ?? []) {
+      const trimmed = tag.trim();
+      if (trimmed.length > 0) {
+        tags.add(trimmed);
+      }
+    }
+  }
+  return [...tags].sort((left, right) => left.localeCompare(right));
+};
+
 export const folderCounts = (prompts: PromptListItem[]): FolderCount[] => {
   const counts = new Map<string, number>();
   for (const prompt of prompts) {
@@ -205,21 +220,30 @@ export const filterPrompts = ({
   folder,
   prompts,
   search,
+  tag,
 }: {
   folder: string;
   prompts: PromptListItem[];
   search: string;
+  tag?: string;
 }): PromptListItem[] => {
   const needle = search.trim().toLowerCase();
+  const selectedTag = tag?.trim() ?? "";
   return prompts.filter((prompt) => {
     if (folder && prompt.folder !== folder) {
+      return false;
+    }
+    if (selectedTag && !(prompt.tags ?? []).includes(selectedTag)) {
       return false;
     }
     if (!needle) {
       return true;
     }
+    const tags = (prompt.tags ?? []).join(" ").toLowerCase();
     return (
-      prompt.name.toLowerCase().includes(needle) || prompt.folder.toLowerCase().includes(needle)
+      prompt.name.toLowerCase().includes(needle) ||
+      prompt.folder.toLowerCase().includes(needle) ||
+      tags.includes(needle)
     );
   });
 };

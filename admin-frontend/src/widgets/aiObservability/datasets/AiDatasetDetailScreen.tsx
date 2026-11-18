@@ -15,7 +15,7 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
   const params = useLocalSearchParams<{id?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
-  const {useCreateItemMutation, useDetailQuery, useItemsQuery} = useAiObservabilityDatasetsApi();
+  const {useDetailQuery, useItemsQuery} = useAiObservabilityDatasetsApi();
   const {useStatusQuery} = useAiObservabilityPromptsApi();
   const statusQuery = useStatusQuery();
   const status = unwrapObservabilityStatus(statusQuery.data);
@@ -40,7 +40,6 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     isLoading: isItemsLoading,
     refetch: refetchItems,
   } = useItemsQuery(id ?? "", {skip: !id});
-  const [createItem] = useCreateItemMutation();
   const dataset = useMemo(() => unwrapDatasetRecord(data), [data]);
   const items = useMemo(() => unwrapDatasetItems(itemsRaw), [itemsRaw]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
@@ -50,51 +49,18 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
     router.push(`${prefix}/ai-experiment-new?datasetId=${encodeURIComponent(id ?? "")}`);
   }, [id, prefix]);
 
-  const handleOpenTrace = useCallback(
-    (traceId: string): void => {
-      router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(traceId)}`);
+  const handleOpenItem = useCallback(
+    (itemId: string): void => {
+      router.push(
+        `${prefix}/ai-dataset-item?datasetId=${encodeURIComponent(id ?? "")}&itemId=${encodeURIComponent(itemId)}`
+      );
     },
-    [prefix]
+    [id, prefix]
   );
 
-  const handleAddItem = useCallback(
-    async ({
-      expectedOutput,
-      input,
-    }: {
-      expectedOutput: string;
-      input: string;
-    }): Promise<string | undefined> => {
-      if (!id) {
-        return "Missing dataset id.";
-      }
-      try {
-        await createItem({
-          body: {
-            expectedOutput: JSON.parse(expectedOutput) as unknown,
-            input: JSON.parse(input) as unknown,
-            origin: "manual",
-            proofread: true,
-          },
-          datasetId: id,
-        }).unwrap();
-        void refetchItems();
-        return undefined;
-      } catch (error) {
-        if (error instanceof SyntaxError) {
-          return "Input and expected output must be valid JSON.";
-        }
-        if (error && typeof error === "object" && "data" in error) {
-          const title = (error as {data?: {title?: string}}).data?.title;
-          if (title) {
-            return title;
-          }
-        }
-        return "Could not add dataset item.";
-      }
-    },
-    [createItem, id, refetchItems]
-  );
+  const handleCreateItem = useCallback((): void => {
+    router.push(`${prefix}/ai-dataset-item?datasetId=${encodeURIComponent(id ?? "")}`);
+  }, [id, prefix]);
 
   if (!id) {
     return (
@@ -135,9 +101,9 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
         dataset={dataset}
         isItemsLoading={isItemsLoading}
         items={items}
-        onAddItem={handleAddItem}
+        onCreateItem={handleCreateItem}
         onOpenExperiment={handleOpenExperiment}
-        onOpenTrace={handleOpenTrace}
+        onOpenItem={handleOpenItem}
         onRetryItems={refetchItems}
         routeBase={prefix}
       />

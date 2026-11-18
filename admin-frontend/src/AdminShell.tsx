@@ -599,12 +599,18 @@ export const AdminShell: React.FC<AdminShellProps> = ({
                 __style: {
                   boxSizing: "border-box",
                   maxWidth: 1280,
-                  padding: "24px 28px 80px",
+                  // react-native-web drops multi-value padding ("24px 28px 80px"), which left
+                  // every admin page flush against the sidebar. Longhand values match the top bar.
+                  paddingBottom: 80,
+                  paddingLeft: 28,
+                  paddingRight: 28,
+                  paddingTop: 24,
                   width: "100%",
                 },
               }}
               flex="grow"
               minHeight={0}
+              testID="admin-shell-content"
               width="100%"
             >
               <Box flex="grow" minHeight={0}>

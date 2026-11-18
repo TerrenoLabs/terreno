@@ -343,9 +343,12 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
       // The rating is also the reply's thumbs feedback when its trace exists; a missing trace
       // (old history, no local trace sink) never fails the rating.
       const traceId = history.prompts[promptIndex]?.traceId;
-      if (traceId && userId && (await registerObsTrace().exists({_id: traceId}))) {
+      if (traceId && userId) {
         const trimmed = typeof comment === "string" ? comment.trim() : "";
         try {
+          if (!(await registerObsTrace().exists({_id: traceId}))) {
+            return res.json({data: {promptIndex, rating}});
+          }
           await recordTraceFeedback({
             input: {thumbs: rating, ...(trimmed && rating !== null ? {comment: trimmed} : {})},
             traceId,

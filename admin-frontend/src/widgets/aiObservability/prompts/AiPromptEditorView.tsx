@@ -15,12 +15,14 @@ import React, {useCallback, useState} from "react";
 import {AiPromptPlaygroundView} from "./AiPromptPlaygroundView";
 import {
   appendPromptReference,
+  formatFolderPath,
   nextVersionFromDetail,
   outgoingProductionCopy,
   type PlaygroundRunResult,
   type PromptDetail,
   type PromptVersionDetail,
   productionVersionFromDetail,
+  promptLocation,
   schemaSummary,
   TEMPERATURE_PRESETS,
 } from "./promptTypes";
@@ -343,6 +345,9 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
 }) => {
   const productionVersion = productionVersionFromDetail(detail);
   const nextVersion = nextVersionFromDetail(detail);
+  const location = promptLocation(detail);
+  const folderLabel = formatFolderPath(location.directory);
+  const storedName = location.leaf === detail.name ? "" : ` · ${detail.name}`;
   const current = detail.versions.find((entry) => entry.version === selectedVersion);
   const [tabIndex, setTabIndex] = useState(0);
   const [confirmProduction, setConfirmProduction] = useState(false);
@@ -425,9 +430,9 @@ export const AiPromptEditorView: React.FC<AiPromptEditorViewProps> = ({
         ) : undefined}
       </Box>
       <Box flex="grow" gap={3}>
-        <Heading size="md">{detail.name}</Heading>
+        <Heading size="md">{location.leaf}</Heading>
         <Text color="secondaryDark">
-          {`${detail.folder} · immutable versions — save creates v${nextVersion}`}
+          {`${folderLabel}${storedName} · immutable versions — save creates v${nextVersion}`}
         </Text>
         <Text color="secondaryDark" size="sm" testID="ai-prompt-outgoing-version">
           {outgoingCopy}

@@ -162,4 +162,86 @@ describe("AiPromptsListView", () => {
     });
     expect(openOrder()).toEqual(["ai-prompt-open-gamma", "ai-prompt-open-alpha"]);
   });
+
+  it("nests slash folders and shows the prompt's last segment", async () => {
+    const onFolderChange = mock(() => {});
+    const library: PromptListItem[] = [
+      {
+        folder: "appointmentAI/intake",
+        latestVersion: 1,
+        name: "appointmentAI/intake/_preamble",
+        production: 1,
+        type: "text",
+      },
+      {
+        folder: "appointmentAI/intake/admission-safety-assessment",
+        latestVersion: 1,
+        name: "appointmentAI/intake/admission-safety-assessment/risk",
+        production: 1,
+        type: "text",
+      },
+      {
+        folder: "examples",
+        latestVersion: 1,
+        name: "summarize",
+        production: 1,
+        type: "chat",
+      },
+    ];
+    const view = renderWithTheme(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder=""
+        onFolderChange={onFolderChange}
+        prompts={library}
+      />
+    );
+
+    expect(view.getByTestId("ai-prompts-folder-appointmentAI-clickable")).toBeTruthy();
+    expect(view.queryByText("appointmentAI/intake")).toBeNull();
+    expect(view.getByText("_preamble")).toBeTruthy();
+    expect(view.getByText("appointmentAI / intake")).toBeTruthy();
+    expect(view.getByText("risk")).toBeTruthy();
+    expect(view.getByText("summarize")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-prompts-folder-appointmentAI-clickable"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onFolderChange.mock.calls[0], ["appointmentAI"]);
+
+    view.rerender(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder="appointmentAI"
+        onFolderChange={onFolderChange}
+        prompts={library}
+      />
+    );
+    expect(view.getByTestId("ai-prompts-folder-appointmentAI/intake-clickable")).toBeTruthy();
+    expect(view.queryByTestId("ai-prompts-folder-examples-clickable")).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-prompts-folder-appointmentAI/intake-clickable"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onFolderChange.mock.calls[1], ["appointmentAI/intake"]);
+
+    view.rerender(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder="appointmentAI/intake"
+        onFolderChange={onFolderChange}
+        prompts={library}
+      />
+    );
+    expect(view.getByText("_preamble")).toBeTruthy();
+    expect(view.getByText("risk")).toBeTruthy();
+    expect(view.queryByText("summarize")).toBeNull();
+    expect(
+      view.getByTestId(
+        "ai-prompts-folder-appointmentAI/intake/admission-safety-assessment-clickable"
+      )
+    ).toBeTruthy();
+  });
 });

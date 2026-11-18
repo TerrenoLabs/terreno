@@ -3,8 +3,8 @@ import {
   Box,
   DataTable,
   type DataTableCellData,
+  Icon,
   Modal,
-  SegmentedControl,
   Spinner,
   Text,
   TextField,
@@ -13,7 +13,15 @@ import {DateTime} from "luxon";
 import React, {useCallback, useMemo} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
-import {ALL_FOLDERS, filterPrompts, folderCounts, type PromptListItem} from "./promptTypes";
+import {
+  ALL_FOLDERS,
+  childFolders,
+  filterPrompts,
+  formatFolderPath,
+  type PromptListItem,
+  pathSegments,
+  promptLocation,
+} from "./promptTypes";
 
 /** List rows can carry a description and labels when the backend sends them. */
 type PromptListRow = PromptListItem & {
@@ -54,7 +62,58 @@ const formatPromptLastUsed = (iso?: string): string => {
 };
 
 const promptSubline = (prompt: PromptListRow): string => {
-  return prompt.description ? `${prompt.folder} · ${prompt.description}` : prompt.folder;
+  const directory = formatFolderPath(promptLocation(prompt).directory);
+  if (prompt.description && directory) {
+    return `${directory} · ${prompt.description}`;
+  }
+  if (prompt.description) {
+    return prompt.description;
+  }
+  return directory || prompt.folder;
+};
+
+const FolderChip: React.FC<{
+  count?: number;
+  label: string;
+  onSelect: (path: string) => void;
+  path: string;
+  selected: boolean;
+  showIcon?: boolean;
+  testID: string;
+}> = ({count, label, onSelect, path, selected, showIcon = false, testID}) => {
+  const handlePress = useCallback((): void => {
+    onSelect(path);
+  }, [onSelect, path]);
+
+  const accessibleCount =
+    count === undefined ? "" : `, ${count} ${count === 1 ? "prompt" : "prompts"}`;
+
+  return (
+    <Box
+      accessibilityHint="Shows the prompts in this folder"
+      accessibilityLabel={`${label}${accessibleCount}`}
+      accessibilityRole="button"
+      alignItems="center"
+      border={selected ? undefined : "default"}
+      color={selected ? "primary" : "base"}
+      direction="row"
+      gap={2}
+      maxWidth={280}
+      onClick={handlePress}
+      paddingX={3}
+      paddingY={1}
+      rounding="3xl"
+      testID={testID}
+    >
+      {showIcon ? (
+        <Icon color={selected ? "inverted" : "secondaryDark"} iconName="folder" size="sm" />
+      ) : null}
+      <Text color={selected ? "inverted" : "primary"} numberOfLines={1} size="sm">
+        {label}
+      </Text>
+      {count === undefined ? null : <Badge secondary status="neutral" value={String(count)} />}
+    </Box>
+  );
 };
 
 const buildColumns = (prompts: PromptListRow[]): ClientTableColumn<PromptListRow>[] => [
@@ -232,20 +291,10 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   const visible = useMemo((): PromptListRow[] => {
     return filterPrompts({folder, prompts, search});
   }, [folder, prompts, search]);
-  const folders = useMemo(() => {
-    return folderCounts(prompts);
-  }, [prompts]);
-  const folderKeys = useMemo(() => {
-    return [ALL_FOLDERS, ...folders.map((entry) => entry.folder)];
-  }, [folders]);
-  const selectedFolderIndex = Math.max(0, folderKeys.indexOf(folder));
-
-  const handleFolderIndexChange = useCallback(
-    (index: number): void => {
-      onFolderChange(folderKeys[index] ?? ALL_FOLDERS);
-    },
-    [folderKeys, onFolderChange]
-  );
+  const foldersHere = useMemo(() => {
+    return childFolders(prompts, folder);
+  }, [folder, prompts]);
+  const selectedSegments = useMemo(() => pathSegments(folder), [folder]);
 
   const customColumnComponentMap = useMemo(
     () => ({
@@ -265,7 +314,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
           >
             <Box testID={`ai-prompt-open-${prompt.name}`}>
               <Text bold numberOfLines={1}>
-                {prompt.name}
+                {promptLocation(prompt).leaf}
               </Text>
             </Box>
             <Text color="secondaryLight" numberOfLines={1} size="sm">
@@ -344,17 +393,70 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
     <Box gap={4} testID="ai-prompts-list">
       {prompts.length > 0 ? (
         <Box alignItems="end" direction="row" gap={4} justifyContent="between" wrap>
-          <Box testID="ai-prompts-folders">
-            <SegmentedControl
-              badges={[
-                {count: prompts.length, status: "neutral"},
-                ...folders.map((entry) => ({count: entry.count, status: "neutral" as const})),
-              ]}
-              items={["All", ...folders.map((entry) => entry.folder)]}
-              onChange={handleFolderIndexChange}
-              selectedIndex={selectedFolderIndex}
-              size="sm"
-            />
+          <Box gap={2} testID="ai-prompts-folders">
+            <Box alignItems="center" direction="row" gap={2} wrap>
+              <FolderChip
+                count={prompts.length}
+                label="All"
+                onSelect={onFolderChange}
+                path={ALL_FOLDERS}
+                selected={selectedSegments.length === 0}
+                testID="ai-prompts-folder-all"
+              />
+              {selectedSegments.map((segment, index) => {
+                const path = selectedSegments.slice(0, index + 1).join("/");
+                return (
+                  <Box alignItems="center" direction="row" gap={2} key={path}>
+                    <Text color="secondaryLight" size="sm">
+                      /
+                    </Text>
+                    <FolderChip
+                      label={segment}
+                      onSelect={onFolderChange}
+                      path={path}
+                      selected={index === selectedSegments.length - 1}
+                      testID={`ai-prompts-folder-${path}`}
+                    />
+                  </Box>
+                );
+              })}
+              {selectedSegments.length === 0
+                ? foldersHere.map((entry) => (
+                    <FolderChip
+                      count={entry.count}
+                      key={entry.path}
+                      label={entry.name}
+                      onSelect={onFolderChange}
+                      path={entry.path}
+                      selected={false}
+                      showIcon
+                      testID={`ai-prompts-folder-${entry.path}`}
+                    />
+                  ))
+                : null}
+            </Box>
+            {selectedSegments.length > 0 && foldersHere.length > 0 ? (
+              <Box
+                alignItems="center"
+                direction="row"
+                gap={2}
+                testID="ai-prompts-folder-children"
+                wrap
+              >
+                {foldersHere.map((entry) => (
+                  <FolderChip
+                    count={entry.count}
+                    key={entry.path}
+                    label={entry.name}
+                    onSelect={onFolderChange}
+                    path={entry.path}
+                    selected={false}
+                    showIcon
+                    testID={`ai-prompts-folder-${entry.path}`}
+                  />
+                ))}
+              </Box>
+            ) : null}
           </Box>
           <Box minWidth={240} width={320}>
             <TextField
@@ -388,12 +490,14 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
       >
         <Box gap={3} testID="ai-prompts-create-form">
           <TextField
+            helperText="Use a slash for each nested folder, such as appointmentAI/intake."
             onChange={onCreateFolderChange}
             testID="ai-prompts-create-folder"
             title="Folder"
             value={createFolder}
           />
           <TextField
+            helperText="A slash nests the name too. The last segment is the prompt."
             onChange={onCreateNameChange}
             testID="ai-prompts-create-name"
             title="Name"

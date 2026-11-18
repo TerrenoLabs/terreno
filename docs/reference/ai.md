@@ -575,7 +575,7 @@ server `AIService` when configured, otherwise a request-scoped service built fro
 
 | Model | Role |
 | --- | --- |
-| `ObsPrompt` | Named prompt (`name` unique) with `folder` and `tags[]` |
+| `ObsPrompt` | Named prompt (`name` unique) with `folder` and `tags[]`. A `/` in `folder` or `name` is a nested folder in the admin list; the last name segment is the prompt |
 | `ObsPromptVersion` | Immutable `vN` body, `variables[]`, schemas, `sensitive` (default false), `config` |
 | `ObsPromptLabel` | Movable labels; unique `(promptId, label)` |
 | `ObsTrace` | Root trace: user, session, status, `errorSummary`, `sensitive`, `prompts[]`, `scope`, `tags[]`, usage |
@@ -625,7 +625,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/observability/prompts` | List. Query `folder`, `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
+| GET | `/ai/observability/prompts` | List. Query `folder` (exact string; the admin list nests `/` itself), `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
 | POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
 | GET | `/ai/observability/prompts/:name` | Prompt + versions + labels. Each version includes `inputSchema`, `outputSchema`, and `outputFieldNotes` when set, so judge schema checks can see required dimensions such as `helpfulness` |
 | POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |

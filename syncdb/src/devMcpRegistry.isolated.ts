@@ -46,6 +46,12 @@ describe("devMcpRegistry (module mocks)", () => {
       name: "add",
     });
     expect(listTerrenoDevCommandSummaries().map((c) => c.name)).toEqual(["add"]);
+    registerTerrenoDevCommand({
+      description: "Adds again",
+      handler: () => 0,
+      name: "add",
+    });
+    expect(listTerrenoDevCommandSummaries().map((c) => c.description)).toEqual(["Adds"]);
     await expect(runTerrenoDevCommand("add", {a: 1, b: 2})).resolves.toBe(3);
     expect(getTerrenoDevClientDispatch()?.dispatch({type: "x"})).toEqual({type: "x"});
   });

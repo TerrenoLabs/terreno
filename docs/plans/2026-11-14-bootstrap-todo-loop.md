@@ -316,12 +316,12 @@ None — no canvas.
   - Test skills: update-docs
 
 - [ ] **T10** — Demonstrate a single-stage run and a full loop on the latest version to a green rubric
-  - Depends on: T9, T12, and the D1 credentials (`VERCEL_TOKEN`, `BOOTSTRAP_LOOP_MONGO_URI`, `GOOGLE_GENERATIVE_AI_API_KEY`, `BOOTSTRAP_LOOP_GH_TOKEN`) in the session env; without them the stage ends BLOCKED naming the missing variables
+  - Depends on: T9, T12, and `BOOTSTRAP_LOOP_GH_TOKEN` plus the private runs repo `TerrenoLabs/bootstrap-todo-runs` (R9 needs real CI runs); D9 drops the Vercel, Atlas and Gemini credentials from T10, so without the token and repo the stage ends BLOCKED naming them
   - Files: docs/bootstrapLoop/runs/<latest>/*, docs/bootstrapLoop/runs/single-stage-demo.md, fixes in scripts/bootstrapLoop/ or create-terreno-app/ or mcp-server/src/bootstrap.ts found by the run
-  - Criteria: one `stage auth` run on an existing scaffold recorded in `single-stage-demo.md` (command, stage JSON); one `loop --version <latest published>` whose committed `score.json` has `pass: true` with every R1–R13 row PASS; outputs uploaded with T9's command. Any harness or template fix carries its own unit test.
+  - Criteria: one `stage auth` run on an existing scaffold recorded in `single-stage-demo.md` (command, stage JSON); one `loop --version <latest published>` whose committed `score.json` has `pass: true` with every R1–R13 row PASS except R5, R13 and R2's deployed-login sub-check, which D9 records as `SKIPPED (descoped, D9)` and never counts as PASS; outputs uploaded with T9's command. Any harness or template fix carries its own unit test.
   - Seam: committed run outputs
   - Interface: `docs/bootstrapLoop/runs/<latest>/score.json` per T6
-  - Also commits `evidence.json` and the screenshots beside `score.json`; the latest version's deploy is kept up (`keep: true`).
+  - Also commits `evidence.json` and the screenshots beside `score.json`. D9 removes the kept-up deploy from T10.
   - Cases: none (untestable as a unit: an operational run; roast checks the committed `score.json` and `evidence.json`, that each CI run URL resolves to a `success` run via `gh run view` / the CircleCI API, that the deploy URL returns 200 now, and the uploaded artifact paths)
   - Blast radius: none
   - Test skills: verify-ui-changes (screenshots)
@@ -381,6 +381,7 @@ Answered by the human on 2026-11-16.
 | D6 (was Q6) | Features: the fixed list (create, edit, complete, delete, due date, all/active/done filter; owner-scoped, synced). | As planned. |
 | D7 (was Q7) | Mobile judged on mobile-width web (Playwright 390×844). | As planned. |
 | D8 | Matrix = every stable 58.x release including patches, plus `local` (Q8 recommendation, assumed). | T8 `listVersions` keeps patches. |
+| D9 | T10 drops the deploy and AI rows: R5, R13 and R2's deployed-login check are `SKIPPED (descoped, D9)`, with no Vercel, Atlas or Gemini credentials required. T10 and T11 still require R1-R4, R6-R12 and R9 to PASS. The answer to "Provide the four D1 credentials?" was "Drop the deploy/AI rows from the T10 criteria". | Narrows D1 and D3 for T10 only; R9 still needs `BOOTSTRAP_LOOP_GH_TOKEN` and `TerrenoLabs/bootstrap-todo-runs`. |
 
 ## Sign-off
 

@@ -595,8 +595,10 @@ describe("LocalTraceStore score index build failure", () => {
   it("logs a failed index build and still upserts end-user scores", async () => {
     resetObsScoreIndexBuild();
     const ObsScore = registerObsScore();
+    // Existing duplicates make the unique index build fail with Mongo's duplicate-key code.
+    const duplicateError = Object.assign(new Error("E11000 duplicate key"), {code: 11000});
     const initSpy = spyOn(ObsScore, "init").mockImplementation((() =>
-      Promise.reject(new Error("E11000 duplicate key"))) as unknown as typeof ObsScore.init);
+      Promise.reject(duplicateError)) as unknown as typeof ObsScore.init);
     const errorSpy = spyOn(logger, "error").mockImplementation(() => logger);
     const traceId = new mongoose.Types.ObjectId().toHexString();
     try {
@@ -624,6 +626,32 @@ describe("LocalTraceStore score index build failure", () => {
     } finally {
       initSpy.mockRestore();
       errorSpy.mockRestore();
+    }
+  });
+
+  it("rethrows any other index build failure and retries the build on the next write", async () => {
+    resetObsScoreIndexBuild();
+    const ObsScore = registerObsScore();
+    const realInit = ObsScore.init.bind(ObsScore);
+    const initSpy = spyOn(ObsScore, "init").mockImplementationOnce((() =>
+      Promise.reject(new Error("connection reset"))) as unknown as typeof ObsScore.init);
+    const traceId = new mongoose.Types.ObjectId().toHexString();
+    const score: ScoreRecord = {
+      dataType: "boolean",
+      name: "thumbs_up",
+      source: "user-feedback",
+      traceId,
+      value: false,
+    };
+    try {
+      const store = new LocalTraceStore();
+      await expect(store.exportScore(score)).rejects.toThrow("connection reset");
+      initSpy.mockImplementation(realInit as unknown as typeof ObsScore.init);
+      await store.exportScore(score);
+      expect(initSpy).toHaveBeenCalledTimes(2);
+      expect(await ObsScore.countDocuments({traceId})).toBe(1);
+    } finally {
+      initSpy.mockRestore();
     }
   });
 });

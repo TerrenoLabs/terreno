@@ -322,6 +322,11 @@ const ensureObsScoreIndexes = (): Promise<unknown> => {
   obsScoreIndexes ??= registerObsScore()
     .init()
     .catch((error: unknown) => {
+      // Only existing duplicates are tolerated; any other failure retries on the next write.
+      if ((error as {code?: number}).code !== 11000) {
+        obsScoreIndexes = undefined;
+        throw error;
+      }
       logger.error(
         "ObsScore indexes failed to build; remove duplicate live user-feedback/user-signal scores per trace and name",
         {error}

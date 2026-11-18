@@ -5,6 +5,7 @@ import {
   type DataTableCellData,
   Icon,
   Modal,
+  SelectField,
   Spinner,
   Text,
   TextField,
@@ -21,6 +22,7 @@ import {
   type PromptListItem,
   pathSegments,
   promptLocation,
+  promptTags,
 } from "./promptTypes";
 
 /** List rows can carry a description and labels when the backend sends them. */
@@ -100,6 +102,7 @@ const FolderChip: React.FC<{
       gap={2}
       maxWidth={280}
       onClick={handlePress}
+      overflow="hidden"
       paddingX={3}
       paddingY={1}
       rounding="3xl"
@@ -108,10 +111,16 @@ const FolderChip: React.FC<{
       {showIcon ? (
         <Icon color={selected ? "inverted" : "secondaryDark"} iconName="folder" size="sm" />
       ) : null}
-      <Text color={selected ? "inverted" : "primary"} numberOfLines={1} size="sm">
-        {label}
-      </Text>
-      {count === undefined ? null : <Badge secondary status="neutral" value={String(count)} />}
+      <Box flex="shrink" minWidth={0} overflow="hidden">
+        <Text color={selected ? "inverted" : "primary"} numberOfLines={1} size="sm">
+          {label}
+        </Text>
+      </Box>
+      {count === undefined ? null : (
+        <Box flex="none">
+          <Badge secondary status="neutral" value={String(count)} />
+        </Box>
+      )}
     </Box>
   );
 };
@@ -256,8 +265,10 @@ export interface AiPromptsListViewProps {
   onOpenPrompt: (name: string) => void;
   onRetry?: () => void;
   onSearchChange: (value: string) => void;
+  onTagChange: (tag: string) => void;
   prompts: PromptListItem[];
   search: string;
+  tag: string;
 }
 
 export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
@@ -285,16 +296,19 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   onOpenPrompt,
   onRetry,
   onSearchChange,
+  onTagChange,
   prompts,
   search,
+  tag,
 }) => {
   const visible = useMemo((): PromptListRow[] => {
-    return filterPrompts({folder, prompts, search});
-  }, [folder, prompts, search]);
+    return filterPrompts({folder, prompts, search, tag});
+  }, [folder, prompts, search, tag]);
   const foldersHere = useMemo(() => {
     return childFolders(prompts, folder);
   }, [folder, prompts]);
   const selectedSegments = useMemo(() => pathSegments(folder), [folder]);
+  const tags = useMemo(() => promptTags(prompts), [prompts]);
 
   const customColumnComponentMap = useMemo(
     () => ({
@@ -364,7 +378,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
     if (visible.length === 0) {
       return (
         <ObservabilityEmptyState
-          description="Try another folder or clear the search."
+          description="Try another folder, tag, or clear the search."
           iconName="magnifying-glass"
           testID="ai-prompts-no-matches"
           title="No prompts match"
@@ -458,15 +472,29 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
               </Box>
             ) : null}
           </Box>
-          <Box minWidth={240} width={320}>
-            <TextField
-              iconName="magnifying-glass"
-              onChange={onSearchChange}
-              placeholder="Search by name or folder"
-              testID="ai-prompts-search"
-              type="search"
-              value={search}
-            />
+          <Box alignItems="end" direction="row" gap={4} wrap>
+            {tags.length > 0 ? (
+              <Box minWidth={200} width={240}>
+                <SelectField
+                  onChange={onTagChange}
+                  options={tags.map((entry) => ({label: entry, value: entry}))}
+                  placeholder="All tags"
+                  testID="ai-prompts-tag"
+                  title="Tag"
+                  value={tag}
+                />
+              </Box>
+            ) : null}
+            <Box minWidth={240} width={320}>
+              <TextField
+                iconName="magnifying-glass"
+                onChange={onSearchChange}
+                placeholder="Search by name, folder, or tag"
+                testID="ai-prompts-search"
+                type="search"
+                value={search}
+              />
+            </Box>
           </Box>
         </Box>
       ) : null}

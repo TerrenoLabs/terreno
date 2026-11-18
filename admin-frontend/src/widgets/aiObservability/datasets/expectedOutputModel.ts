@@ -44,7 +44,7 @@ const schemaTypeName = (schema?: JsonSchema): string | undefined => {
 };
 
 /** "privacyLeak" and "privacy_leak" both read as "Privacy Leak". */
-export const labelFromKey = (key: string, schema?: JsonSchema): string => {
+const labelFromKey = (key: string, schema?: JsonSchema): string => {
   if (schema?.title && schema.title.trim().length > 0) {
     return schema.title.trim();
   }
@@ -104,7 +104,7 @@ const enumValues = (schema?: JsonSchema): string[] | undefined => {
 };
 
 /** A blank value that matches the schema, used for a new golden row or a new list entry. */
-export const blankFromSchema = (schema?: JsonSchema): unknown => {
+const blankFromSchema = (schema?: JsonSchema): unknown => {
   const kind = schemaTypeName(schema);
   if (schema?.properties || kind === "object") {
     const record: Record<string, unknown> = {};
@@ -129,7 +129,7 @@ export const blankFromSchema = (schema?: JsonSchema): unknown => {
  * Fills missing schema fields without overwriting a value that is already there.
  * A value whose type does not match the schema is replaced by the blank schema shape.
  */
-export const mergeWithSchema = (schema: JsonSchema | undefined, value: unknown): unknown => {
+const mergeWithSchema = (schema: JsonSchema | undefined, value: unknown): unknown => {
   if (!schema) {
     return value;
   }

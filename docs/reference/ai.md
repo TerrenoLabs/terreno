@@ -628,7 +628,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/observability/prompts` | List. Query `folder` (exact string; the admin list nests `/` itself), `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
+| GET | `/ai/observability/prompts` | List. Query `folder` (exact string; the admin list nests `/` itself), `search`, `include=usage7d` (7-day calls/cost). Each row includes `tags`. `production` is `"—"` until a production label exists. The admin list filters those tags in the browser |
 | POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
 | GET | `/ai/observability/prompts/:name` | Prompt + versions + labels. Each version includes `inputSchema`, `outputSchema`, and `outputFieldNotes` when set, so judge schema checks can see required dimensions such as `helpfulness` |
 | POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |

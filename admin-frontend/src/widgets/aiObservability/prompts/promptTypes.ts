@@ -9,6 +9,7 @@ export interface PromptListItem {
   latestVersion: number;
   name: string;
   production: number | "—";
+  tags?: string[];
   type: "chat" | "text";
   usage7d?: PromptUsage7d;
 }
@@ -120,11 +121,6 @@ export interface PlaygroundRunResult {
   tokens: {inputTokens?: number; outputTokens?: number; totalTokens?: number};
 }
 
-export interface FolderCount {
-  count: number;
-  folder: string;
-}
-
 export const ALL_FOLDERS = "";
 
 /** Split a folder or prompt name on `/`, dropping blank segments from extra slashes. */
@@ -228,7 +224,7 @@ export const childFolders = (prompts: PromptListItem[], parent: string): FolderN
 };
 
 /** True when `folder` is the prompt's directory or a parent of it. `""` matches every prompt. */
-export const promptInFolder = (
+const promptInFolder = (
   prompt: Pick<PromptListItem, "folder" | "name">,
   folder: string
 ): boolean => {
@@ -295,16 +291,18 @@ export const unwrapPromptDetail = (raw: unknown): PromptDetail | undefined => {
   return normalizePromptDetail(payload);
 };
 
-export const folderCounts = (prompts: PromptListItem[]): FolderCount[] => {
-  const counts = new Map<string, number>();
+/** Sorted unique tags across the loaded prompts. Blank tags are dropped. */
+export const promptTags = (prompts: PromptListItem[]): string[] => {
+  const tags = new Set<string>();
   for (const prompt of prompts) {
-    counts.set(prompt.folder, (counts.get(prompt.folder) ?? 0) + 1);
+    for (const tag of prompt.tags ?? []) {
+      const trimmed = tag.trim();
+      if (trimmed.length > 0) {
+        tags.add(trimmed);
+      }
+    }
   }
-  return [...counts.entries()]
-    .sort(([a], [b]) => {
-      return a.localeCompare(b);
-    })
-    .map(([folder, count]) => ({count, folder}));
+  return [...tags].sort((left, right) => left.localeCompare(right));
 };
 
 export const formatProduction = (production: number | "—"): string => {
@@ -318,21 +316,33 @@ export const filterPrompts = ({
   folder,
   prompts,
   search,
+  tag,
 }: {
   folder: string;
   prompts: PromptListItem[];
   search: string;
+  tag?: string;
 }): PromptListItem[] => {
   const needle = search.trim().toLowerCase();
+  const selectedTag = tag?.trim() ?? "";
   return prompts.filter((prompt) => {
     if (!promptInFolder(prompt, folder)) {
+      return false;
+    }
+    if (selectedTag && !(prompt.tags ?? []).includes(selectedTag)) {
       return false;
     }
     if (!needle) {
       return true;
     }
     const location = promptLocation(prompt);
-    const haystack = [prompt.name, prompt.folder, location.directory, location.leaf]
+    const haystack = [
+      prompt.name,
+      prompt.folder,
+      location.directory,
+      location.leaf,
+      ...(prompt.tags ?? []),
+    ]
       .join("\n")
       .toLowerCase();
     return haystack.includes(needle);

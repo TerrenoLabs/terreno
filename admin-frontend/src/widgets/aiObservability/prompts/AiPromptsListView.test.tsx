@@ -24,7 +24,7 @@ const idleHandlers = {
   createOpen: false,
   createSystem: "",
   createTemplate: "",
-  folder: "All folders",
+  folder: "",
   onCreate: mock(() => {}),
   onCreateDescriptionChange: mock(() => {}),
   onCreateFolderChange: mock(() => {}),
@@ -36,8 +36,10 @@ const idleHandlers = {
   onOpenCreate: mock(() => {}),
   onOpenPrompt: mock(() => {}),
   onSearchChange: mock(() => {}),
+  onTagChange: mock(() => {}),
   prompts,
   search: "",
+  tag: "",
 };
 
 describe("AiPromptsListView", () => {
@@ -76,7 +78,6 @@ describe("AiPromptsListView", () => {
     const view = renderWithTheme(
       <AiPromptsListView
         {...idleHandlers}
-        folder=""
         prompts={[
           {
             description: "Short summaries",
@@ -122,9 +123,7 @@ describe("AiPromptsListView", () => {
       {folder: "examples", latestVersion: 12, name: "beta", production: "—", type: "text"},
       {folder: "examples", latestVersion: 7, name: "gamma", production: 7, type: "chat"},
     ];
-    const view = renderWithTheme(
-      <AiPromptsListView {...idleHandlers} folder="" prompts={library} />
-    );
+    const view = renderWithTheme(<AiPromptsListView {...idleHandlers} prompts={library} />);
     const tableProps = (): DataTableProps =>
       view.UNSAFE_root.find(
         (node) => node.props.testID === "ai-prompts-table" && "setSortColumn" in node.props
@@ -156,6 +155,7 @@ describe("AiPromptsListView", () => {
       "ai-prompt-open-alpha",
     ]);
     expect(view.getByText("v12")).toBeTruthy();
+    expect(view.getByTestId("ai-prompts-folders")).toBeTruthy();
 
     act(() => {
       tableProps().onFilterValuesChange?.({type: ["chat"]});
@@ -243,5 +243,32 @@ describe("AiPromptsListView", () => {
         "ai-prompts-folder-appointmentAI/intake/admission-safety-assessment-clickable"
       )
     ).toBeTruthy();
+  });
+
+  it("filters the table to prompts that have the selected tag", () => {
+    const library: PromptListItem[] = [
+      {
+        folder: "examples",
+        latestVersion: 1,
+        name: "summarize",
+        production: 1,
+        tags: ["gold"],
+        type: "chat",
+      },
+      {
+        folder: "ops",
+        latestVersion: 1,
+        name: "triage",
+        production: "—",
+        tags: ["ops"],
+        type: "text",
+      },
+    ];
+    const view = renderWithTheme(
+      <AiPromptsListView {...idleHandlers} prompts={library} tag="gold" />
+    );
+    expect(view.getByTestId("ai-prompts-tag.label")).toBeTruthy();
+    expect(view.getByText("summarize")).toBeTruthy();
+    expect(view.queryByText("triage")).toBeNull();
   });
 });

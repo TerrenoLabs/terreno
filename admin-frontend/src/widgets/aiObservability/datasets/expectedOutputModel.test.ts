@@ -7,7 +7,6 @@ import {
   type FormFieldNode,
   type FormGroupNode,
   type JsonSchema,
-  labelFromKey,
   prepareFormValue,
   readPath,
   removeAtIndex,
@@ -38,8 +37,20 @@ const CHAT_SAFETY_SCHEMA: JsonSchema = {
 
 describe("expected output form", () => {
   it("labels a camelCase key as words", () => {
-    assert.equal(labelFromKey("privacyLeak"), "Privacy Leak");
-    assert.equal(labelFromKey("route", {title: "Routing"}), "Routing");
+    const schema: JsonSchema = {
+      properties: {
+        privacyLeak: {type: "boolean"},
+        route: {title: "Routing", type: "string"},
+      },
+      type: "object",
+    };
+    const form = buildForm(schema, prepareFormValue(schema, {}));
+    assert.equal(form.type, "group");
+    if (form.type !== "group") {
+      return;
+    }
+    assert.exists(fieldAt(form, "Privacy Leak"));
+    assert.exists(fieldAt(form, "Routing"));
   });
 
   it("edits a string expected output as one text field", () => {

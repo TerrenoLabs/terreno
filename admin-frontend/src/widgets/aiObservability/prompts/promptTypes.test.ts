@@ -3,7 +3,6 @@ import {
   appendPromptReference,
   childFolders,
   filterPrompts,
-  folderCounts,
   formatFolderPath,
   formatPlaygroundMetrics,
   formatProduction,
@@ -15,8 +14,8 @@ import {
   type PromptListItem,
   type PromptVersionDetail,
   productionVersionFromDetail,
-  promptInFolder,
   promptLocation,
+  promptTags,
   schemaSummary,
   templateVariableKeys,
   unwrapPromptDetail,
@@ -30,10 +29,11 @@ const sample: PromptListItem[] = [
     latestVersion: 2,
     name: "summarize",
     production: 1,
+    tags: ["gold"],
     type: "chat",
     usage7d: {calls: 4, costUsd: 0.0123},
   },
-  {folder: "ops", latestVersion: 1, name: "triage", production: "—", type: "text"},
+  {folder: "ops", latestVersion: 1, name: "triage", production: "—", tags: ["ops"], type: "text"},
 ];
 
 const version = (
@@ -85,17 +85,20 @@ describe("promptTypes helpers", () => {
     });
   });
 
-  it("counts folders and filters by folder plus search", () => {
-    expect(folderCounts(sample)).toEqual([
-      {count: 1, folder: "examples"},
-      {count: 1, folder: "ops"},
-    ]);
+  it("filters by folder, tag, and search", () => {
     expect(
       filterPrompts({folder: "ops", prompts: sample, search: ""}).map((row) => row.name)
     ).toEqual(["triage"]);
     expect(
       filterPrompts({folder: "", prompts: sample, search: "sum"}).map((row) => row.name)
     ).toEqual(["summarize"]);
+    expect(promptTags(sample)).toEqual(["gold", "ops"]);
+    expect(
+      filterPrompts({folder: "", prompts: sample, search: "", tag: "gold"}).map((row) => row.name)
+    ).toEqual(["summarize"]);
+    expect(
+      filterPrompts({folder: "", prompts: sample, search: "ops"}).map((row) => row.name)
+    ).toEqual(["triage"]);
   });
 
   it("treats every slash in the folder or the name as a nested folder", () => {
@@ -156,12 +159,14 @@ describe("promptTypes helpers", () => {
       "admission-safety-assessment",
     ]);
 
-    expect(promptInFolder(preamble, "appointmentAI")).toBe(true);
-    expect(promptInFolder(preamble, "appointmentAI/intake")).toBe(true);
-    expect(promptInFolder(preamble, "appointmentAI/intake/admission-safety-assessment")).toBe(
-      false
+    const namesIn = (folder: string): string[] =>
+      filterPrompts({folder, prompts: nested, search: ""}).map((row) => row.name);
+    expect(namesIn("appointmentAI")).toContain(preamble.name);
+    expect(namesIn("appointmentAI/intake")).toContain(preamble.name);
+    expect(namesIn("appointmentAI/intake/admission-safety-assessment")).not.toContain(
+      preamble.name
     );
-    expect(promptInFolder(summarize, "appointmentAI")).toBe(false);
+    expect(namesIn("appointmentAI")).not.toContain(summarize.name);
     expect(
       filterPrompts({folder: "appointmentAI/intake", prompts: nested, search: "plan"}).map(
         (row) => row.name

@@ -25,6 +25,7 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
   const [createPrompt, createState] = useCreateMutation();
   const [search, setSearch] = useState("");
   const [folder, setFolder] = useState(ALL_FOLDERS);
+  const [tag, setTag] = useState("");
   const [createOpen, setCreateOpen] = useState(false);
   const [createFolder, setCreateFolder] = useState("examples");
   const [createName, setCreateName] = useState("");
@@ -135,8 +136,10 @@ export const AiPromptsScreenWidget: React.FC<AdminScreenWidgetProps> = (props) =
           onOpenPrompt={handleOpen}
           onRetry={refetch}
           onSearchChange={setSearch}
+          onTagChange={setTag}
           prompts={prompts}
           search={search}
+          tag={tag}
         />
       )}
     </AiObservabilityChrome>

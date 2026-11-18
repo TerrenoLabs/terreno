@@ -1,5 +1,6 @@
 import type {ScreenWidgetComponent} from "../../../types";
 import {AiDatasetDetailScreenWidget} from "../datasets/AiDatasetDetailScreen";
+import {AiDatasetItemScreenWidget} from "../datasets/AiDatasetItemScreen";
 import {AiDatasetsScreenWidget} from "../datasets/AiDatasetsListScreen";
 import {AiEvaluatorDetailScreenWidget} from "../evaluators/AiEvaluatorDetailScreen";
 import {AiEvaluatorNewScreenWidget} from "../evaluators/AiEvaluatorNewScreen";
@@ -29,6 +30,7 @@ export {
 
 export const AI_OBSERVABILITY_WIDGETS: Record<string, ScreenWidgetComponent> = {
   "ai-dataset-detail": AiDatasetDetailScreenWidget,
+  "ai-dataset-item": AiDatasetItemScreenWidget,
   "ai-datasets": AiDatasetsScreenWidget,
   "ai-evaluator-detail": AiEvaluatorDetailScreenWidget,
   "ai-evaluator-new": AiEvaluatorNewScreenWidget,

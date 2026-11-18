@@ -179,7 +179,7 @@ describe("AiDatasetDetailScreen", () => {
       assert.deepEqual(server.callsTo(DETAIL_ROUTE)[0]?.params, {id: "ds-1"});
     });
 
-    it("opens experiment and trace routes from the detail view", async () => {
+    it("opens the expected-output page from a row and from add item", async () => {
       detailState.data = dataset;
       itemsState.data = items;
       routerPush.mockClear();
@@ -202,77 +202,17 @@ describe("AiDatasetDetailScreen", () => {
         fireEvent.press(view.getByTestId("ai-dataset-items-table-row-item-1-clickable"));
         await Promise.resolve();
       });
-      await act(async () => {
-        fireEvent.press(view.getByTestId("ai-dataset-item-open-trace"));
-        await new Promise((resolve) => setTimeout(resolve, 50));
-      });
-      assert.include(String(routerPush.mock.calls[1]?.[0]), "ai-trace-detail");
-    });
+      const itemHref = String(routerPush.mock.calls[1]?.[0]);
+      assert.include(itemHref, "ai-dataset-item");
+      assert.include(itemHref, "itemId=item-1");
 
-    it("surfaces add-item validation and API errors", async () => {
-      detailState.data = dataset;
-      itemsState.data = items;
-      const view = renderWithTheme(
-        <AiDatasetDetailScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-dataset-detail"
-          server={createServer(async () => {
-            throw {data: {title: "Invalid item"}};
-          })}
-        />
-      );
-      await flushObservabilityRequests();
       await act(async () => {
         fireEvent.press(view.getByTestId("ai-dataset-add-item"));
         await Promise.resolve();
       });
-      fireEvent.changeText(
-        view.getAllByDisplayValue("{}")[0] ?? view.getByDisplayValue("{}"),
-        "{bad json"
-      );
-      const addButtons = view.getAllByText("Add item");
-      await act(async () => {
-        fireEvent.press(addButtons[addButtons.length - 1]!);
-        await Promise.resolve();
-      });
-      expect(view.getByTestId("ai-dataset-add-item-error")).toBeTruthy();
-
-      const successServer = createServer(async () => ({}));
-      const success = renderWithTheme(
-        <AiDatasetDetailScreenWidget
-          config={emptyConfig}
-          routeBase="/admin"
-          screenName="ai-dataset-detail"
-          server={successServer}
-        />
-      );
-      await flushObservabilityRequests();
-      await act(async () => {
-        fireEvent.press(success.getByTestId("ai-dataset-add-item"));
-        await Promise.resolve();
-      });
-      fireEvent.changeText(
-        success.getAllByDisplayValue("{}")[0] ?? success.getByDisplayValue("{}"),
-        '{"q":"hi"}'
-      );
-      fireEvent.changeText(
-        success.getAllByDisplayValue("{}")[1] ?? success.getByDisplayValue("{}"),
-        '{"a":"ok"}'
-      );
-      const successAddButtons = success.getAllByText("Add item");
-      await act(async () => {
-        fireEvent.press(successAddButtons[successAddButtons.length - 1]!);
-        await Promise.resolve();
-      });
-      await flushObservabilityRequests();
-      const [created] = successServer.callsTo(CREATE_ITEM_ROUTE);
-      assert.deepInclude(created?.body as Record<string, unknown>, {
-        expectedOutput: {a: "ok"},
-        input: {q: "hi"},
-      });
-      // A successful add reloads the item list.
-      assert.equal(successServer.callsTo(ITEMS_ROUTE).length, 2);
+      const createHref = String(routerPush.mock.calls[2]?.[0]);
+      assert.include(createHref, "ai-dataset-item");
+      assert.notInclude(createHref, "itemId=");
     });
 
     it("distinguishes item loading and load errors from an empty dataset", async () => {

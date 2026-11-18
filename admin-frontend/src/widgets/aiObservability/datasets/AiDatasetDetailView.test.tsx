@@ -1,5 +1,4 @@
 import {describe, expect, it, mock} from "bun:test";
-import {Modal} from "@terreno/ui";
 import {act, fireEvent, within} from "@testing-library/react-native";
 import {assert} from "chai";
 import React from "react";
@@ -43,10 +42,8 @@ const items: DatasetItemRecord[] = [
   },
 ];
 
-type OnAddItem = React.ComponentProps<typeof AiDatasetDetailView>["onAddItem"];
-
 describe("AiDatasetDetailView items table", () => {
-  it("opens complete item details from a row while keeping wide content readable", async () => {
+  it("opens the expected-output page from a row while keeping wide content readable", async () => {
     const baseItem = items[0];
     assert.exists(baseItem);
     const fullQuestion =
@@ -64,13 +61,14 @@ describe("AiDatasetDetailView items table", () => {
         tags: ["gold", "universal"],
       },
     ];
-    const {getByTestId, queryByTestId, UNSAFE_root} = renderWithTheme(
+    const onOpenItem = mock<(itemId: string) => void>(() => undefined);
+    const {getByTestId} = renderWithTheme(
       <AiDatasetDetailView
         dataset={dataset}
         items={longItems}
-        onAddItem={async () => undefined}
+        onCreateItem={() => undefined}
         onOpenExperiment={() => undefined}
-        onOpenTrace={() => undefined}
+        onOpenItem={onOpenItem}
         routeBase="/admin"
       />
     );
@@ -84,26 +82,7 @@ describe("AiDatasetDetailView items table", () => {
       fireEvent.press(getByTestId("ai-dataset-items-table-row-item-1-clickable"));
       await Promise.resolve();
     });
-    const modal = within(getByTestId("ai-dataset-item-modal"));
-    expect(modal.getByText(/without duplicating screens/)).toBeTruthy();
-    expect(modal.getByText(/One React Native codebase ships/)).toBeTruthy();
-    expect(modal.getByText(/gold import/)).toBeTruthy();
-    expect(modal.getByText("Outcome: tp")).toBeTruthy();
-    expect(modal.getByText("Annotator user: user-1")).toBeTruthy();
-    expect(modal.getByText("Review item: review-1")).toBeTruthy();
-
-    const detailsModal = UNSAFE_root.findAllByType(Modal).find(
-      (entry) => entry.props.title === "Dataset item details"
-    );
-    assert.exists(detailsModal);
-    if (!detailsModal) {
-      return;
-    }
-    await act(async () => {
-      fireEvent(detailsModal, "onDismiss");
-      await Promise.resolve();
-    });
-    assert.notExists(queryByTestId("ai-dataset-item-modal"));
+    assert.deepEqual(onOpenItem.mock.calls, [["item-1"]]);
   });
 });
 
@@ -113,8 +92,9 @@ describe("AiDatasetDetailView tabs", () => {
       <AiDatasetDetailView
         dataset={dataset}
         items={items.slice(1)}
-        onAddItem={async () => undefined}
+        onCreateItem={() => undefined}
         onOpenExperiment={() => undefined}
+        onOpenItem={() => undefined}
         routeBase="/admin"
       />
     );
@@ -128,15 +108,15 @@ describe("AiDatasetDetailView tabs", () => {
 
   it("shows needs review count badge and wires actions", async () => {
     const onOpenExperiment = mock(() => undefined);
-    const onOpenTrace = mock(() => undefined);
-    const onAddItem = mock<OnAddItem>(async () => undefined);
+    const onOpenItem = mock<(itemId: string) => void>(() => undefined);
+    const onCreateItem = mock(() => undefined);
     const view = renderWithTheme(
       <AiDatasetDetailView
         dataset={dataset}
         items={items}
-        onAddItem={onAddItem}
+        onCreateItem={onCreateItem}
         onOpenExperiment={onOpenExperiment}
-        onOpenTrace={onOpenTrace}
+        onOpenItem={onOpenItem}
         routeBase="/admin"
       />
     );
@@ -152,16 +132,7 @@ describe("AiDatasetDetailView tabs", () => {
       await Promise.resolve();
     });
     assert.equal(onOpenExperiment.mock.calls.length, 1);
-    fireEvent.changeText(view.getByText("Input (JSON)"), '{"q":"new"}');
-    fireEvent.changeText(view.getByText("Expected output (JSON)"), '{"a":"ok"}');
-    const addButtons = view.getAllByText("Add item");
-    const submitAddButton = addButtons.at(-1);
-    assert.exists(submitAddButton);
-    await act(async () => {
-      fireEvent.press(submitAddButton);
-      await Promise.resolve();
-    });
-    assert.isAtLeast(onAddItem.mock.calls.length, 1);
+    assert.equal(onCreateItem.mock.calls.length, 1);
     await act(async () => {
       fireEvent.press(view.getByText("Auto"));
       await Promise.resolve();
@@ -170,50 +141,6 @@ describe("AiDatasetDetailView tabs", () => {
       fireEvent.press(view.getByTestId("ai-dataset-items-table-row-item-2-clickable"));
       await Promise.resolve();
     });
-    await act(async () => {
-      fireEvent.press(view.getByText("Open source trace"));
-      await Promise.resolve();
-    });
-    assert.equal(onOpenTrace.mock.calls.length, 1);
-    assert.notExists(view.queryByTestId("ai-dataset-item-modal"));
-  });
-
-  it("surfaces add-item errors and dismisses the modal on success", async () => {
-    const onAddItem = mock<OnAddItem>(async () => "Invalid JSON in input.");
-    const view = renderWithTheme(
-      <AiDatasetDetailView
-        dataset={dataset}
-        items={items}
-        onAddItem={onAddItem}
-        onOpenExperiment={() => undefined}
-        routeBase="/admin"
-      />
-    );
-    await act(async () => {
-      fireEvent.press(view.getByTestId("ai-dataset-add-item"));
-      await Promise.resolve();
-    });
-    const addButtons = view.getAllByText("Add item");
-    const submitAddButton = addButtons.at(-1);
-    assert.exists(submitAddButton);
-    await act(async () => {
-      fireEvent.press(submitAddButton);
-      await Promise.resolve();
-    });
-    expect(view.getByTestId("ai-dataset-add-item-error")).toBeTruthy();
-
-    onAddItem.mockImplementation(async () => undefined);
-    await act(async () => {
-      fireEvent.press(view.getByTestId("ai-dataset-add-item"));
-      await Promise.resolve();
-    });
-    const retryButtons = view.getAllByText("Add item");
-    const retryAddButton = retryButtons.at(-1);
-    assert.exists(retryAddButton);
-    await act(async () => {
-      fireEvent.press(retryAddButton);
-      await Promise.resolve();
-    });
-    expect(view.queryByTestId("ai-dataset-add-item-error")).toBeNull();
+    assert.deepEqual(onOpenItem.mock.calls, [["item-2"]]);
   });
 });

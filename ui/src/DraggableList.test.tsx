@@ -340,7 +340,7 @@ describe("DraggableList", () => {
     });
 
     it("stacks rows in normal flow instead of a fixed-height absolute slot", () => {
-      const {toJSON} = render(
+      const {getByTestId, toJSON} = render(
         <DraggableList
           callbackNewDataIds={() => {}}
           dataIDs={["a", "b"]}
@@ -351,10 +351,13 @@ describe("DraggableList", () => {
         />
       );
 
-      const tree = toJSON() as {props: {style: {gap?: number; minHeight?: number}}};
-      expect(tree.props.style.gap).toBe(10);
-      expect(tree.props.style.minHeight).toBeUndefined();
-      expect(JSON.stringify(tree)).not.toContain('"position":"absolute"');
+      const listStyle = getByTestId("draggable-list").props.style as {
+        gap?: number;
+        minHeight?: number;
+      };
+      expect(listStyle.gap).toBe(10);
+      expect(listStyle.minHeight).toBeUndefined();
+      expect(JSON.stringify(toJSON())).not.toContain('"position":"absolute"');
     });
 
     it("drops a short row using the measured height of the row under it", () => {

@@ -458,6 +458,31 @@ Standard admin model permissions then use one access-level selector:
 Other application and screen permissions remain individual toggles. Saving writes the same
 permission JSON used by `rbacRouter`, so no separate configuration format is required.
 
+#### Hiding actions with `isActionVisible`
+
+Pass `isActionVisible` when the catalog includes statement actions operators should not
+assign from this screen. Return `false` to hide an action from role cards, the **Available
+permissions** list, the admin-page toggle, and per-resource editor toggles. Actions already
+saved on a role stay in `permissions` when you save; only visible toggles change.
+
+The predicate receives `{action, resource}` so the same verb can stay hidden on one resource
+and visible on another (for example a model CRUD grant versus a named admin check).
+
+The standard **Access level** selector appears only when `read`, `write`, and `writeOwned` are
+all still visible for that resource. Hiding one of them removes the selector for that resource
+without stripping hidden grants from the saved role.
+
+```tsx
+<AdminRolesList
+  isActionVisible={({action, resource}) => {
+    if (resource !== "scheduleItem") {
+      return true;
+    }
+    return !["create", "list", "read", "update", "delete"].includes(action);
+  }}
+/>
+```
+
 ### AdminFieldRenderer
 
 Renders field values in table cells with formatting.

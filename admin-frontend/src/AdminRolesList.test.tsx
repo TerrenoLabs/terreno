@@ -523,6 +523,68 @@ describe("AdminRolesList", () => {
     });
     expect(queryByText("Role already exists")).toBeNull();
   });
+
+  it("hides filtered actions and writes them back unchanged", async () => {
+    mockUseListRolesQuery.mockReturnValue({
+      data: [
+        {
+          displayName: "Todo User",
+          name: "todoUser",
+          permissions: {
+            admin: ["access", "runScripts"],
+            adminTodo: ["read", "writeOwned"],
+            todo: ["read", "update"],
+          },
+        },
+      ],
+      error: null,
+      isLoading: false,
+      refetch: mockRefetch,
+    });
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AdminRolesList
+        apiBase="/admin"
+        isActionVisible={({action, resource}) => {
+          if (resource === "adminTodo") {
+            return false;
+          }
+          if (resource === "todo" && action === "read") {
+            return false;
+          }
+          return true;
+        }}
+      />
+    );
+
+    expect(queryByTestId("admin-roles-item-todoUser-permission-adminTodo-read")).toBeNull();
+    expect(queryByTestId("admin-permissions-adminTodo-write")).toBeNull();
+    expect(queryByTestId("admin-roles-item-todoUser-permission-todo-read")).toBeNull();
+    expect(getByTestId("admin-roles-item-todoUser-permission-todo-update")).toBeTruthy();
+    expect(getByTestId("admin-permissions-admin-access")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("admin-roles-edit-todoUser"));
+    });
+    expect(queryByTestId("admin-role-access-adminTodo")).toBeNull();
+    expect(queryByTestId("admin-role-permission-todo-read-clickable")).toBeNull();
+    expect(getByTestId("admin-role-page-access")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("admin-role-permission-todo-update-clickable"));
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("admin-role-save-button"));
+    });
+
+    const updateInput = mockUpdateRole.mock.calls[0]?.[0] as {
+      changes?: {permissions?: Record<string, string[]>};
+    };
+    assert.deepEqual(updateInput.changes?.permissions, {
+      admin: ["access", "runScripts"],
+      adminTodo: ["read", "writeOwned"],
+      todo: ["read"],
+    });
+  });
 });
 
 describe("AdminRolesField", () => {

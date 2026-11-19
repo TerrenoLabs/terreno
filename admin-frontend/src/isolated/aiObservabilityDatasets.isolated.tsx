@@ -380,7 +380,7 @@ describe("AiDatasetItemScreen", () => {
     datasetState?: FakeQueryState;
     itemRoute?: FakeObservabilityRoute;
     items?: DatasetItemRecord[];
-    itemsState?: FakeQueryState;
+    itemsState?: FakeObservabilityRoute;
   } = {}): FakeObservabilityServer => {
     return createObservabilityServer({
       [CREATE_ROUTE]: createRoute ?? (async () => ({})),
@@ -514,6 +514,35 @@ describe("AiDatasetItemScreen", () => {
     assert.include(String(routerReplace.mock.calls[0]?.[0]), "ai-dataset-item?datasetId=ds-1");
     assert.include(String(routerReplace.mock.calls[0]?.[0]), "itemId=item-2");
     assert.equal(routerPush.mock.calls.length, 0);
+  });
+
+  it("reads the queue after a save so an item reviewed earlier is not reopened", async () => {
+    setExpoSearchParams(() => ({datasetId: "ds-1", itemId: "item-2"}));
+    const queued = {...existingItem, id: "item-1", proofread: false};
+    const current = {...existingItem, id: "item-2", proofread: false};
+    const reviewed = {...existingItem, id: "item-1", proofread: true};
+    let listCalls = 0;
+    const server = buildServer({
+      itemsState: () => {
+        listCalls += 1;
+        return {data: listCalls === 1 ? [queued, current] : [reviewed, current]};
+      },
+    });
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Save and next"));
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    assert.equal(routerReplace.mock.calls.length, 0);
+    assert.equal(
+      routerPush.mock.calls.at(-1)?.[0],
+      "/admin/ai-dataset-detail?id=ds-1&tab=needsReview"
+    );
   });
 
   it("finishes the review queue on the Needs review tab after the last item", async () => {

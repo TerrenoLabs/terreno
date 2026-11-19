@@ -58,7 +58,11 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
     statusLoading: statusQuery.isLoading,
   });
   const {data, isError, isLoading} = useDetailQuery(datasetId, {skip: datasetId.length === 0});
-  const {data: itemsRaw, isLoading: isItemsLoading} = useItemsQuery(datasetId, {
+  const {
+    data: itemsRaw,
+    isLoading: isItemsLoading,
+    refetch: refetchItems,
+  } = useItemsQuery(datasetId, {
     skip: datasetId.length === 0,
   });
   const [createItem] = useCreateItemMutation();
@@ -127,6 +131,16 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
     router.push(`${prefix}/ai-trace-detail?id=${encodeURIComponent(item.sourceTraceId)}`);
   }, [item?.sourceTraceId, prefix]);
 
+  // Reads the list after the save so an item saved just now is no longer offered as needing review.
+  const findNextReviewItem = useCallback(async (): Promise<string | undefined> => {
+    const refreshed = await refetchItems();
+    const queue =
+      refreshed.isError || refreshed.data === undefined
+        ? items
+        : unwrapDatasetItems(refreshed.data);
+    return nextNeedsReviewItemId(queue, itemId);
+  }, [itemId, items, refetchItems]);
+
   const handleSave = useCallback(async (): Promise<void> => {
     if (!datasetId) {
       return;
@@ -157,17 +171,18 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
           itemId,
         }).unwrap();
       }
-      if (isNew) {
+      if (!reviewing) {
         router.push(backHref);
-      } else if (reviewing && nextReviewItem) {
-        router.replace(
-          `${prefix}/ai-dataset-item?datasetId=${encodeURIComponent(datasetId)}&itemId=${encodeURIComponent(nextReviewItem)}`
-        );
-      } else if (reviewing) {
-        router.push(reviewQueueHref);
-      } else {
-        router.push(backHref);
+        return;
       }
+      const nextId = await findNextReviewItem();
+      if (nextId) {
+        router.replace(
+          `${prefix}/ai-dataset-item?datasetId=${encodeURIComponent(datasetId)}&itemId=${encodeURIComponent(nextId)}`
+        );
+        return;
+      }
+      router.push(reviewQueueHref);
     } catch (saveError) {
       setError(saveErrorMessage(saveError));
       setIsSaving(false);
@@ -177,10 +192,10 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
     createItem,
     datasetId,
     expected,
+    findNextReviewItem,
     input,
     isNew,
     itemId,
-    nextReviewItem,
     outcomeClass,
     prefix,
     proofread,

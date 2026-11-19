@@ -397,6 +397,43 @@ describe("DraggableList", () => {
       expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
     });
 
+    it("moves a tall row above a short row once its center passes the short row's midpoint", () => {
+      const callbackNewDataIds = mock(() => {});
+      const {getByTestId} = render(
+        <DraggableList
+          callbackNewDataIds={callbackNewDataIds}
+          dataIDs={["a", "b"]}
+          itemHeight={50}
+          itemsGap={10}
+          renderItem={renderItem}
+          variableHeight
+        />
+      );
+
+      act(() => {
+        fireEvent(getByTestId("draggable-item-a"), "layout", layout(40));
+        fireEvent(getByTestId("draggable-item-b"), "layout", layout(300));
+      });
+
+      const dragB = capturedGestures.at(-1);
+      act(() => {
+        dragB?.onBegin?.();
+        dragB?.onChange?.({translationY: -100});
+        dragB?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).not.toHaveBeenCalled();
+
+      const dragBAgain = capturedGestures.at(-1);
+      act(() => {
+        dragBAgain?.onBegin?.();
+        dragBAgain?.onChange?.({translationY: -200});
+        dragBAgain?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
+    });
+
     it("does not reorder a tall row dragged a short distance past the row under it", () => {
       const callbackNewDataIds = mock(() => {});
       const {getByTestId} = render(

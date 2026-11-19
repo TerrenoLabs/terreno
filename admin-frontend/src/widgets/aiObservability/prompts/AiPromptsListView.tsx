@@ -126,7 +126,8 @@ const FolderNameCell: React.FC<{
       overflow="hidden"
       testID={testID}
     >
-      <Box flex="none" marginRight={3}>
+      {/* A fixed width keeps the icon from collapsing under the label on web. */}
+      <Box alignItems="center" justifyContent="center" marginRight={2} width={20}>
         <Icon color="secondaryDark" iconName={isUp ? "arrow-left" : "folder"} size="sm" />
       </Box>
       <Box flex="shrink" gap={1} minWidth={0} overflow="hidden">

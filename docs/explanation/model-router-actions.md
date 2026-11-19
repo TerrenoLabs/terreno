@@ -165,6 +165,8 @@ At router build time, Terreno rejects:
 
 - Empty action names or names that do not match `/^[A-Za-z][A-Za-z0-9_-]+$/`
 - Instance action names that match a Mongoose array field path (which would collide with `POST /:id/:field` array routes)
+- A collection action named `bulk` on a router with `bulk` enabled (which would shadow
+  `POST /bulk`; see [bulk writes](../reference/api.md#modelrouter-bulk-writes))
 
 Actions are registered before user `endpoints` callbacks, so they take precedence if paths overlap.
 

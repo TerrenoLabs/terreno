@@ -136,6 +136,7 @@ app.register(todoRouter);
 | Array Push | POST | `/:id/:field` | Push to array field |
 | Array Update | PATCH | `/:id/:field/:itemId` | Update array item |
 | Array Remove | DELETE | `/:id/:field/:itemId` | Remove array item |
+| Bulk (opt-in `bulk`) | POST | `/bulk` | Many create/update/delete operations; atomic by default |
 
 ### All Options
 

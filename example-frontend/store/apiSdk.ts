@@ -20,6 +20,24 @@ import {
 type ApiSdkQueryOptions<T> = Omit<UseApiQueryOptions<T, T>, "providesTags" | "transformResponse">;
 type ApiSdkLazyOptions<T> = Omit<UseLazyApiQueryOptions<T, never>, "providesTags" | "toRequest">;
 
+export interface APIError {
+  code?: string;
+  detail?: string;
+  id?: string;
+  links?: {
+    about?: string;
+    type?: string;
+  };
+  meta?: Record<string, unknown>;
+  source?: {
+    header?: string;
+    parameter?: string;
+    pointer?: string;
+  };
+  status?: number;
+  title?: string;
+}
+
 export type AdminMigrationsRunArgs = "true" | "false" | undefined;
 
 export type AdminMigrationsRunRes =
@@ -7135,7 +7153,7 @@ export type PatchGptHistoriesByIdRatingArgs = {
   body: {
     comment?: string;
     promptIndex?: number;
-    rating?: string;
+    rating?: "up" | "down" | null | null;
   };
 };
 
@@ -8606,7 +8624,7 @@ export type PostAiObservabilityTracesByIdFeedbackArgs = {
     flagDataset?: boolean;
     outcome?: "tp" | "fp" | "tn" | "fn";
     signal?: "accepted" | "dismissed" | "copied" | "edited" | "regenerated";
-    thumbs?: "up" | "down" | null;
+    thumbs?: "up" | "down" | null | null;
   };
 };
 
@@ -10005,6 +10023,63 @@ export const useLazySettingsGcsQuery = (
     ...options,
     providesTags: ["settings"],
     toRequest: (): ApiRequestArgs => settingsGcsRequest(),
+  });
+
+export type TodosBulkArgs = {
+  atomic?: boolean;
+  operations: {
+    body?: {
+      _id?: string;
+      completed?: boolean;
+      ownerId?: string;
+      priority?: "low" | "medium" | "high";
+      tags?: string[];
+      title?: string;
+      updated?: string;
+      created?: string;
+      deleted?: boolean;
+      _syncPrevStream?: string;
+      _syncSeq?: number;
+    };
+    id?: string;
+    method: "create" | "update" | "delete";
+  }[];
+};
+
+export type TodosBulkRes = {
+  data?: {
+    _id: string;
+    completed?: boolean;
+    ownerId: string;
+    priority?: "low" | "medium" | "high";
+    tags?: string[];
+    title: string;
+    updated: string;
+    created: string;
+    deleted?: boolean;
+    _syncPrevStream?: string;
+    _syncSeq?: number;
+  };
+  error?: APIError;
+  id?: string;
+  index: number;
+  method: "create" | "update" | "delete";
+  status: number;
+}[];
+
+export const todosBulkRequest = (arg: TodosBulkArgs): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/todos/bulk`,
+});
+
+/** Bulk write todos */
+export const useTodosBulkMutation = (
+  options: UseApiMutationOptions<TodosBulkArgs, TodosBulkRes> = {}
+): UseApiMutationResult<TodosBulkArgs, TodosBulkRes> =>
+  useApiMutation<TodosBulkArgs, TodosBulkRes>(todosBulkRequest, {
+    invalidatesTags: ["todos"],
+    ...options,
   });
 
 export type TodosBulkCompleteArgs = {

@@ -388,7 +388,9 @@ merges it into the parent object, and Save sends the whole object for that field
 the object starts from each subfield's default; enums, refs, dates, and Mixed subfields without a
 default are left out. Nested objects inside an array of subdocuments render the same way; their
 test IDs add the array key and item index (`admin-field-servers.0.media.port`), and new array
-items follow the same default rules.
+items follow the same default rules. An array of subdocuments (feature-flag rules and
+variants, for example) is a drag-reorderable list. Each row is as tall as its fields,
+including user pickers and nested groups, so the next field starts below that row.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 

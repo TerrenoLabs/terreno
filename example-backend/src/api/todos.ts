@@ -85,6 +85,8 @@ export const todoRouter = modelRouter("/todos", Todo, {
     sortableFields: ["title", "completed", "created", "priority"],
   },
   audit: true,
+  // POST /todos/bulk: many creates/updates/deletes through the same permissions and hooks.
+  bulk: true,
   collectionActions: {
     ...todoLoadTestCollectionActions,
     bulkComplete: {

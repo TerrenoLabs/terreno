@@ -816,6 +816,33 @@ describe("executeDelete", () => {
     expect(tombstones).toHaveLength(1);
   });
 
+  it("returns prevDoc with deleted not true when skipPostHooks is true", async () => {
+    const doc = await createDoc({name: "before-delete"});
+    const result = (await executeDelete<ExecStuff>({
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: baseOptions(),
+      skipPostHooks: true,
+      user: owner,
+    })) as {doc: ExecStuff; prevDoc?: ExecStuff};
+    expect(result.doc.deleted).toBe(true);
+    expect(result.prevDoc).toBeDefined();
+    expect(result.prevDoc?.deleted).not.toBe(true);
+    expect(result.prevDoc?.name).toBe("before-delete");
+    expect(String(result.prevDoc?._id)).toBe(doc._id.toString());
+  });
+
+  it("does not return prevDoc when skipPostHooks is not set", async () => {
+    const doc = await createDoc();
+    const result = (await executeDelete<ExecStuff>({
+      id: doc._id.toString(),
+      model: ExecStuffModel,
+      options: baseOptions(),
+      user: owner,
+    })) as {doc: ExecStuff; prevDoc?: ExecStuff};
+    expect(result.prevDoc).toBeUndefined();
+  });
+
   it("returns an authorized string-id tombstone for an idempotent delete", async () => {
     const id = "offline-generated-id";
     await ExecStringIdStuffModel.create({

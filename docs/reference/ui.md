@@ -405,6 +405,22 @@ Steps: [Show release notes with WhatsNewBanner](../how-to/whats-new-banner.md).
 
 ## Component Behaviors
 
+### DraggableList row height
+
+`itemHeight` is the height of every row. The list places the next row one stride below the previous one.
+
+Pass `variableHeight` when rows are not the same height. Each row stays in normal flow and is as tall as its content. `itemHeight` is only the placeholder until that row is measured, and it is the fallback if measurement has not arrived before a drag. Admin arrays of subdocuments set `variableHeight`, so a row that grows (a long user list, a nested group) does not cover the fields under it.
+
+```tsx
+<DraggableList
+  callbackNewDataIds={setIds}
+  dataIDs={ids}
+  itemHeight={76}
+  renderItem={renderItem}
+  variableHeight
+/>
+```
+
 ### Button Layout Behavior
 
 Buttons automatically size to their content unless `fullWidth` is specified:

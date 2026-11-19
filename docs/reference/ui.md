@@ -663,7 +663,9 @@ Streaming chat surface for `@terreno/ai`. Histories, messages, submit, and optio
 
 Pass `mascot` when the app owns a character. Terreno ships none. The node renders only while `currentMessages` is empty, centered in the chat panel above the suggested prompts. The empty hero uses the message viewport height as a minimum so short content stays centered, while taller mascots still scroll. Streaming feedback shares that centered hero instead of creating a second pane. Omit the prop for the default empty chat.
 
-The composer row (attachment picker, tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided.
+The transcript sits in a 760px column. A user message is a light rounded bubble. An assistant message is plain text on the page background, with copy, download, and rating controls in one row underneath. Tool calls are a single expandable line: the call and its result open together, and the body scrolls inside a 240px cap.
+
+The composer row (attachment picker, Tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided. **Tools** sits beside the attachment control and lists every entry in `mcpTools`: what it does, and each argument's name, type, whether it is required, and its description. Pass `inputSchema` (a JSON Schema object) for the arguments. The button stays available when `mcpTools` is empty.
 
 The history sidebar (model selector, toolbar, New chat, and the history list) is a 250px-minimum column. Pass `showHistory={false}` to leave it out so the chat panel takes the full width, as on a phone. The host then owns history navigation and the sidebar's controls. `showHistory` defaults to `true`.
 
@@ -671,7 +673,7 @@ Each history row keeps rename and delete in a three-dot overflow menu (`gpt-hist
 
 "Scroll to bottom" appears only when content sits more than 100px below the viewport. It never shows in an empty chat.
 
-Image content parts render copy-image and (web) download actions. The message copy button on an image-only reply copies the image, not text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
+Image replies keep one copy control and, on web, one download control. They sit in the same row as thumbs up and thumbs down, and use the same muted icon button. An image-only reply copies the image. A reply that also has text copies the text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
 
 The attach control (`FilePickerButton`) opens an anchored dropdown with **Photo Library** and **Document**. On web both open a browser file input from the press itself and return `data:` URLs, so attachments survive a reload; on native they use `expo-image-picker` and `expo-document-picker`.
 

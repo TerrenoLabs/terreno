@@ -330,22 +330,41 @@ describe("GPTChat", () => {
     assert.isOk(getByText("0/1 MCP"));
   });
 
-  it("lists the available MCP tools in a modal", async () => {
+  it("lists each tool, what it does, and the arguments it accepts", async () => {
     const {getByTestId, getByText} = renderChat({
-      mcpTools: [{description: "Reads files", name: "readFile"}, {name: "writeFile"}],
+      mcpTools: [
+        {
+          description: "Reads files",
+          inputSchema: {
+            properties: {
+              path: {description: "File to read", type: "string"},
+            },
+            required: ["path"],
+            type: "object",
+          },
+          name: "readFile",
+        },
+        {name: "writeFile"},
+      ],
     });
 
     await press(getByTestId("gpt-tools-button"));
 
+    assert.isOk(getByText(/assistant can call these tools/));
     assert.isOk(getByText("readFile"));
     assert.isOk(getByText("Reads files"));
+    assert.isOk(getByText("path (string) · required"));
+    assert.isOk(getByText("File to read"));
     assert.isOk(getByText("writeFile"));
+    assert.isOk(getByText("None. The assistant calls it with an empty input."));
   });
 
-  it("hides the tools button when there are no tools", () => {
-    const {queryByTestId} = renderChat({mcpTools: []});
+  it("shows the tools button beside the composer when no tools are published", async () => {
+    const {getByTestId, getByText} = renderChat({mcpTools: []});
 
-    assert.isNull(queryByTestId("gpt-tools-button"));
+    await press(getByTestId("gpt-tools-button"));
+
+    assert.isOk(getByText("No tools are available in this chat."));
   });
 
   it("omits the mascot when the consumer does not pass one", () => {
@@ -555,11 +574,41 @@ describe("GPTChat", () => {
     ];
     const {getByLabelText, getByText} = renderChat({currentMessages: messages});
 
-    await press(getByLabelText("Result: readFile"));
-    await press(getByLabelText("Result: writeFile"));
+    await press(getByLabelText("Tool: readFile"));
+    await press(getByLabelText("Tool: writeFile"));
 
     assert.isOk(getByText("done"));
     assert.isOk(getByText(/"ok": true/));
+  });
+
+  it("combines a tool call and its result into one scrolling row", async () => {
+    const longResult = `row\n${"patient\n".repeat(80)}`;
+    const messages: GPTChatMessage[] = [
+      {
+        content: "",
+        role: "tool-call",
+        toolCall: {args: {limit: 50}, toolCallId: "users-1", toolName: "users_list"},
+      },
+      {
+        content: "",
+        role: "tool-result",
+        toolResult: {result: longResult, toolCallId: "users-1", toolName: "users_list"},
+      },
+    ];
+    const {getAllByLabelText, getByLabelText, getByTestId, getByText, queryByLabelText} =
+      renderChat({
+        currentMessages: messages,
+      });
+
+    assert.lengthOf(getAllByLabelText("Tool: users_list"), 1);
+    assert.isNull(queryByLabelText("Result: users_list"));
+    await press(getByLabelText("Tool: users_list"));
+
+    const body = getByTestId("gpt-tool-body-users-1");
+    const style = [body.props.style].flat(Infinity);
+    assert.isTrue(style.some((entry) => entry?.maxHeight === 240));
+    assert.isOk(getByText(/"limit": 50/));
+    assert.isOk(getByText(/patient/));
   });
 
   it("renders image and file content parts", () => {
@@ -704,9 +753,10 @@ describe("GPTChat", () => {
     assert.equal(mockedSetStringAsync.mock.calls.length, 0);
   });
 
-  it("offers a copy-image action on generated images", async () => {
+  it("keeps a single copy button when a reply includes text and an image", async () => {
+    mockedSetStringAsync.mockClear();
     mockedSetImageAsync.mockClear();
-    const {getByTestId} = renderChat({
+    const {getByTestId, queryByTestId} = renderChat({
       currentMessages: [
         {
           content: "Here you go",
@@ -716,9 +766,39 @@ describe("GPTChat", () => {
       ],
     });
 
-    await press(getByTestId("gpt-copy-image"));
+    assert.isNull(queryByTestId("gpt-copy-image"));
+    await press(getByTestId("gpt-copy-msg-0"));
 
-    assert.deepEqual(mockedSetImageAsync.mock.calls, [["BBBB"]]);
+    assert.deepEqual(mockedSetStringAsync.mock.calls, [["Here you go"]]);
+    assert.equal(mockedSetImageAsync.mock.calls.length, 0);
+  });
+
+  it("puts image copy and download on the same row as the ratings", () => {
+    const originalOS = Platform.OS;
+    Platform.OS = "web";
+    try {
+      const {getByTestId, queryByTestId} = renderChat({
+        currentMessages: [
+          {
+            content: "",
+            contentParts: [
+              {mimeType: "image/png", type: "image", url: "data:image/png;base64,AAAA"},
+            ],
+            role: "assistant",
+          },
+        ],
+        onRateFeedback: () => {},
+      });
+      const actions = getByTestId("gpt-message-actions-0");
+
+      assert.isOk(within(actions).getByTestId("gpt-copy-msg-0"));
+      assert.isOk(within(actions).getByTestId("gpt-download-image-0"));
+      assert.isOk(within(actions).getByTestId("gpt-rate-up-0"));
+      assert.isOk(within(actions).getByTestId("gpt-rate-down-0"));
+      assert.isNull(queryByTestId("gpt-copy-image"));
+    } finally {
+      Platform.OS = originalOS;
+    }
   });
 
   it("grows the composer up to a maximum height and resets after sending", async () => {
@@ -1320,7 +1400,7 @@ describe("GPTChat asks", () => {
     });
 
     assert.isOk(getByText("You skipped this question."));
-    assert.isOk(getByText("Result: lookup"));
+    assert.isOk(getByText("lookup"));
   });
 
   it("shows the errors for the matching ask inline", () => {

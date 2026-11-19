@@ -906,8 +906,8 @@ time. When any dataset has human answers, a **People's answers** column summariz
 `judgments`: **N answers out of date** when questions were reworded since they were answered,
 **All answered** when every question set answered every item, otherwise **N of M answered**. The header **New dataset** creates a dataset; **Import** on each row accepts `.json` or `.csv` via
 `FilePickerButton` (local URI read) or paste, posting `{rows}` for JSON or `{format:'csv',content}`
-for CSV. `ai-dataset-detail?id=` shows counts, schema binding, tabs **All / Human / Auto / Needs
-review** (a `SegmentedControl`). Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
+for CSV. `ai-dataset-detail?id=` shows counts, schema binding, a golden-label note, tabs **All / Human / Auto / Needs
+review** (a `SegmentedControl`; `&tab=needsReview` opens the Needs review tab, and it says so when nothing needs review). On an item in the queue, **Save and next** (`ai-dataset-item`) saves and replaces the route with the next unproofread item in list order; the last item's button reads **Save and finish review**. Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
 trace is not listed in both tabs. The screen includes an items table (input, expected, provenance,
 trace link), **Add item**, and **Run experiment**. The items table uses `ObservabilityTable`: rows grow with their content
 and cells wrap to three lines before truncating, so long inputs and expected outputs no longer

@@ -33,11 +33,15 @@ In-app **thumbs** (with an optional comment), **false positive|negative**, and p
 
 ## 2. Label expected output
 
-1. Open the dataset, then click an item. That opens the expected-output page (not a dialog).
-2. Edit the fields. When the dataset has `expectedOutputSchema`, each property is a field (text, number, checkbox, or a select for an enum). The schema type wins: a number stored in a `string` property shows and saves as text. Without a schema, the form follows the JSON already stored on the item. A string label is one text field.
-3. Set **Outcome class** (`tp` / `fp` / `tn` / `fn`) when the feature is a flag.
-4. Check **Proofread** when this expected output is the golden label. Synthetic items stay unchecked until you accept them.
-5. **Save expected output**. **Add item** on the dataset opens the same page with empty fields shaped like the first item, or like the schema.
+The **golden label** is an item's expected output once a human has proofread it: the answer this feature must give for that input. Experiments score the live feature against proofread golden labels only, so an unproofread item never counts toward a score.
+
+1. Open the dataset and choose **Needs review**. Each row is an item that is not proofread yet. Click one to open the expected-output page (not a dialog).
+2. Read the input. It is exactly what the model received.
+3. Fix the expected output to the answer this feature should give, not the answer it gave. When the dataset has `expectedOutputSchema`, each property is a field (text, number, checkbox, or a select for an enum). The schema type wins: a number stored in a `string` property shows and saves as text. Without a schema, the form follows the JSON already stored on the item. A string label is one text field.
+4. Set **Outcome class** (`tp` / `fp` / `tn` / `fn`) when the feature is a flag.
+5. Tick **Proofread** once the expected output is right. Synthetic items stay unticked until you accept them.
+6. **Save and next** saves and opens the next item that still needs review, in list order, wrapping to the top. On the last one the button reads **Save and finish review** and returns you to the Needs review tab, which says when nothing is left. Saving a golden item from the **All** or **Human** tab returns to the dataset.
+7. **Add item** on the dataset opens the same page with empty fields shaped like the first item, or like the schema. Saving a new item returns to the dataset.
 
 Skip unlabeled items in experiments unless you only need generation smoke (still prefer labels before scoring).
 

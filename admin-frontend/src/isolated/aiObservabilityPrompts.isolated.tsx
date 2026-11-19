@@ -1084,6 +1084,10 @@ describe("AiPromptsListScreen", () => {
       const view = renderWithTheme(<AiPromptsScreenWidget {...widgetProps} server={server} />);
       await flushObservabilityRequests();
       await act(async () => {
+        fireEvent.press(view.getByTestId("ai-prompts-folder-examples-clickable"));
+        await Promise.resolve();
+      });
+      await act(async () => {
         fireEvent.press(view.getByTestId("ai-prompt-open-summarize"));
         await new Promise((resolve) => setTimeout(resolve, 50));
       });
@@ -1287,6 +1291,7 @@ describe("AiPromptsListView", () => {
           prompts={prompts}
           search=""
           {...idleHandlers}
+          folder="examples"
         />
       );
       expect(getByTestId("ai-prompts-table")).toBeTruthy();
@@ -1308,6 +1313,7 @@ describe("AiPromptsListView", () => {
           prompts={prompts}
           search=""
           {...idleHandlers}
+          folder="examples"
         />
       );
       expect(getByTestId("ai-prompt-open-summarize")).toBeTruthy();

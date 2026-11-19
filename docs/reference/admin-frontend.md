@@ -793,7 +793,7 @@ Dataset detail hides **Add item** without `aiDataset:update` and **Run experimen
 `aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
 when production is unset. Widgets do not couple to host app state.
 
-`ai-prompts` lists prompts with nested folder chips (one slash-level at a time; a long name is clipped)
+`ai-prompts` lists prompts with a folder row per nested slash level (open the row to go inside; a long name stays on one line)
 and a **Tag** select (All tags, then each tag on the loaded list),
 search across name, folder, and tag, type, Production and Newest version columns, 7-day calls, last used, and a header **New
 prompt** when `aiPrompt:create` is allowed. The create modal

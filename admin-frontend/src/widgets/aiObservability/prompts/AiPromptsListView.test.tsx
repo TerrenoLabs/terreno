@@ -78,6 +78,7 @@ describe("AiPromptsListView", () => {
     const view = renderWithTheme(
       <AiPromptsListView
         {...idleHandlers}
+        folder="examples"
         prompts={[
           {
             description: "Short summaries",
@@ -123,7 +124,9 @@ describe("AiPromptsListView", () => {
       {folder: "examples", latestVersion: 12, name: "beta", production: "—", type: "text"},
       {folder: "examples", latestVersion: 7, name: "gamma", production: 7, type: "chat"},
     ];
-    const view = renderWithTheme(<AiPromptsListView {...idleHandlers} prompts={library} />);
+    const view = renderWithTheme(
+      <AiPromptsListView {...idleHandlers} folder="examples" prompts={library} />
+    );
     const tableProps = (): DataTableProps =>
       view.UNSAFE_root.find(
         (node) => node.props.testID === "ai-prompts-table" && "setSortColumn" in node.props
@@ -155,7 +158,7 @@ describe("AiPromptsListView", () => {
       "ai-prompt-open-alpha",
     ]);
     expect(view.getByText("v12")).toBeTruthy();
-    expect(view.getByTestId("ai-prompts-folders")).toBeTruthy();
+    expect(view.queryByTestId("ai-prompts-folder-examples-clickable")).toBeNull();
 
     act(() => {
       tableProps().onFilterValuesChange?.({type: ["chat"]});
@@ -198,11 +201,10 @@ describe("AiPromptsListView", () => {
     );
 
     expect(view.getByTestId("ai-prompts-folder-appointmentAI-clickable")).toBeTruthy();
-    expect(view.queryByText("appointmentAI/intake")).toBeNull();
-    expect(view.getByText("_preamble")).toBeTruthy();
-    expect(view.getByText("appointmentAI / intake")).toBeTruthy();
-    expect(view.getByText("risk")).toBeTruthy();
-    expect(view.getByText("summarize")).toBeTruthy();
+    expect(view.getByTestId("ai-prompts-folder-examples-clickable")).toBeTruthy();
+    expect(view.queryByText("_preamble")).toBeNull();
+    expect(view.queryByText("summarize")).toBeNull();
+    expect(view.getByText("2 prompts")).toBeTruthy();
 
     await act(async () => {
       fireEvent.press(view.getByTestId("ai-prompts-folder-appointmentAI-clickable"));
@@ -218,6 +220,8 @@ describe("AiPromptsListView", () => {
         prompts={library}
       />
     );
+    expect(view.getByTestId("ai-prompts-folder-up-clickable")).toBeTruthy();
+    expect(view.getByText("All prompts")).toBeTruthy();
     expect(view.getByTestId("ai-prompts-folder-appointmentAI/intake-clickable")).toBeTruthy();
     expect(view.queryByTestId("ai-prompts-folder-examples-clickable")).toBeNull();
 
@@ -236,13 +240,20 @@ describe("AiPromptsListView", () => {
       />
     );
     expect(view.getByText("_preamble")).toBeTruthy();
-    expect(view.getByText("risk")).toBeTruthy();
+    expect(view.getByText("appointmentAI / intake")).toBeTruthy();
+    expect(view.queryByText("risk")).toBeNull();
     expect(view.queryByText("summarize")).toBeNull();
     expect(
       view.getByTestId(
         "ai-prompts-folder-appointmentAI/intake/admission-safety-assessment-clickable"
       )
     ).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-prompts-folder-up-clickable"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onFolderChange.mock.calls[2], ["appointmentAI"]);
   });
 
   it("filters the table to prompts that have the selected tag", () => {

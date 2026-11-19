@@ -1414,7 +1414,10 @@ const TOOLS_LIST_INTRO =
 /** Tallest the tool list grows on a large screen. */
 const TOOLS_LIST_MAX_HEIGHT = 640;
 
-/** Title, padding, and the modal's bottom margin. The list stays inside what's left. */
+/**
+ * Estimated height of the Modal's title, close control, padding, and margins, measured in the
+ * demo. The list cap is the window height minus this, so raise it if the Modal chrome grows.
+ */
 const TOOLS_MODAL_CHROME = 220;
 
 const ToolsModal = ({

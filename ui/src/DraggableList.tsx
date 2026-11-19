@@ -424,6 +424,8 @@ const VariableDragRow: React.FC<VariableDragRowProps> = ({
   const animatedStyle = useAnimatedStyle(() => {
     if (!dragMode) {
       return {
+        backgroundColor: "transparent",
+        boxShadow: "none",
         position: "relative" as const,
         top: 0,
         width: "100%",

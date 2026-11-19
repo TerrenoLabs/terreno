@@ -52,6 +52,12 @@ afterAll(() => {
   mock.module("./IconButton", () => ({IconButton: mock(() => null)}));
 });
 
+// The clipboard mocks come from bunSetup.ts and are shared, so later files must not see these calls.
+afterEach(() => {
+  mockedSetImageAsync.mockClear();
+  mockedSetStringAsync.mockClear();
+});
+
 // Box and IconButton presses run through an async haptic call, so state updates land in a
 // microtask after the event.
 const press = async (element: Parameters<typeof fireEvent.press>[0]): Promise<void> => {

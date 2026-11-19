@@ -185,6 +185,102 @@ export const GPTChatTranscript: React.FC = (): React.ReactElement => {
   return <GPTChatDemo frameHeight={880} />;
 };
 
+const BLOCKS_REPLY = `v: 1
+datasets:
+  signups:
+    columns:
+      - {name: month, type: string}
+      - {name: count, type: number}
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+      - [Mar, 90]
+      - [Apr, 210]
+blocks:
+  - type: heading
+    size: lg
+    text: Signups this quarter
+  - type: text
+    markdown: Signups grew **12%** quarter over quarter.
+  - type: columns
+    children:
+      - type: metric
+        label: Total
+        value: "403"
+        delta: "+12%"
+        trend: up
+      - type: metric
+        label: Best month
+        value: Apr
+  - type: callout
+    status: info
+    text: Numbers refresh hourly from the signups dataset.
+  - type: card
+    id: team
+    title: Team
+    children:
+      - type: badge
+        status: success
+        text: On track
+      - type: text
+        markdown: Ada leads the quarter. The card sits on the page, not inside a chat bubble.
+  - type: chart
+    id: signups_chart
+    kind: bar
+    title: Signups
+    data: signups
+    x: month
+    y: count
+  - type: table
+    id: signups_table
+    title: Signups by month
+    data: signups
+  - type: details
+    title: How a signup is counted
+    text: A signup is a new workspace created during the month.
+  - type: actions
+    id: follow
+    elements:
+      - type: button
+        id: reply_btn
+        text: Break it down
+        action: {kind: reply, text: Break signups down by channel}
+`;
+
+const BLOCKS_MESSAGES: GPTChatMessage[] = [
+  {content: "How did signups do this quarter?", role: "user"},
+  {content: BLOCKS_REPLY, id: "blocks-quarter", role: "assistant"},
+];
+
+export const GPTChatBlocks: React.FC = (): React.ReactElement => {
+  const [messages, setMessages] = useState<GPTChatMessage[]>(BLOCKS_MESSAGES);
+
+  const handleSubmit = useCallback((prompt: string): void => {
+    setMessages((current) => [
+      ...current,
+      {content: prompt, role: "user"},
+      {content: CANNED_ASSISTANT_REPLY, role: "assistant"},
+    ]);
+  }, []);
+
+  return (
+    <GPTChatFrame height={960}>
+      <GPTChat
+        currentHistoryId="h1"
+        currentMessages={messages}
+        histories={STATIC_HISTORIES}
+        mcpTools={DEMO_TOOLS}
+        onCreateHistory={noop}
+        onDeleteHistory={noop}
+        onSelectHistory={noop}
+        onSubmit={handleSubmit}
+        testID="demo-gpt-chat-blocks"
+        uiBlocks
+      />
+    </GPTChatFrame>
+  );
+};
+
 export const GPTChatEmpty: React.FC = (): React.ReactElement => {
   return (
     <Box gap={2} width="100%">

@@ -1,5 +1,6 @@
 import type {DemoConfiguration} from "@config";
 import {
+  GPTChatBlocks,
   GPTChatDemo,
   GPTChatEmpty,
   GPTChatMascot,
@@ -43,6 +44,11 @@ export const GPTChatConfiguration: DemoConfiguration = {
       description:
         "User bubbles, plain assistant text, one row per tool, and image actions beside ratings.",
       render: () => <GPTChatTranscript />,
+    },
+    Blocks: {
+      description:
+        "Assistant reply rendered as blocks: metrics, card, chart, table, and actions on the page.",
+      render: () => <GPTChatBlocks />,
     },
     Empty: {
       description: "No messages, with suggested prompts.",

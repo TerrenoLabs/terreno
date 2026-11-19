@@ -331,7 +331,7 @@ describe("GPTChat", () => {
   });
 
   it("lists each tool, what it does, and the arguments it accepts", async () => {
-    const {getByTestId, getByText} = renderChat({
+    const {getByTestId, getByText, queryByText} = renderChat({
       mcpTools: [
         {
           description: "Reads files",
@@ -353,9 +353,14 @@ describe("GPTChat", () => {
     assert.isOk(getByText(/assistant can call these tools/));
     assert.isOk(getByText("readFile"));
     assert.isOk(getByText("Reads files"));
+    assert.isOk(getByText("writeFile"));
+    assert.isNull(queryByText("path (string) · required"));
+    assert.isNull(queryByText("None. The assistant calls it with an empty input."));
+
+    await press(getByTestId("gpt-tools-arguments-toggle"));
+
     assert.isOk(getByText("path (string) · required"));
     assert.isOk(getByText("File to read"));
-    assert.isOk(getByText("writeFile"));
     assert.isOk(getByText("None. The assistant calls it with an empty input."));
   });
 

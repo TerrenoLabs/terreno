@@ -12,6 +12,7 @@ import {
   AccessibilityInfo,
   findNodeHandle,
   Platform,
+  Pressable,
   Image as RNImage,
   ScrollView,
   type ScrollViewInstance,
@@ -28,6 +29,7 @@ import type {AskSubmitHandler, ChatAsk} from "./asks/askTypes";
 import {Box} from "./Box";
 import {Button} from "./Button";
 import {BlocksView} from "./blocks/BlocksView";
+import {CheckBox} from "./CheckBox";
 import type {BlocksViewProps} from "./Common";
 import {DropdownMenuItem} from "./DropdownMenuItem";
 import {DropdownPanel} from "./DropdownPanel";
@@ -1418,13 +1420,33 @@ const ToolsModal = ({
   mcpTools: MCPToolDetail[];
   onDismiss: () => void;
 }): React.ReactElement => {
+  const [showArguments, setShowArguments] = useState(false);
+
+  const handleToggleArguments = useCallback((): void => {
+    setShowArguments((current) => !current);
+  }, []);
+
   return (
-    <Modal onDismiss={onDismiss} size="md" title="Tools" visible={isVisible}>
-      <ScrollView style={{maxHeight: 420}}>
+    <Modal onDismiss={onDismiss} size="lg" title="Tools" visible={isVisible}>
+      <ScrollView style={{maxHeight: 640}}>
         <Box gap={3} padding={3} testID="gpt-tools-list">
           <Text color="secondaryDark" size="sm">
             {TOOLS_LIST_INTRO}
           </Text>
+          {mcpTools.length > 0 ? (
+            <Pressable
+              accessibilityLabel="Show arguments"
+              accessibilityRole="checkbox"
+              accessibilityState={{checked: showArguments}}
+              onPress={handleToggleArguments}
+              testID="gpt-tools-arguments-toggle"
+            >
+              <Box alignItems="center" direction="row" gap={2}>
+                <CheckBox selected={showArguments} />
+                <Text size="sm">Show arguments</Text>
+              </Box>
+            </Pressable>
+          ) : null}
           {mcpTools.length === 0 ? (
             <Text color="secondaryDark" size="sm">
               No tools are available in this chat.
@@ -1438,27 +1460,31 @@ const ToolsModal = ({
                   <Text color="secondaryDark" size="sm">
                     {tool.description ?? "No description provided."}
                   </Text>
-                  <Text bold color="secondaryDark" size="sm">
-                    Arguments
-                  </Text>
-                  {toolArguments.length === 0 ? (
-                    <Text color="secondaryDark" size="sm">
-                      None. The assistant calls it with an empty input.
-                    </Text>
-                  ) : (
-                    toolArguments.map((toolArgument) => (
-                      <Box gap={1} key={toolArgument.name}>
-                        <Text size="sm">
-                          {`${toolArgument.name} (${toolArgument.type}) · ${toolArgument.required ? "required" : "optional"}`}
+                  {showArguments ? (
+                    <>
+                      <Text bold color="secondaryDark" size="sm">
+                        Arguments
+                      </Text>
+                      {toolArguments.length === 0 ? (
+                        <Text color="secondaryDark" size="sm">
+                          None. The assistant calls it with an empty input.
                         </Text>
-                        {toolArgument.description ? (
-                          <Text color="secondaryDark" size="sm">
-                            {toolArgument.description}
-                          </Text>
-                        ) : null}
-                      </Box>
-                    ))
-                  )}
+                      ) : (
+                        toolArguments.map((toolArgument) => (
+                          <Box gap={1} key={toolArgument.name}>
+                            <Text size="sm">
+                              {`${toolArgument.name} (${toolArgument.type}) · ${toolArgument.required ? "required" : "optional"}`}
+                            </Text>
+                            {toolArgument.description ? (
+                              <Text color="secondaryDark" size="sm">
+                                {toolArgument.description}
+                              </Text>
+                            ) : null}
+                          </Box>
+                        ))
+                      )}
+                    </>
+                  ) : null}
                 </Box>
               );
             })

@@ -1999,17 +1999,19 @@ export const GPTChat = ({
                 />
               </Box>
             ) : null}
-            <Box justifyContent="center" testID="gpt-composer-tools">
-              <Button
-                accessibilityLabel="Show available tools"
-                iconName="wrench"
-                onClick={() => setIsToolsModalVisible(true)}
-                size="sm"
-                testID="gpt-tools-button"
-                text="Tools"
-                variant="outline"
-              />
-            </Box>
+            {mcpTools && mcpTools.length > 0 ? (
+              <Box justifyContent="center" testID="gpt-composer-tools">
+                <Button
+                  accessibilityLabel="Show available tools"
+                  iconName="wrench"
+                  onClick={() => setIsToolsModalVisible(true)}
+                  size="sm"
+                  testID="gpt-tools-button"
+                  text="Tools"
+                  variant="outline"
+                />
+              </Box>
+            ) : null}
             <Box flex="grow" justifyContent="center">
               <TextArea
                 blurOnSubmit={false}

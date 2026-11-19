@@ -403,12 +403,9 @@ describe("GPTChat", () => {
     }
   });
 
-  it("shows the tools button beside the composer when no tools are published", async () => {
-    const {getByTestId, getByText} = renderChat({mcpTools: []});
-
-    await press(getByTestId("gpt-tools-button"));
-
-    assert.isOk(getByText("No tools are available in this chat."));
+  it("hides the tools button when no tools are published", () => {
+    assert.isNull(renderChat().queryByTestId("gpt-tools-button"));
+    assert.isNull(renderChat({mcpTools: []}).queryByTestId("gpt-composer-tools"));
   });
 
   it("omits the mascot when the consumer does not pass one", () => {

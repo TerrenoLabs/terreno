@@ -797,7 +797,7 @@ when production is unset. Widgets do not couple to host app state.
 
 `ai-prompts` lists prompts with a folder row per nested slash level (open the row to go inside; a long name stays on one line)
 and a **Tag** select (All tags, then each tag on the loaded list),
-search across name, folder, and tag, type, Production and Newest version columns, 7-day calls, last used, and a header **New
+search across name, folder, and tag in every folder (folder rows hide while searching or filtering by tag), type, Production and Newest version columns, 7-day calls, last used, and a header **New
 prompt** when `aiPrompt:create` is allowed. The create modal
 includes an optional **Description** (saved on the prompt record and shown on the hub Versions screen).
 `ai-prompt-editor?name=` is a prompt hub with **Versions**, **Traces**, and

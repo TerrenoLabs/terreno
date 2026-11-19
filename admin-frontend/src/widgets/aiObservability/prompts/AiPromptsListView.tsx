@@ -15,6 +15,7 @@ import React, {useCallback, useMemo} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
 import {
+  ALL_FOLDERS,
   childFolders,
   filterPrompts,
   formatFolderPath,
@@ -120,13 +121,12 @@ const FolderNameCell: React.FC<{
       alignItems="center"
       direction="row"
       flex="grow"
-      gap={2}
       minWidth={0}
       onClick={handlePress}
       overflow="hidden"
       testID={testID}
     >
-      <Box flex="none">
+      <Box flex="none" marginRight={3}>
         <Icon color="secondaryDark" iconName={isUp ? "arrow-left" : "folder"} size="sm" />
       </Box>
       <Box flex="shrink" gap={1} minWidth={0} overflow="hidden">
@@ -329,7 +329,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   const browsing = search.trim().length === 0 && tag.trim().length === 0;
   const visible = useMemo((): PromptListRow[] => {
     if (!browsing) {
-      return filterPrompts({folder: currentDirectory, prompts, search, tag});
+      return filterPrompts({folder: ALL_FOLDERS, prompts, search, tag});
     }
     return prompts.filter((prompt) => promptLocation(prompt).directory === currentDirectory);
   }, [browsing, currentDirectory, prompts, search, tag]);

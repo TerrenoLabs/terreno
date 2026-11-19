@@ -256,6 +256,32 @@ describe("AiPromptsListView", () => {
     assert.deepEqual(onFolderChange.mock.calls[2], ["appointmentAI"]);
   });
 
+  it("searches every folder even when a nested folder is open", () => {
+    const library: PromptListItem[] = [
+      {
+        folder: "appointmentAI/intake",
+        latestVersion: 1,
+        name: "appointmentAI/intake/_preamble",
+        production: 1,
+        type: "text",
+      },
+      {folder: "examples", latestVersion: 1, name: "summarize", production: 1, type: "chat"},
+    ];
+    const view = renderWithTheme(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder="appointmentAI/intake"
+        prompts={library}
+        search="summarize"
+      />
+    );
+
+    expect(view.getByText("summarize")).toBeTruthy();
+    expect(view.getByText("examples")).toBeTruthy();
+    expect(view.queryByTestId("ai-prompts-folder-up-clickable")).toBeNull();
+    expect(view.queryByText("_preamble")).toBeNull();
+  });
+
   it("filters the table to prompts that have the selected tag", () => {
     const library: PromptListItem[] = [
       {

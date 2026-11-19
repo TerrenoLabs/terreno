@@ -368,6 +368,7 @@ interface VariableDragRowProps {
   dragTop: {value: number};
   dragged: boolean;
   id: string;
+  itemBorderRadius: number;
   itemContainerStyle?: StyleProp<ViewStyle>;
   offset: number;
   onDragBegin: (id: string) => void;
@@ -380,6 +381,8 @@ interface VariableDragRowProps {
   startOffset: {value: number};
 }
 
+const DRAG_ROW_SHADOW = "0px 0px 5px rgba(0, 0, 0, 0.2)";
+
 /**
  * One variable-height row. At rest it sits in normal flow. During a drag every
  * row is taken out of flow and positioned from measured heights.
@@ -390,6 +393,7 @@ const VariableDragRow: React.FC<VariableDragRowProps> = ({
   dragTop,
   dragged,
   id,
+  itemBorderRadius,
   itemContainerStyle,
   offset,
   onDragBegin,
@@ -401,6 +405,8 @@ const VariableDragRow: React.FC<VariableDragRowProps> = ({
   renderItem,
   startOffset,
 }) => {
+  const isAndroid = Platform.OS === "android";
+
   const handleLayout = useCallback(
     (event: LayoutChangeEvent): void => {
       if (dragMode) {
@@ -426,6 +432,7 @@ const VariableDragRow: React.FC<VariableDragRowProps> = ({
     }
     return {
       backgroundColor: dragged ? backgroundOnHold : "transparent",
+      boxShadow: dragged && !isAndroid ? DRAG_ROW_SHADOW : "none",
       left: 0,
       position: "absolute" as const,
       top: dragged ? dragTop.value : offset,
@@ -452,7 +459,13 @@ const VariableDragRow: React.FC<VariableDragRowProps> = ({
     });
 
   return (
-    <Animated.View style={[itemContainerStyle, animatedStyle]}>
+    <Animated.View
+      style={[
+        {borderRadius: itemBorderRadius, paddingRight: 10},
+        itemContainerStyle,
+        animatedStyle,
+      ]}
+    >
       <View
         collapsable={false}
         onLayout={handleLayout}
@@ -501,8 +514,9 @@ const VariableHeightDraggableList: React.FC<DragListProps> = (props) => {
     renderItem,
   } = props;
   const dataIDs = useMemo(() => props.dataIDs || data || [], [props.dataIDs, data]);
-  const itemsGap = props.itemsGap ?? 5;
-  const itemHeight = props.itemHeight ?? 50;
+  const itemsGap = props.itemsGap || 5;
+  const itemHeight = props.itemHeight || 50;
+  const itemBorderRadius = props.itemBorderRadius || 8;
 
   const [measured, setMeasured] = useState<Record<string, number>>({});
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
@@ -609,6 +623,7 @@ const VariableHeightDraggableList: React.FC<DragListProps> = (props) => {
           dragMode={dragMode}
           dragTop={dragTop}
           id={id}
+          itemBorderRadius={itemBorderRadius}
           itemContainerStyle={itemContainerStyle}
           key={id}
           offset={offsetOfId(id, order, measured, itemHeight, itemsGap)}

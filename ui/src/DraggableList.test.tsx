@@ -1,5 +1,5 @@
 import {afterEach, beforeEach, describe, expect, it, mock, spyOn} from "bun:test";
-import {act, render} from "@testing-library/react-native";
+import {act, fireEvent, render} from "@testing-library/react-native";
 import React from "react";
 import {Platform, Text as RNText, View} from "react-native";
 import {Gesture} from "react-native-gesture-handler";
@@ -330,6 +330,146 @@ describe("DraggableList", () => {
 
     expect(getByText("a")).toBeTruthy();
     reactionSpy.mockRestore();
+  });
+
+  describe("variableHeight", () => {
+    const layout = (
+      height: number
+    ): {nativeEvent: {layout: {height: number; width: number; x: number; y: number}}} => ({
+      nativeEvent: {layout: {height, width: 100, x: 0, y: 0}},
+    });
+
+    it("stacks rows in normal flow instead of a fixed-height absolute slot", () => {
+      const {getByTestId, toJSON} = render(
+        <DraggableList
+          callbackNewDataIds={() => {}}
+          dataIDs={["a", "b"]}
+          itemHeight={50}
+          itemsGap={10}
+          renderItem={renderItem}
+          variableHeight
+        />
+      );
+
+      const listStyle = getByTestId("draggable-list").props.style as {
+        gap?: number;
+        minHeight?: number;
+      };
+      expect(listStyle.gap).toBe(10);
+      expect(listStyle.minHeight).toBeUndefined();
+      expect(JSON.stringify(toJSON())).not.toContain('"position":"absolute"');
+    });
+
+    it("drops a short row using the measured height of the row under it", () => {
+      const callbackNewDataIds = mock(() => {});
+      const {getByTestId} = render(
+        <DraggableList
+          callbackNewDataIds={callbackNewDataIds}
+          dataIDs={["a", "b"]}
+          itemHeight={50}
+          itemsGap={10}
+          renderItem={renderItem}
+          variableHeight
+        />
+      );
+
+      act(() => {
+        fireEvent(getByTestId("draggable-item-a"), "layout", layout(40));
+        fireEvent(getByTestId("draggable-item-b"), "layout", layout(300));
+      });
+
+      const dragA = capturedGestures.at(-2);
+      act(() => {
+        dragA?.onBegin?.();
+        dragA?.onChange?.({translationY: 90});
+        dragA?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).not.toHaveBeenCalled();
+
+      const dragAAgain = capturedGestures.at(-2);
+      act(() => {
+        dragAAgain?.onBegin?.();
+        dragAAgain?.onChange?.({translationY: 200});
+        dragAAgain?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
+    });
+
+    it("moves a tall row above a short row once its center passes the short row's midpoint", () => {
+      const callbackNewDataIds = mock(() => {});
+      const {getByTestId} = render(
+        <DraggableList
+          callbackNewDataIds={callbackNewDataIds}
+          dataIDs={["a", "b"]}
+          itemHeight={50}
+          itemsGap={10}
+          renderItem={renderItem}
+          variableHeight
+        />
+      );
+
+      act(() => {
+        fireEvent(getByTestId("draggable-item-a"), "layout", layout(40));
+        fireEvent(getByTestId("draggable-item-b"), "layout", layout(300));
+      });
+
+      const dragB = capturedGestures.at(-1);
+      act(() => {
+        dragB?.onBegin?.();
+        dragB?.onChange?.({translationY: -100});
+        dragB?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).not.toHaveBeenCalled();
+
+      const dragBAgain = capturedGestures.at(-1);
+      act(() => {
+        dragBAgain?.onBegin?.();
+        dragBAgain?.onChange?.({translationY: -200});
+        dragBAgain?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
+    });
+
+    it("does not reorder a tall row dragged a short distance past the row under it", () => {
+      const callbackNewDataIds = mock(() => {});
+      const {getByTestId} = render(
+        <DraggableList
+          callbackNewDataIds={callbackNewDataIds}
+          dataIDs={["a", "b"]}
+          itemHeight={50}
+          itemsGap={10}
+          renderItem={renderItem}
+          variableHeight
+        />
+      );
+
+      act(() => {
+        fireEvent(getByTestId("draggable-item-a"), "layout", layout(300));
+        fireEvent(getByTestId("draggable-item-b"), "layout", layout(40));
+      });
+
+      const dragA = capturedGestures.at(-2);
+      act(() => {
+        dragA?.onBegin?.();
+        dragA?.onChange?.({translationY: 30});
+        dragA?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).not.toHaveBeenCalled();
+
+      const dragAAgain = capturedGestures.at(-2);
+      act(() => {
+        dragAAgain?.onBegin?.();
+        dragAAgain?.onChange?.({translationY: 200});
+        dragAAgain?.onFinalize?.();
+      });
+
+      expect(callbackNewDataIds).toHaveBeenCalledWith(["b", "a"]);
+    });
   });
 
   describe("DragItem", () => {

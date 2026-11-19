@@ -30,20 +30,26 @@ mock.module("@terreno/ui", () => {
     itemHeight,
     renderItem,
     callbackNewDataIds,
+    variableHeight,
   }: {
     dataIDs: string[];
     itemHeight: number;
     renderItem: (arg: {item: string}) => React.ReactElement;
     callbackNewDataIds: (ids: string[]) => void;
+    variableHeight?: boolean;
   }) => {
-    return ReactMod.createElement(RN.View, {itemHeight, testID: "mock-draggable-list"}, [
-      ...dataIDs.map((id) => ReactMod.cloneElement(renderItem({item: id}), {key: id})),
-      ReactMod.createElement(RN.Pressable, {
-        key: "__reorder",
-        onPress: () => callbackNewDataIds([...dataIDs].reverse()),
-        testID: "mock-reorder",
-      }),
-    ]);
+    return ReactMod.createElement(
+      RN.View,
+      {itemHeight, testID: "mock-draggable-list", variableHeight},
+      [
+        ...dataIDs.map((id) => ReactMod.cloneElement(renderItem({item: id}), {key: id})),
+        ReactMod.createElement(RN.Pressable, {
+          key: "__reorder",
+          onPress: () => callbackNewDataIds([...dataIDs].reverse()),
+          testID: "mock-reorder",
+        }),
+      ]
+    );
   };
   const Box = ({children, ...rest}: Record<string, unknown>) =>
     ReactMod.createElement(RN.View, rest, children);
@@ -253,6 +259,41 @@ describe("AdminNestedArrayField", () => {
     expect(next.map((i: Record<string, unknown>) => i.name)).toEqual(["c", "b", "a"]);
   });
 
+  it("keeps the new order across re-renders so a second reorder maps to the right items", () => {
+    const onChange = mock<NestedOnChange>(() => {});
+    const items = baseItems as unknown as Record<string, AdminFieldConfig>;
+    const original = [
+      {active: true, count: 1, name: "a", tags: []},
+      {active: false, count: 2, name: "b", tags: []},
+      {active: true, count: 3, name: "c", tags: []},
+    ];
+    const {getByTestId, rerender} = renderWithTheme(
+      <AdminNestedArrayField
+        baseUrl="/admin"
+        items={items}
+        onChange={onChange}
+        title="Items"
+        value={original}
+      />
+    );
+    fireEvent.press(getByTestId("mock-reorder"));
+    const reordered = onChange.mock.calls[0][0];
+    expect(reordered.map((i: Record<string, unknown>) => i.name)).toEqual(["c", "b", "a"]);
+
+    rerender(
+      <AdminNestedArrayField
+        baseUrl="/admin"
+        items={items}
+        onChange={onChange}
+        title="Items"
+        value={reordered}
+      />
+    );
+    fireEvent.press(getByTestId("mock-reorder"));
+    const reorderedAgain = onChange.mock.calls[1][0];
+    expect(reorderedAgain.map((i: Record<string, unknown>) => i.name)).toEqual(["a", "b", "c"]);
+  });
+
   it("supports re-render with longer value array (grows itemIds)", () => {
     const onChange = mock<NestedOnChange>(() => {});
     const {rerender, toJSON} = renderWithTheme(
@@ -338,6 +379,7 @@ describe("AdminNestedArrayField", () => {
       );
       // Header 44 + name 76 + media group (84 + port 76 + sonarr group (84 + 2 * 76)) + padding 24
       expect(getByTestId("mock-draggable-list").props.itemHeight).toBe(540);
+      expect(getByTestId("mock-draggable-list").props.variableHeight).toBe(true);
     });
 
     it("gives nested groups per-item test IDs in editable rows", () => {

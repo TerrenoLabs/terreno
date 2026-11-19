@@ -1437,8 +1437,13 @@ const ToolsModal = ({
     setShowArguments(checked);
   }, []);
 
+  const handleDismiss = useCallback((): void => {
+    setShowArguments(false);
+    onDismiss();
+  }, [onDismiss]);
+
   return (
-    <Modal onDismiss={onDismiss} size="lg" title="Tools" visible={isVisible}>
+    <Modal onDismiss={handleDismiss} size="lg" title="Tools" visible={isVisible}>
       <ScrollView style={{maxHeight: listMaxHeight}} testID="gpt-tools-scroll">
         <Box gap={3} padding={3} testID="gpt-tools-list">
           <Text color="secondaryDark" size="sm">

@@ -1,5 +1,12 @@
 ---
-category: Changed
+category: Breaking
 ---
 
-**@terreno/ui:** `GPTChat` reads as a transcript. User messages stay in a light bubble. Assistant text sits on the page background inside a 760px column, with copy, download, and ratings in one row. An image-only reply copies the image. A reply that also has text copies the text, and the separate `gpt-copy-image` control is gone. A tool call and its result are one expandable row labeled `Tool: <name>` (previously `Result: <name>`), and the body scrolls inside a 240px cap. **Tools** appears beside the composer only when `mcpTools` has entries. It opens a large list whose arguments stay hidden until **Show arguments** is checked.
+**@terreno/ui:** `GPTChat` now reads as a transcript: user messages in a light bubble, assistant text on the page in a 760px column, and tool calls as one expandable row capped at 240px. Breaking changes for apps and e2e suites that select these elements:
+
+- `gpt-copy-image` is removed. Use `gpt-copy-msg-<index>` for copy. It copies the image for an image-only reply and the text when a reply has both.
+- Tool rows are labeled `Tool: <name>` instead of `Result: <name>`.
+- **Tools** (`gpt-tools-button`) appears beside the composer only when `mcpTools` has entries.
+- A user or assistant message with no text, content parts, or blocks renders nothing, including its action row.
+
+Download for an image reply is `gpt-download-image-<index>`. The **Tools** modal hides arguments until **Show arguments** is checked, and it resets to hidden when closed.

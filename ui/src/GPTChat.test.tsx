@@ -403,6 +403,35 @@ describe("GPTChat", () => {
     }
   });
 
+  it("reopens the tools list with arguments hidden", async () => {
+    const {getByLabelText, getByTestId, queryByText} = renderChat({
+      mcpTools: [
+        {
+          inputSchema: {properties: {path: {type: "string"}}, required: ["path"], type: "object"},
+          name: "readFile",
+        },
+      ],
+    });
+
+    await press(getByTestId("gpt-tools-button"));
+    await press(getByTestId("gpt-tools-arguments-toggle"));
+    assert.isOk(queryByText("path (string) · required"));
+
+    await press(getByLabelText("Close modal"));
+    await press(getByTestId("gpt-tools-button"));
+
+    assert.isNull(queryByText("path (string) · required"));
+  });
+
+  it("renders no action row for an empty assistant message", () => {
+    const {queryByTestId} = renderChat({
+      currentMessages: [{content: "   ", role: "assistant"}],
+      onRateFeedback: () => {},
+    });
+
+    assert.isNull(queryByTestId("gpt-message-actions-0"));
+  });
+
   it("hides the tools button when no tools are published", () => {
     assert.isNull(renderChat().queryByTestId("gpt-tools-button"));
     assert.isNull(renderChat({mcpTools: []}).queryByTestId("gpt-composer-tools"));

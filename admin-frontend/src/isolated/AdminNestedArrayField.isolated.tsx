@@ -259,6 +259,41 @@ describe("AdminNestedArrayField", () => {
     expect(next.map((i: Record<string, unknown>) => i.name)).toEqual(["c", "b", "a"]);
   });
 
+  it("keeps the new order across re-renders so a second reorder maps to the right items", () => {
+    const onChange = mock<NestedOnChange>(() => {});
+    const items = baseItems as unknown as Record<string, AdminFieldConfig>;
+    const original = [
+      {active: true, count: 1, name: "a", tags: []},
+      {active: false, count: 2, name: "b", tags: []},
+      {active: true, count: 3, name: "c", tags: []},
+    ];
+    const {getByTestId, rerender} = renderWithTheme(
+      <AdminNestedArrayField
+        baseUrl="/admin"
+        items={items}
+        onChange={onChange}
+        title="Items"
+        value={original}
+      />
+    );
+    fireEvent.press(getByTestId("mock-reorder"));
+    const reordered = onChange.mock.calls[0][0];
+    expect(reordered.map((i: Record<string, unknown>) => i.name)).toEqual(["c", "b", "a"]);
+
+    rerender(
+      <AdminNestedArrayField
+        baseUrl="/admin"
+        items={items}
+        onChange={onChange}
+        title="Items"
+        value={reordered}
+      />
+    );
+    fireEvent.press(getByTestId("mock-reorder"));
+    const reorderedAgain = onChange.mock.calls[1][0];
+    expect(reorderedAgain.map((i: Record<string, unknown>) => i.name)).toEqual(["a", "b", "c"]);
+  });
+
   it("supports re-render with longer value array (grows itemIds)", () => {
     const onChange = mock<NestedOnChange>(() => {});
     const {rerender, toJSON} = renderWithTheme(

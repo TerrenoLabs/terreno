@@ -235,14 +235,14 @@ export const AdminNestedArrayField: React.FC<AdminNestedArrayFieldProps> = ({
     }
   }
 
-  // Map from stable ID to current index in arrayValue
+  // Map from stable ID to current index in arrayValue; rebuilt whenever the data changes order
   const idToIndexMap = useMemo((): Record<string, number> => {
     const map: Record<string, number> = {};
     for (let i = 0; i < itemIdsRef.current.length; i++) {
       map[itemIdsRef.current[i]] = i;
     }
     return map;
-  }, [arrayValue.length]);
+  }, [arrayValue]);
 
   const handleAddItem = useCallback((): void => {
     const newItem = buildNestedObjectDefault(items);

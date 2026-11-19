@@ -157,6 +157,9 @@ const mergeWithSchema = (schema: JsonSchema | undefined, value: unknown): unknow
   if (enumValues(schema)) {
     return typeof value === "string" ? value : "";
   }
+  if (kind === "string" && (typeof value === "number" || typeof value === "boolean")) {
+    return String(value);
+  }
   if (typeof value === "string") {
     return value;
   }
@@ -233,7 +236,9 @@ const buildField = ({
       type: "field",
     };
   }
-  if (kindName === "boolean" || typeof value === "boolean") {
+  // A declared schema type picks the control; the stored value's type only decides untyped fields.
+  const isUntyped = kindName === undefined;
+  if (kindName === "boolean" || (isUntyped && typeof value === "boolean")) {
     return {
       description: schema?.description,
       kind: "boolean",
@@ -243,7 +248,7 @@ const buildField = ({
       type: "field",
     };
   }
-  if (kindName === "number" || kindName === "integer" || typeof value === "number") {
+  if (kindName === "number" || kindName === "integer" || (isUntyped && typeof value === "number")) {
     return {
       description: schema?.description,
       kind: "number",

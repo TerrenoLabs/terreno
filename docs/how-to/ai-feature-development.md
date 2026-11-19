@@ -34,7 +34,7 @@ In-app **thumbs** (with an optional comment), **false positive|negative**, and p
 ## 2. Label expected output
 
 1. Open the dataset, then click an item. That opens the expected-output page (not a dialog).
-2. Edit the fields. When the dataset has `expectedOutputSchema`, each property is a field (text, number, checkbox, or a select for an enum). Without a schema, the form follows the JSON already stored on the item. A string label is one text field.
+2. Edit the fields. When the dataset has `expectedOutputSchema`, each property is a field (text, number, checkbox, or a select for an enum). The schema type wins: a number stored in a `string` property shows and saves as text. Without a schema, the form follows the JSON already stored on the item. A string label is one text field.
 3. Set **Outcome class** (`tp` / `fp` / `tn` / `fn`) when the feature is a flag.
 4. Check **Proofread** when this expected output is the golden label. Synthetic items stay unchecked until you accept them.
 5. **Save expected output**. **Add item** on the dataset opens the same page with empty fields shaped like the first item, or like the schema.

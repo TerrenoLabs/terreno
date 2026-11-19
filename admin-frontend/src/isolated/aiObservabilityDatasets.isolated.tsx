@@ -410,6 +410,46 @@ describe("AiDatasetItemScreen", () => {
     assert.exists(itemsLoading.getByTestId("ai-dataset-item-loading"));
   });
 
+  it("refills the form when the item param changes on a mounted screen", async () => {
+    const secondItem: DatasetItemRecord = {
+      ...existingItem,
+      expectedOutput: {crisis: false, route: "none"},
+      id: "item-2",
+      outcomeClass: "fp",
+      proofread: true,
+    };
+    const server = buildServer({items: [existingItem, secondItem]});
+    const screen = (): React.ReactElement => (
+      <AiDatasetItemScreenWidget
+        config={emptyConfig}
+        routeBase="/admin"
+        screenName="ai-dataset-item"
+        server={server}
+      />
+    );
+    const view = renderWithTheme(screen());
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Edit expected output"));
+
+    setExpoSearchParams(() => ({datasetId: "ds-1", itemId: "item-2"}));
+    view.rerender(screen());
+    await flushObservabilityRequests();
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    const patches = server.callsTo(ITEM_ROUTE);
+    assert.equal(patches.length, 1);
+    assert.deepEqual(patches[0]?.params, {id: "ds-1", itemId: "item-2"});
+    assert.deepEqual(patches[0]?.body, {
+      expectedOutput: {crisis: false, route: "none"},
+      outcomeClass: "fp",
+      proofread: true,
+    });
+  });
+
   it("shows load failures for the dataset and for a missing item", async () => {
     const datasetFailed = renderItemScreen(buildServer({datasetState: {isError: true}}));
     await flushObservabilityRequests();

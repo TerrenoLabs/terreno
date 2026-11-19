@@ -231,6 +231,22 @@ describe("expected output model edge cases", () => {
     assert.isFalse(fieldAt(short, "Long").multiline);
   });
 
+  it("keeps a declared string field as text when the stored value is a number or boolean", () => {
+    const schema: JsonSchema = {
+      properties: {code: {type: "string"}, flag: {type: "string"}},
+      type: "object",
+    };
+    const value = prepareFormValue(schema, {code: 42, flag: true});
+    assert.deepEqual(value, {code: "42", flag: "true"});
+    const form = buildForm(schema, value);
+    assert.equal(form.type, "group");
+    if (form.type !== "group") {
+      return;
+    }
+    assert.equal(fieldAt(form, "Code").kind, "text");
+    assert.equal(fieldAt(form, "Flag").kind, "text");
+  });
+
   it("infers numbers and booleans from values when the schema has no type", () => {
     const schema: JsonSchema = {properties: {flag: {}, n: {}}, type: "object"};
     const form = buildForm(schema, {flag: true, n: 4});

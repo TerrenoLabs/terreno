@@ -70,7 +70,9 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-dataset-detail?id=${encodeURIComponent(datasetId)}`;
 
-  const [formReady, setFormReady] = useState(false);
+  const formKey = `${datasetId}:${itemId}`;
+  const [filledKey, setFilledKey] = useState<string | undefined>(undefined);
+  const formReady = filledKey === formKey;
   const [expected, setExpected] = useState<unknown>("");
   const [input, setInput] = useState<unknown>("");
   const [outcomeClass, setOutcomeClass] = useState("");
@@ -78,13 +80,15 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // Fill the form once, after the dataset and its items have loaded.
+  // Fill the form once per dataset and item, after both have loaded, so a param change refills it.
   useEffect(() => {
     if (formReady || isLoading || isItemsLoading) {
       return;
     }
+    setError("");
+    setIsSaving(false);
     if (!dataset) {
-      setFormReady(true);
+      setFilledKey(formKey);
       return;
     }
     if (isNew) {
@@ -97,20 +101,21 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
             ? emptyLike(sample.expectedOutput)
             : ""
       );
+      setOutcomeClass("");
       setProofread(true);
-      setFormReady(true);
+      setFilledKey(formKey);
       return;
     }
     if (!item) {
-      setFormReady(true);
+      setFilledKey(formKey);
       return;
     }
     setInput(item.input);
     setExpected(prepareFormValue(schema, item.expectedOutput));
     setOutcomeClass(item.outcomeClass ?? "");
     setProofread(item.proofread);
-    setFormReady(true);
-  }, [dataset, formReady, isItemsLoading, isLoading, isNew, item, items, schema]);
+    setFilledKey(formKey);
+  }, [dataset, formKey, formReady, isItemsLoading, isLoading, isNew, item, items, schema]);
 
   const handleOpenTrace = useCallback((): void => {
     if (!item?.sourceTraceId) {

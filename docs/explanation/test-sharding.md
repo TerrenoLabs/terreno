@@ -60,7 +60,7 @@ Packages that finish in a few seconds gain nothing and lose nothing.
 
 ## Isolated files
 
-`ai` and `admin-frontend` pass `--isolated` to the runner. After the shards pass, each
+`ai`, `admin-frontend`, and `api` pass `--isolated` to the runner. After the shards pass, each
 `src/isolated/*.isolated.ts(x)` file runs in a process of its own, as many at a time as there
 are shards. See [Test isolation](test-isolation.md).
 

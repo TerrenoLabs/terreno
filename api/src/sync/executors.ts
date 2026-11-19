@@ -22,6 +22,10 @@ import type {Document, Model} from "mongoose";
 import {addPopulateToQuery, type ModelRouterOptions} from "../api";
 import {omitUserRolesFromWriteBody, type User} from "../auth";
 import {loadDocOr404} from "../docLoader";
+
+/** Re-exported so `api.ts` can hand it to the bulk route without importing `docLoader` itself. */
+export {loadDocOr404};
+
 import {
   APIError,
   type APIErrorConstructor,
@@ -55,9 +59,9 @@ export interface ExecutorResult<T> {
    */
   cleanedBody?: Partial<T>;
   /**
-   * C5 (FIX 6): present only when `executeUpdate` was called with
-   * `skipPostHooks: true` — the pre-update document snapshot, needed to
-   * run `postUpdate` later via `runPostUpdate`.
+   * C5 (FIX 6): present only when `executeUpdate` or `executeDelete` was called with
+   * `skipPostHooks: true` — the document snapshot from before the write, needed to run
+   * `postUpdate` later via `runPostUpdate` and for audit `before` snapshots.
    */
   prevDoc?: T;
 }
@@ -924,6 +928,10 @@ export const executeDelete = async <T>({
     }
   }
 
+  // The caller that defers postDelete (bulk, sync) also needs the doc as it was before the
+  // tombstone, e.g. for the audit `before` snapshot.
+  const prevDoc = skipPostHooks ? (cloneDeep(doc) as T) : undefined;
+
   // Support .deleted from isDeleted plugin
   if (
     Object.keys(model.schema.paths).includes("deleted") &&
@@ -956,7 +964,7 @@ export const executeDelete = async <T>({
     }
   }
 
-  return {doc};
+  return prevDoc ? {doc, prevDoc} : {doc};
 };
 
 /** C5 (FIX 6): run `postDelete` outside the write/ledger-finalize window — see `runPostCreate`. */

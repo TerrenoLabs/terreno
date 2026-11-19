@@ -7,14 +7,16 @@ import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {observabilityActionAllowed} from "../shell/observabilityPermissions";
 import {AiDatasetDetailView} from "./AiDatasetDetailView";
-import {unwrapDatasetItems, unwrapDatasetRecord} from "./datasetTypes";
+import {type DatasetItemTab, unwrapDatasetItems, unwrapDatasetRecord} from "./datasetTypes";
 import {useAiObservabilityDatasetsApi} from "./useAiObservabilityDatasetsApi";
 
 export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (props) => {
   const {routeBase} = props;
-  const params = useLocalSearchParams<{id?: string | string[]}>();
+  const params = useLocalSearchParams<{id?: string | string[]; tab?: string | string[]}>();
   const idParam = params.id;
   const id = Array.isArray(idParam) ? idParam[0] : idParam;
+  const tabParam = Array.isArray(params.tab) ? params.tab[0] : params.tab;
+  const initialTab: DatasetItemTab = tabParam === "needsReview" ? "needsReview" : "all";
   const {useDetailQuery, useItemsQuery} = useAiObservabilityDatasetsApi();
   const {useStatusQuery} = useAiObservabilityPromptsApi();
   const statusQuery = useStatusQuery();
@@ -99,6 +101,7 @@ export const AiDatasetDetailScreenWidget: React.FC<AdminScreenWidgetProps> = (pr
         canAddItem={canAddItem}
         canRunExperiment={canRunExperiment}
         dataset={dataset}
+        initialTab={initialTab}
         isItemsLoading={isItemsLoading}
         items={items}
         onCreateItem={handleCreateItem}

@@ -87,3 +87,24 @@ describe("AiDatasetItemView", () => {
     assert.equal(onOpenTrace.mock.calls.length, 1);
   });
 });
+
+describe("AiDatasetItemView review guidance", () => {
+  it("explains the golden label on every item", () => {
+    const view = renderWithTheme(<AiDatasetItemView {...baseProps} />);
+    expect(view.getByText("Expected output (golden label)")).toBeTruthy();
+    expect(
+      view.getByText(/Experiments score the live feature against proofread golden labels/)
+    ).toBeTruthy();
+    expect(view.queryByTestId("ai-dataset-item-review-steps")).toBeNull();
+  });
+
+  it("lists the review steps when the item is in the review queue", () => {
+    const view = renderWithTheme(<AiDatasetItemView {...baseProps} proofread={false} reviewing />);
+    const steps = view.getByTestId("ai-dataset-item-review-steps");
+    assert.exists(steps);
+    expect(
+      view.getByText("1. Read the input. It is exactly what the model received.")
+    ).toBeTruthy();
+    expect(view.getByText("5. Save and next. Unticked items stay in Needs review.")).toBeTruthy();
+  });
+});

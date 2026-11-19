@@ -3,6 +3,14 @@ import React, {useCallback, useMemo} from "react";
 import {ExpectedOutputForm} from "./ExpectedOutputForm";
 import {buildForm, type JsonSchema} from "./expectedOutputModel";
 
+const REVIEW_STEPS = [
+  "Read the input. It is exactly what the model received.",
+  "Fix the expected output to the answer this feature should give, not the answer it gave.",
+  "Set the outcome class if this feature is a flag. Leave it blank otherwise.",
+  "Tick Proofread once the expected output is right.",
+  "Save and next. Unticked items stay in Needs review.",
+];
+
 const OUTCOME_OPTIONS = [
   {label: "True positive", value: "tp"},
   {label: "False positive", value: "fp"},
@@ -26,6 +34,7 @@ export interface AiDatasetItemViewProps {
   onSave: () => void;
   outcomeClass: string;
   proofread: boolean;
+  reviewing?: boolean;
   saveLabel: string;
 }
 
@@ -45,6 +54,7 @@ export const AiDatasetItemView: React.FC<AiDatasetItemViewProps> = ({
   onSave,
   outcomeClass,
   proofread,
+  reviewing = false,
   saveLabel,
 }) => {
   const inputNode = useMemo(() => buildForm(undefined, input), [input]);
@@ -59,6 +69,22 @@ export const AiDatasetItemView: React.FC<AiDatasetItemViewProps> = ({
 
   return (
     <Box gap={5} testID="ai-dataset-item">
+      {reviewing ? (
+        <Box
+          border="default"
+          gap={2}
+          padding={4}
+          rounding="md"
+          testID="ai-dataset-item-review-steps"
+        >
+          <Heading size="sm">How to review this item</Heading>
+          {REVIEW_STEPS.map((step, index) => (
+            <Text key={step} size="sm">
+              {`${index + 1}. ${step}`}
+            </Text>
+          ))}
+        </Box>
+      ) : null}
       <Box border="default" gap={3} padding={4} rounding="md">
         <Heading size="sm">Input</Heading>
         <Text color="secondaryDark" size="sm">
@@ -75,7 +101,11 @@ export const AiDatasetItemView: React.FC<AiDatasetItemViewProps> = ({
         />
       </Box>
       <Box border="default" gap={3} padding={4} rounding="md" testID="ai-dataset-item-expected">
-        <Heading size="sm">Expected output</Heading>
+        <Heading size="sm">Expected output (golden label)</Heading>
+        <Text color="secondaryDark" size="sm">
+          The golden label is the answer this feature must give for this input. Experiments score
+          the live feature against proofread golden labels only.
+        </Text>
         <Text color="secondaryDark" size="sm">
           {expectedSchema
             ? "Fields come from this dataset's expected output schema."
@@ -111,6 +141,9 @@ export const AiDatasetItemView: React.FC<AiDatasetItemViewProps> = ({
         <CheckBox selected={proofread} />
         <Text>Proofread — this expected output is a golden label</Text>
       </Box>
+      <Text color="secondaryDark" size="sm">
+        Unticked items stay in Needs review and do not count toward experiments.
+      </Text>
       {onOpenTrace ? (
         <Button
           onClick={onOpenTrace}

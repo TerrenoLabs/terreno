@@ -111,6 +111,19 @@ export const filterDatasetItemsByTab = (
   });
 };
 
+/**
+ * The next item after `currentId` in list order that still needs review, wrapping to the top.
+ * The current item is never returned, so saving it cannot loop back to itself.
+ */
+export const nextNeedsReviewItemId = (
+  items: DatasetItemRecord[],
+  currentId: string
+): string | undefined => {
+  const index = items.findIndex((item) => item.id === currentId);
+  const ordered = index < 0 ? items : [...items.slice(index + 1), ...items.slice(0, index)];
+  return ordered.find((item) => !item.proofread && item.id !== currentId)?.id;
+};
+
 export const summarizeJson = (value: unknown): string => {
   if (value === undefined || value === null) {
     return "—";

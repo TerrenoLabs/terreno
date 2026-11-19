@@ -17,6 +17,7 @@ export interface AiDatasetDetailViewProps {
   canAddItem?: boolean;
   canRunExperiment?: boolean;
   dataset: DatasetRecord;
+  initialTab?: DatasetItemTab;
   isItemsLoading?: boolean;
   items: DatasetItemRecord[];
   itemsLoadError?: string;
@@ -56,6 +57,7 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
   canAddItem = true,
   canRunExperiment = true,
   dataset,
+  initialTab = "all",
   isItemsLoading,
   items,
   itemsLoadError,
@@ -64,7 +66,7 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
   onOpenItem,
   onRetryItems,
 }) => {
-  const [tab, setTab] = useState<DatasetItemTab>("all");
+  const [tab, setTab] = useState<DatasetItemTab>(initialTab);
 
   const filtered = useMemo(() => {
     return filterDatasetItemsByTab(items, tab);
@@ -123,6 +125,10 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
           ) : undefined}
         </Box>
       </Box>
+      <Text color="secondaryDark" size="sm" testID="ai-dataset-golden-guidance">
+        Each item&apos;s expected output is its golden label: the answer this feature must give for
+        that input. Experiments score the feature against proofread items only.
+      </Text>
       <SegmentedControl
         items={TAB_OPTIONS.map((option) => tabLabel(option, needsReviewCount))}
         onChange={(index) => {
@@ -134,6 +140,12 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
         selectedIndex={selectedIndex}
         testID="ai-dataset-tabs"
       />
+      {tab === "needsReview" ? (
+        <Text color="secondaryDark" size="sm" testID="ai-dataset-review-guidance">
+          Needs review items are not proofread yet. Open one, correct its expected output, tick
+          Proofread, then Save and next to move down this list.
+        </Text>
+      ) : undefined}
       {tab === "needsReview" && needsReviewCount > 0 ? (
         <Badge
           status="error"
@@ -152,7 +164,11 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
         </Box>
       ) : filtered.length === 0 ? (
         <Box padding={4} testID="ai-dataset-items-empty">
-          <Text color="secondaryDark">No items in this tab.</Text>
+          <Text color="secondaryDark">
+            {tab === "needsReview"
+              ? "Nothing needs review. Every item is proofread."
+              : "No items in this tab."}
+          </Text>
         </Box>
       ) : (
         <Box gap={2}>

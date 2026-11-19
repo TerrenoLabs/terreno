@@ -3,6 +3,7 @@ import {assert} from "chai";
 import type {DatasetItemRecord, DatasetRecord} from "./datasetTypes";
 import {
   filterDatasetItemsByTab,
+  nextNeedsReviewItemId,
   summarizeJson,
   unwrapDatasetItems,
   unwrapDatasetList,
@@ -84,5 +85,35 @@ describe("datasetTypes helpers", () => {
     const long = "x".repeat(90);
     assert.equal(summarizeJson(long).endsWith("…"), true);
     assert.equal(summarizeJson({a: 1}).length <= 80, true);
+  });
+});
+
+describe("nextNeedsReviewItemId", () => {
+  const queue = [
+    item({id: "a", proofread: false}),
+    item({id: "b", proofread: true}),
+    item({id: "c", proofread: false}),
+    item({id: "d", proofread: false}),
+  ];
+
+  it("returns the next unproofread item after the current one in list order", () => {
+    assert.equal(nextNeedsReviewItemId(queue, "a"), "c");
+    assert.equal(nextNeedsReviewItemId(queue, "c"), "d");
+  });
+
+  it("wraps to the top when nothing after the current item needs review", () => {
+    assert.equal(nextNeedsReviewItemId(queue, "d"), "a");
+  });
+
+  it("never returns the current item, even when it is the only one left", () => {
+    assert.isUndefined(nextNeedsReviewItemId([item({id: "a", proofread: false})], "a"));
+  });
+
+  it("returns undefined when every item is proofread", () => {
+    assert.isUndefined(nextNeedsReviewItemId([item({id: "a"}), item({id: "b"})], "a"));
+  });
+
+  it("returns the first queued item when the current id is unknown", () => {
+    assert.equal(nextNeedsReviewItemId(queue, "missing"), "a");
   });
 });

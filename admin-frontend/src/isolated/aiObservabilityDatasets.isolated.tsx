@@ -63,6 +63,7 @@ interface ExpoRouterPushMock {
 }
 
 const routerPush = mock(() => undefined) as unknown as ExpoRouterPushMock;
+const routerReplace = mock(() => undefined) as unknown as ExpoRouterPushMock;
 
 const readExpoSearchParams: {current: () => Record<string, string>} = {
   current: () => ({}),
@@ -76,6 +77,9 @@ mock.module("expo-router", () => ({
   router: {
     push: (...args: unknown[]): void => {
       routerPush(...args);
+    },
+    replace: (...args: unknown[]): void => {
+      routerReplace(...args);
     },
   },
   useLocalSearchParams: (): Record<string, string> => readExpoSearchParams.current(),
@@ -389,6 +393,7 @@ describe("AiDatasetItemScreen", () => {
 
   beforeEach(() => {
     routerPush.mockClear();
+    routerReplace.mockClear();
     setExpoSearchParams(() => ({datasetId: "ds-1", itemId: "item-1"}));
   });
 
@@ -488,6 +493,64 @@ describe("AiDatasetItemScreen", () => {
       proofread: true,
     });
     assert.include(String(routerPush.mock.calls.at(-1)?.[0]), "ai-dataset-detail?id=ds-1");
+  });
+
+  it("saves a needs-review item and opens the next one that needs review", async () => {
+    const queued = {...existingItem, id: "item-2", proofread: false};
+    const golden = {...existingItem, id: "item-3", proofread: true};
+    const server = buildServer({items: [existingItem, queued, golden]});
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Save and next"));
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    assert.equal(server.callsTo(ITEM_ROUTE).length, 1);
+    assert.equal(routerReplace.mock.calls.length, 1);
+    assert.include(String(routerReplace.mock.calls[0]?.[0]), "ai-dataset-item?datasetId=ds-1");
+    assert.include(String(routerReplace.mock.calls[0]?.[0]), "itemId=item-2");
+    assert.equal(routerPush.mock.calls.length, 0);
+  });
+
+  it("finishes the review queue on the Needs review tab after the last item", async () => {
+    const golden = {...existingItem, id: "item-3", proofread: true};
+    const server = buildServer({items: [existingItem, golden]});
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Save and finish review"));
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    assert.equal(routerReplace.mock.calls.length, 0);
+    assert.equal(
+      routerPush.mock.calls.at(-1)?.[0],
+      "/admin/ai-dataset-detail?id=ds-1&tab=needsReview"
+    );
+  });
+
+  it("returns to the dataset after saving a golden item", async () => {
+    const golden = {...existingItem, proofread: true};
+    const server = buildServer({items: [golden]});
+    const view = renderItemScreen(server);
+    await flushObservabilityRequests();
+    assert.exists(view.getByText("Save expected output"));
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-dataset-item-save"));
+      await Promise.resolve();
+    });
+    await flushObservabilityRequests();
+
+    assert.equal(routerReplace.mock.calls.length, 0);
+    assert.equal(routerPush.mock.calls.at(-1)?.[0], "/admin/ai-dataset-detail?id=ds-1");
   });
 
   it("starts a new item from the sibling input and the schema-shaped expected output", async () => {

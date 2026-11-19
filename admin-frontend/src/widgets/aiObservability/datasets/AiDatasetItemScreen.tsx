@@ -7,7 +7,7 @@ import {AiObservabilityChrome} from "../shell/AiObservabilityChrome";
 import {unwrapObservabilityStatus} from "../shell/aiObservabilityNav";
 import {observabilityActionAllowed} from "../shell/observabilityPermissions";
 import {AiDatasetItemView} from "./AiDatasetItemView";
-import {unwrapDatasetItems, unwrapDatasetRecord} from "./datasetTypes";
+import {nextNeedsReviewItemId, unwrapDatasetItems, unwrapDatasetRecord} from "./datasetTypes";
 import {emptyLike, type JsonSchema, prepareFormValue} from "./expectedOutputModel";
 import {useAiObservabilityDatasetsApi} from "./useAiObservabilityDatasetsApi";
 
@@ -69,6 +69,9 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
   const schema = dataset?.expectedOutputSchema as JsonSchema | undefined;
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const backHref = `${prefix}/ai-dataset-detail?id=${encodeURIComponent(datasetId)}`;
+  const reviewQueueHref = `${backHref}&tab=needsReview`;
+  const reviewing = !isNew && item !== undefined && !item.proofread;
+  const nextReviewItem = reviewing ? nextNeedsReviewItemId(items, itemId) : undefined;
 
   const formKey = `${datasetId}:${itemId}`;
   const [filledKey, setFilledKey] = useState<string | undefined>(undefined);
@@ -154,7 +157,17 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
           itemId,
         }).unwrap();
       }
-      router.push(backHref);
+      if (isNew) {
+        router.push(backHref);
+      } else if (reviewing && nextReviewItem) {
+        router.replace(
+          `${prefix}/ai-dataset-item?datasetId=${encodeURIComponent(datasetId)}&itemId=${encodeURIComponent(nextReviewItem)}`
+        );
+      } else if (reviewing) {
+        router.push(reviewQueueHref);
+      } else {
+        router.push(backHref);
+      }
     } catch (saveError) {
       setError(saveErrorMessage(saveError));
       setIsSaving(false);
@@ -167,10 +180,21 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
     input,
     isNew,
     itemId,
+    nextReviewItem,
     outcomeClass,
+    prefix,
     proofread,
+    reviewQueueHref,
+    reviewing,
     updateItem,
   ]);
+
+  let saveLabel = "Save expected output";
+  if (isNew) {
+    saveLabel = "Add item";
+  } else if (reviewing) {
+    saveLabel = nextReviewItem ? "Save and next" : "Save and finish review";
+  }
 
   if (datasetId.length === 0) {
     return (
@@ -232,7 +256,8 @@ export const AiDatasetItemScreenWidget: React.FC<AdminScreenWidgetProps> = (prop
         onSave={handleSave}
         outcomeClass={outcomeClass}
         proofread={proofread}
-        saveLabel={isNew ? "Add item" : "Save expected output"}
+        reviewing={reviewing}
+        saveLabel={saveLabel}
       />
     </AiObservabilityChrome>
   );

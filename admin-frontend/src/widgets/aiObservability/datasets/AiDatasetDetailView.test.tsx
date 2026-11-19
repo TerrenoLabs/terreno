@@ -144,3 +144,39 @@ describe("AiDatasetDetailView tabs", () => {
     assert.deepEqual(onOpenItem.mock.calls, [["item-2"]]);
   });
 });
+
+describe("AiDatasetDetailView review guidance", () => {
+  it("explains golden labels on every tab and the review steps on Needs review", () => {
+    const view = renderWithTheme(
+      <AiDatasetDetailView
+        dataset={dataset}
+        initialTab="needsReview"
+        items={items}
+        onCreateItem={mock(() => {})}
+        onOpenExperiment={mock(() => {})}
+        onOpenItem={mock(() => {})}
+        routeBase="/admin"
+      />
+    );
+    expect(view.getByTestId("ai-dataset-golden-guidance")).toBeTruthy();
+    expect(view.getByText(/that input\. Experiments score the feature/)).toBeTruthy();
+    expect(view.getByTestId("ai-dataset-review-guidance")).toBeTruthy();
+    expect(view.getByText(/Save and next to move down this list/)).toBeTruthy();
+    expect(view.getByTestId("ai-dataset-items-table")).toBeTruthy();
+  });
+
+  it("opens on the Needs review tab when asked and says so when nothing is left", () => {
+    const view = renderWithTheme(
+      <AiDatasetDetailView
+        dataset={{...dataset, counts: {...dataset.counts, needsReview: 0}}}
+        initialTab="needsReview"
+        items={[items[0] as DatasetItemRecord]}
+        onCreateItem={mock(() => {})}
+        onOpenExperiment={mock(() => {})}
+        onOpenItem={mock(() => {})}
+        routeBase="/admin"
+      />
+    );
+    expect(view.getByText("Nothing needs review. Every item is proofread.")).toBeTruthy();
+  });
+});

@@ -9,8 +9,10 @@ import {
   ActivityIndicator,
   Platform,
   Pressable,
+  type ScaledSize,
   ScrollView,
   type TextProps,
+  useWindowDimensions,
 } from "react-native";
 
 import type {AskSubmission, ChatAsk, ChatAskState} from "./asks/askTypes";
@@ -362,6 +364,37 @@ describe("GPTChat", () => {
     assert.isOk(getByText("path (string) · required"));
     assert.isOk(getByText("File to read"));
     assert.isOk(getByText("None. The assistant calls it with an empty input."));
+  });
+
+  it("toggles arguments with Space and keeps the list inside a short window", async () => {
+    const setWindow = useWindowDimensions as (() => ScaledSize) & {
+      mockImplementation: (impl: () => ScaledSize) => void;
+    };
+    setWindow.mockImplementation(() => ({fontScale: 1, height: 500, scale: 2, width: 375}));
+    try {
+      const {getByTestId, getByText} = renderChat({
+        mcpTools: [
+          {
+            inputSchema: {
+              properties: {path: {type: "string"}},
+              required: ["path"],
+              type: "object",
+            },
+            name: "readFile",
+          },
+        ],
+      });
+
+      await press(getByTestId("gpt-tools-button"));
+      assert.equal(getByTestId("gpt-tools-scroll").props.style.maxHeight, 280);
+      fireEvent(getByTestId("gpt-tools-arguments-toggle"), "keyDown", {
+        key: " ",
+        preventDefault: () => {},
+      });
+      assert.isOk(getByText("path (string) · required"));
+    } finally {
+      setWindow.mockImplementation(() => ({fontScale: 1, height: 812, scale: 2, width: 375}));
+    }
   });
 
   it("shows the tools button beside the composer when no tools are published", async () => {

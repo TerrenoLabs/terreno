@@ -12,12 +12,12 @@ import {
   AccessibilityInfo,
   findNodeHandle,
   Platform,
-  Pressable,
   Image as RNImage,
   ScrollView,
   type ScrollViewInstance,
   type TextInputInstance,
   type TextInstance,
+  useWindowDimensions,
   View,
   type ViewInstance,
 } from "react-native";
@@ -29,7 +29,6 @@ import type {AskSubmitHandler, ChatAsk} from "./asks/askTypes";
 import {Box} from "./Box";
 import {Button} from "./Button";
 import {BlocksView} from "./blocks/BlocksView";
-import {CheckBox} from "./CheckBox";
 import type {BlocksViewProps} from "./Common";
 import {DropdownMenuItem} from "./DropdownMenuItem";
 import {DropdownPanel} from "./DropdownPanel";
@@ -39,6 +38,7 @@ import {FormContainer} from "./FormContainer";
 import {Heading} from "./Heading";
 import {Icon} from "./Icon";
 import {IconButton} from "./IconButton";
+import {LabeledCheckBox} from "./LabeledCheckBox";
 import {MarkdownView} from "./MarkdownView";
 import {Modal} from "./Modal";
 import {SelectField} from "./SelectField";
@@ -1411,6 +1411,12 @@ const AttachButton = ({
 const TOOLS_LIST_INTRO =
   "The assistant can call these tools while it answers. You don't run them yourself.";
 
+/** Tallest the tool list grows on a large screen. */
+const TOOLS_LIST_MAX_HEIGHT = 640;
+
+/** Title, padding, and the modal's bottom margin. The list stays inside what's left. */
+const TOOLS_MODAL_CHROME = 220;
+
 const ToolsModal = ({
   isVisible,
   mcpTools,
@@ -1421,31 +1427,30 @@ const ToolsModal = ({
   onDismiss: () => void;
 }): React.ReactElement => {
   const [showArguments, setShowArguments] = useState(false);
+  const {height: windowHeight} = useWindowDimensions();
+  const listMaxHeight = Math.min(
+    TOOLS_LIST_MAX_HEIGHT,
+    Math.max(160, windowHeight - TOOLS_MODAL_CHROME)
+  );
 
-  const handleToggleArguments = useCallback((): void => {
-    setShowArguments((current) => !current);
+  const handleToggleArguments = useCallback((checked: boolean): void => {
+    setShowArguments(checked);
   }, []);
 
   return (
     <Modal onDismiss={onDismiss} size="lg" title="Tools" visible={isVisible}>
-      <ScrollView style={{maxHeight: 640}}>
+      <ScrollView style={{maxHeight: listMaxHeight}} testID="gpt-tools-scroll">
         <Box gap={3} padding={3} testID="gpt-tools-list">
           <Text color="secondaryDark" size="sm">
             {TOOLS_LIST_INTRO}
           </Text>
           {mcpTools.length > 0 ? (
-            <Pressable
-              accessibilityLabel="Show arguments"
-              accessibilityRole="checkbox"
-              accessibilityState={{checked: showArguments}}
-              onPress={handleToggleArguments}
+            <LabeledCheckBox
+              checked={showArguments}
+              label="Show arguments"
+              onChange={handleToggleArguments}
               testID="gpt-tools-arguments-toggle"
-            >
-              <Box alignItems="center" direction="row" gap={2}>
-                <CheckBox selected={showArguments} />
-                <Text size="sm">Show arguments</Text>
-              </Box>
-            </Pressable>
+            />
           ) : null}
           {mcpTools.length === 0 ? (
             <Text color="secondaryDark" size="sm">

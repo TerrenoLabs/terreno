@@ -82,6 +82,10 @@ describe("rbacRouter", () => {
     const access = createAccess({
       connection: mongoose.connection,
       resolvePermissions: async ({user}) => (user.admin ? allPermissions : {}),
+      statementDescriptions: {
+        todo: {read: "View a todo", update: "   "},
+        user: {manageSecurity: "Custom security label"},
+      },
       statements: appStatements,
       userModel: routeUserModel as unknown as AuthUserModel,
     });
@@ -122,6 +126,17 @@ describe("rbacRouter", () => {
       "manageRoles",
       "assignRoles",
     ]);
+    expect(statementsResponse.body.data.statementDescriptions.todo.read).toBe("View a todo");
+    expect(statementsResponse.body.data.statementDescriptions.todo.update).toBeUndefined();
+    expect(statementsResponse.body.data.statementDescriptions.user.manageSecurity).toBe(
+      "Custom security label"
+    );
+    expect(statementsResponse.body.data.statementDescriptions.user.updateIdentity).toContain(
+      "email"
+    );
+    expect(statementsResponse.body.data.statementDescriptions.admin.access).toBe(
+      "Open the admin panel"
+    );
 
     const rolesResponse = await adminAgent.get("/rbac/roles").expect(200);
     expect(rolesResponse.body.data.map((role: {name: string}) => role.name)).toEqual(

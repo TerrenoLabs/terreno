@@ -15,8 +15,18 @@ type AdminRpc = NonNullable<ReturnType<typeof useAdminRpc>>;
 interface AppRolesListProps {
   /** Admin RPC client for the RBAC endpoints. Defaults to the one `AdminProvider` supplies. */
   rpc?: AdminRpc;
+  /**
+   * Show the colored action badges (read, update, and the rest). When false, a described
+   * permission shows its description and an undescribed one shows the action name as text.
+   * Defaults to true.
+   */
+  showActionBadges?: boolean;
   /** Show model (CRUD) permissions alongside permission checks. Defaults to false. */
   showAllPermissions?: boolean;
+}
+
+interface StatementDescriptions {
+  [resource: string]: Record<string, string>;
 }
 
 interface RbacRoleRow {
@@ -33,7 +43,11 @@ type RbacStatements = Record<string, readonly string[]>;
 type RolesResponse = RbacRoleRow[] | {data?: RbacRoleRow[]} | undefined;
 
 type StatementsResponse =
-  | {data?: {statements?: RbacStatements}; statements?: RbacStatements}
+  | {
+      data?: {statementDescriptions?: StatementDescriptions; statements?: RbacStatements};
+      statementDescriptions?: StatementDescriptions;
+      statements?: RbacStatements;
+    }
   | undefined;
 
 interface RoleFormState {
@@ -79,6 +93,26 @@ const normalizeStatements = (data: StatementsResponse): RbacStatements => {
   return data?.statements ?? data?.data?.statements ?? {};
 };
 
+const normalizeStatementDescriptions = (data: StatementsResponse): StatementDescriptions => {
+  const raw = data?.statementDescriptions ?? data?.data?.statementDescriptions;
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    return {};
+  }
+  return raw;
+};
+
+const descriptionFor = (
+  descriptions: StatementDescriptions,
+  resource: string,
+  action: string
+): string | undefined => {
+  const description = descriptions[resource]?.[action]?.trim();
+  if (!description) {
+    return undefined;
+  }
+  return description;
+};
+
 /** Keeps only resources with at least one permission check, sorted by resource name. */
 const visiblePermissions = ({
   permissions,
@@ -110,10 +144,12 @@ const errorMessage = (failure: unknown, fallback: string): string => {
 };
 
 const PermissionCheckRows: React.FC<{
+  descriptions: StatementDescriptions;
   permissions: Record<string, readonly string[]>;
+  showActionBadges: boolean;
   showAll: boolean;
   testIDPrefix: string;
-}> = ({permissions, showAll, testIDPrefix}) => {
+}> = ({descriptions, permissions, showActionBadges, showAll, testIDPrefix}) => {
   const rows = visiblePermissions({permissions, showAll});
   if (rows.length === 0) {
     return (
@@ -126,7 +162,7 @@ const PermissionCheckRows: React.FC<{
     <Box gap={1}>
       {rows.map(([resource, actions]) => (
         <Box
-          alignItems="center"
+          alignItems={showActionBadges ? "center" : "start"}
           direction="row"
           gap={2}
           key={resource}
@@ -138,15 +174,28 @@ const PermissionCheckRows: React.FC<{
               {resource}
             </Text>
           </Box>
-          <Box direction="row" gap={1} wrap>
-            {actions.map((action) => (
-              <Badge
-                key={action}
-                status="info"
-                testID={`${testIDPrefix}-${resource}-${action}`}
-                value={action}
-              />
-            ))}
+          <Box direction={showActionBadges ? "row" : "column"} gap={1} wrap>
+            {actions.map((action) => {
+              const description = descriptionFor(descriptions, resource, action);
+              const testID = `${testIDPrefix}-${resource}-${action}`;
+              if (!showActionBadges) {
+                return (
+                  <Text color="secondaryDark" key={action} size="sm" testID={testID}>
+                    {description ?? action}
+                  </Text>
+                );
+              }
+              return (
+                <Box alignItems="center" direction="row" gap={1} key={action}>
+                  <Badge status="info" testID={testID} value={action} />
+                  {description ? (
+                    <Text color="secondaryDark" size="sm" testID={`${testID}-description`}>
+                      {description}
+                    </Text>
+                  ) : null}
+                </Box>
+              );
+            })}
           </Box>
         </Box>
       ))}
@@ -156,6 +205,7 @@ const PermissionCheckRows: React.FC<{
 
 export const AppRolesList: React.FC<AppRolesListProps> = ({
   rpc: rpcOverride,
+  showActionBadges = true,
   showAllPermissions = false,
 }) => {
   const contextRpc = useAdminRpc();
@@ -173,6 +223,10 @@ export const AppRolesList: React.FC<AppRolesListProps> = ({
   const roles = normalizeRoles(rolesQuery.data);
   const statements = useMemo(
     () => normalizeStatements(statementsQuery.data),
+    [statementsQuery.data]
+  );
+  const statementDescriptions = useMemo(
+    () => normalizeStatementDescriptions(statementsQuery.data),
     [statementsQuery.data]
   );
   const statementChecks = useMemo(
@@ -342,7 +396,9 @@ export const AppRolesList: React.FC<AppRolesListProps> = ({
                 </Text>
                 {role.description ? <Text size="sm">{role.description}</Text> : null}
                 <PermissionCheckRows
+                  descriptions={statementDescriptions}
                   permissions={role.permissions ?? {}}
+                  showActionBadges={showActionBadges}
                   showAll={showAllPermissions}
                   testIDPrefix={`admin-roles-item-${role.name}-permission`}
                 />
@@ -356,7 +412,9 @@ export const AppRolesList: React.FC<AppRolesListProps> = ({
             {statementsQuery.error ? <Text color="error">Failed to load permissions.</Text> : null}
             {!statementsQuery.isLoading && !statementsQuery.error ? (
               <PermissionCheckRows
+                descriptions={statementDescriptions}
                 permissions={statements}
+                showActionBadges={showActionBadges}
                 showAll={showAllPermissions}
                 testIDPrefix="admin-permissions"
               />
@@ -410,23 +468,37 @@ export const AppRolesList: React.FC<AppRolesListProps> = ({
                 <Box gap={1} key={resource}>
                   <Text bold>{resource}</Text>
                   <Box direction="row" gap={3} wrap>
-                    {actions.map((action) => (
-                      <Box
-                        accessibilityHint={`Toggles the ${action} permission for ${resource}`}
-                        accessibilityLabel={`${resource} ${action}`}
-                        alignItems="center"
-                        direction="row"
-                        gap={1}
-                        key={`${resource}:${action}`}
-                        onClick={() => handlePermissionToggle(resource, action)}
-                        testID={`admin-role-permission-${resource}-${action}`}
-                      >
-                        <CheckBox
-                          selected={form.permissions[resource]?.includes(action) ?? false}
-                        />
-                        <Text>{action}</Text>
-                      </Box>
-                    ))}
+                    {actions.map((action) => {
+                      const description = descriptionFor(statementDescriptions, resource, action);
+                      return (
+                        <Box
+                          accessibilityHint={`Toggles the ${action} permission for ${resource}`}
+                          accessibilityLabel={`${resource} ${action}`}
+                          alignItems="center"
+                          direction="row"
+                          gap={1}
+                          key={`${resource}:${action}`}
+                          onClick={() => handlePermissionToggle(resource, action)}
+                          testID={`admin-role-permission-${resource}-${action}`}
+                        >
+                          <CheckBox
+                            selected={form.permissions[resource]?.includes(action) ?? false}
+                          />
+                          <Box>
+                            <Text>{action}</Text>
+                            {description ? (
+                              <Text
+                                color="secondaryDark"
+                                size="sm"
+                                testID={`admin-role-permission-${resource}-${action}-description`}
+                              >
+                                {description}
+                              </Text>
+                            ) : null}
+                          </Box>
+                        </Box>
+                      );
+                    })}
                   </Box>
                 </Box>
               ))}

@@ -14,6 +14,11 @@ export interface RbacStatements {
   [resource: string]: readonly string[];
 }
 
+/** Optional labels for permissions, keyed by resource then action. */
+export interface StatementDescriptions {
+  [resource: string]: Record<string, string>;
+}
+
 export interface RoleInput {
   description?: string | null;
   displayName: string;
@@ -32,7 +37,11 @@ type UpdateRoleMutation = [
   {isLoading: boolean},
 ];
 
-type StatementsData = {data?: {statements?: RbacStatements}; statements?: RbacStatements};
+type StatementsData = {
+  data?: {statementDescriptions?: StatementDescriptions; statements?: RbacStatements};
+  statementDescriptions?: StatementDescriptions;
+  statements?: RbacStatements;
+};
 
 interface StatementsQueryResult {
   data?: StatementsData;
@@ -65,6 +74,21 @@ export const normalizeRoles = (data: RolesQueryData): RbacRoleRow[] => {
 
 export const normalizeStatements = (data: StatementsQueryResult["data"]): RbacStatements => {
   return data?.statements ?? data?.data?.statements ?? {};
+};
+
+const isDescriptionMap = (value: unknown): value is StatementDescriptions => {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+};
+
+/** Reads optional permission labels from either statements envelope. */
+export const normalizeStatementDescriptions = (
+  data: StatementsQueryResult["data"]
+): StatementDescriptions => {
+  const raw = data?.statementDescriptions ?? data?.data?.statementDescriptions;
+  if (!isDescriptionMap(raw)) {
+    return {};
+  }
+  return raw;
 };
 
 /**

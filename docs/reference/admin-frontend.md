@@ -437,7 +437,15 @@ Role cards and the **Available permissions** list split permissions into two gro
    `list`, `read`, `update`, `delete`, `write`, and `writeOwned`.
 
 A resource with both kinds of action appears in both groups. Each group shows one row per
-resource, with that resource's actions as badges. Badge color shows the kind of access:
+resource, with that resource's actions as badges. When `GET /rbac/statements` includes
+`statementDescriptions`, the label for an action renders beside its badge and under that
+action's checkbox in the role editor.
+
+Pass `showActionBadges={false}` to hide those badges on role cards and the available
+permissions list. Each permission then stacks on its own line: the description when
+one exists, otherwise the action name as plain text.
+
+Badge color shows the kind of access:
 
 - Green: read-only actions (`read`, `list`, `access`, `view*`)
 - Red: destructive actions (`delete`, `destroy`, `remove`)

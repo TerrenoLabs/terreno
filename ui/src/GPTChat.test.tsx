@@ -1457,7 +1457,7 @@ describe("GPTChat asks", () => {
   });
 
   it("still shows tool results that do not belong to an ask", () => {
-    const {getByText} = renderChat({
+    const {getByLabelText, getByText} = renderChat({
       currentMessages: [
         askMessage(planAsk({status: "answered"})),
         askResultMessage({action: "decline"}),
@@ -1470,7 +1470,7 @@ describe("GPTChat asks", () => {
     });
 
     assert.isOk(getByText("You skipped this question."));
-    assert.isOk(getByText("lookup"));
+    assert.isOk(getByLabelText("Tool: lookup"));
   });
 
   it("shows the errors for the matching ask inline", () => {

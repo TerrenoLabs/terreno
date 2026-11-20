@@ -189,7 +189,7 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
   {
     name: "FeedbackCommentField",
     reason:
-      'Rendered by ThumbsUpDownFeedback; its "With Comment" story exercises it with onCommentSubmit',
+      "Rendered by ThumbsUpDownFeedback; its With Comment story exercises it with onCommentSubmit",
   },
   {
     name: "FilterAccordion",

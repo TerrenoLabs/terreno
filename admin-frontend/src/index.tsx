@@ -23,7 +23,12 @@ export {
 } from "./AdminProvider";
 export {AdminRefField, type AdminRefFieldProps} from "./AdminRefField";
 export {AdminRolesField} from "./AdminRolesField";
-export {AdminRolesList} from "./AdminRolesList";
+export {
+  AdminRolesList,
+  type AdminRolesListProps,
+  type RoleActionVisibility,
+  type RoleActionVisibilityArgs,
+} from "./AdminRolesList";
 export {AdminScreenPage, type AdminScreenPageProps} from "./AdminScreenPage";
 export {AdminScreenRouter, type AdminScreenRouterProps} from "./AdminScreenRouter";
 export {AdminScriptList} from "./AdminScriptList";

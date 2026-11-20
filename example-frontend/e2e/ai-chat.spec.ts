@@ -455,7 +455,7 @@ test.describe("AI Chat", () => {
     await page.getByTestId("gpt-ask-call_approval-button-approve").click();
 
     await expect(page.getByText("Deleted 2 completed todos: Buy milk, File taxes.")).toBeVisible();
-    const resultCard = page.getByLabel("Result: deleteCompletedTodos");
+    const resultCard = page.getByLabel("Tool: deleteCompletedTodos");
     await expect(resultCard).toBeVisible();
     await resultCard.click();
     await expect(page.getByText(/"deleted": 2/)).toBeVisible();

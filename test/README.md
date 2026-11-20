@@ -42,6 +42,7 @@ Then run `bun test` in the package. The preload starts `mongodb-memory-server` w
 - `registerBackendPreload` — full lifecycle with optional transactions and fixture cache
 - `setTerrenoTestEnv` — canonical auth secrets for tests
 - `getBaseServer` / `authAsUser` — Express + supertest helpers
+- `testRequest` — `supertest(app)` bound to 127.0.0.1, so other local apps can't answer test requests
 - `authWithToken` — authenticate with a pre-minted token, skipping the login round-trip
 - `waitUntil` / `waitForCalls` / `freezeTime` — poll instead of sleeping; freeze the clock
 - `expectAPIError` / `assertStrictResponseProperties` — error-body and field-leak assertions

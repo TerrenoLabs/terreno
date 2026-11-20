@@ -9,11 +9,13 @@ import {
 import type {PromptActionPermissions} from "../shell/observabilityPermissions";
 import {AiPromptEditorView} from "./AiPromptEditorView";
 import {
+  formatFolderPath,
   formatProduction,
   latestVersionFromDetail,
   type PlaygroundRunResult,
   type PromptDetail,
   productionVersionFromDetail,
+  promptLocation,
 } from "./promptTypes";
 
 export interface AiPromptHubViewProps {
@@ -88,7 +90,11 @@ const PromptOverviewPanel: React.FC<{
         </Text>
       )}
       <Box direction="row" gap={2} wrap>
-        <Badge status="info" testID="ai-prompt-folder" value={`Folder: ${detail.folder}`} />
+        <Badge
+          status="info"
+          testID="ai-prompt-folder"
+          value={`Folder: ${formatFolderPath(promptLocation(detail).directory) || detail.folder}`}
+        />
         <Badge status="neutral" testID="ai-prompt-latest" value={`Latest: v${latest}`} />
         <Badge
           status={production === undefined ? "warning" : "success"}
@@ -118,7 +124,7 @@ const PromptOverviewPanel: React.FC<{
                   <Text testID={`ai-prompt-used-by-${entry.name}`}>{entry.name}</Text>
                 )}
                 <Text color="secondaryDark" size="sm">
-                  {`${entry.folder} · ${entry.versions.map((version) => `v${version}`).join(", ")}`}
+                  {`${formatFolderPath(promptLocation(entry).directory) || entry.folder} · ${entry.versions.map((version) => `v${version}`).join(", ")}`}
                 </Text>
               </Box>
             ))}
@@ -218,6 +224,7 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
   selectedVersion,
 }) => {
   const [tabIndex, setTabIndex] = useState(0);
+  const location = promptLocation(detail);
 
   const traceRows: ObservabilityTableRow[] = useMemo(() => {
     return detail.relationships.traces.items.map((trace) => ({
@@ -245,7 +252,7 @@ export const AiPromptHubView: React.FC<AiPromptHubViewProps> = ({
 
   return (
     <Box flex="grow" gap={4} testID="ai-prompt-hub">
-      <Heading size="md">{detail.name}</Heading>
+      <Heading size="md">{location.leaf}</Heading>
       <SegmentedControl
         items={HUB_TABS}
         onChange={setTabIndex}

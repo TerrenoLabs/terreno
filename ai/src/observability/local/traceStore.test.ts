@@ -1,4 +1,5 @@
-import {afterEach, beforeEach, describe, expect, it} from "bun:test";
+import {afterEach, beforeEach, describe, expect, it, spyOn} from "bun:test";
+import {logger} from "@terreno/api";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
@@ -14,6 +15,7 @@ import {
   MemoryScoreSink,
   MemoryTraceSink,
   parseTraceListSort,
+  resetObsScoreIndexBuild,
 } from "./traceStore";
 
 const iso = (msAgo: number): string => {
@@ -415,5 +417,241 @@ describe("LocalTraceStore", () => {
       status: 400,
     });
     await expect(store.list({prompt: [operator]})).rejects.toMatchObject({status: 400});
+  });
+});
+
+describe("LocalTraceStore caller-supplied trace ids", () => {
+  let store: LocalTraceStore;
+
+  afterEach(() => {
+    resetObservabilityApp();
+  });
+
+  beforeEach(async () => {
+    new ObservabilityApp({plugins: [createLocalObservabilityPlugin()]});
+    store = new LocalTraceStore();
+    await registerObsTrace().deleteMany({});
+    await registerObsSpan().deleteMany({});
+    await registerObsScore().deleteMany({});
+  });
+
+  it("uses a valid ObjectId trace.id as _id and returns it", async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+
+    const exported = await store.exportTrace(baseTrace({id}));
+
+    expect(String(exported.id)).toBe(id);
+    expect(await registerObsTrace().findById(id)).not.toBeNull();
+  });
+
+  it("stores a uuid trace.id under a generated ObjectId and ignores the uuid", async () => {
+    const uuid = "123e4567-e89b-42d3-a456-426614174000";
+
+    const exported = await store.exportTrace(baseTrace({id: uuid}));
+
+    expect(String(exported.id)).not.toBe(uuid);
+    expect(String(exported.id)).toMatch(/^[0-9a-f]{24}$/);
+    expect(await registerObsTrace().countDocuments({})).toBe(1);
+  });
+
+  it("spans exported with a caller-supplied id carry that trace id as traceId", async () => {
+    const id = new mongoose.Types.ObjectId().toString();
+
+    await store.exportTrace(baseTrace({id}));
+
+    const spans = await registerObsSpan().find({});
+    expect(spans.length).toBe(1);
+    expect(String(spans[0]?.traceId)).toBe(id);
+  });
+  describe("feedback filters", () => {
+    const newId = (): string => new mongoose.Types.ObjectId().toString();
+    const ids = async (query: Parameters<LocalTraceStore["list"]>[0]): Promise<string[]> => {
+      return (await store.list(query)).data.map((row) => String(row.id)).sort();
+    };
+    let a: string;
+    let b: string;
+    let c: string;
+    let d: string;
+
+    const vote = async (traceId: string, value: boolean, comment?: string): Promise<void> => {
+      await store.exportScore({
+        comment,
+        dataType: "boolean",
+        name: "thumbs_up",
+        source: "user-feedback",
+        traceId,
+        value,
+      });
+    };
+
+    beforeEach(async () => {
+      a = newId();
+      b = newId();
+      c = newId();
+      d = newId();
+      await store.exportTrace(
+        baseTrace({id: a, prompts: [{name: "example-summarize", version: 1}]})
+      );
+      await store.exportTrace(baseTrace({id: b, prompts: [{name: "other", version: 1}]}));
+      await store.exportTrace(baseTrace({id: c, prompts: [{name: "other", version: 1}]}));
+      await store.exportTrace(baseTrace({id: d, prompts: [{name: "other", version: 1}]}));
+      await vote(a, false, "too long");
+      await vote(b, true);
+      await store.exportScore({
+        dataType: "boolean",
+        name: "dismissed",
+        source: "user-signal",
+        traceId: c,
+        value: true,
+      });
+    });
+
+    it("thumbs=down matches only the thumbs-down trace", async () => {
+      expect(await ids({thumbs: "down"})).toEqual([a]);
+    });
+
+    it("thumbs=up matches only the thumbs-up trace", async () => {
+      expect(await ids({thumbs: "up"})).toEqual([b]);
+    });
+
+    it("signal=dismissed matches only the dismissed trace", async () => {
+      expect(await ids({signal: "dismissed"})).toEqual([c]);
+    });
+
+    it("signal matches only that signal name", async () => {
+      expect(await ids({signal: "copied"})).toEqual([]);
+    });
+
+    it("hasComment=true matches only the trace with a user-feedback comment", async () => {
+      expect(await ids({hasComment: true})).toEqual([a]);
+    });
+
+    it("hasComment=false matches every trace without a comment", async () => {
+      expect(await ids({hasComment: false})).toEqual([b, c, d].sort());
+    });
+
+    it("an empty comment does not count as a comment", async () => {
+      const e = newId();
+      await store.exportTrace(baseTrace({id: e}));
+      await vote(e, false, "");
+      expect(await ids({hasComment: true})).toEqual([a]);
+    });
+
+    it("a comment on a non user-feedback score does not count for hasComment", async () => {
+      await store.exportScore({
+        comment: "judge says no",
+        dataType: "boolean",
+        name: "judged",
+        source: "llm-judge",
+        traceId: d,
+        value: false,
+      });
+      expect(await ids({hasComment: true})).toEqual([a]);
+    });
+
+    it("a user-signal score does not match thumbs filters", async () => {
+      expect(await ids({thumbs: "down"})).not.toContain(c);
+      expect(await ids({thumbs: "up"})).not.toContain(c);
+    });
+
+    it("thumbs combines with the prompt filter", async () => {
+      expect(await ids({prompt: "example-summarize", thumbs: "down"})).toEqual([a]);
+      expect(await ids({prompt: "other", thumbs: "down"})).toEqual([]);
+    });
+
+    it("a deselected thumbs vote no longer matches thumbs, hasComment, or hasScore", async () => {
+      await store.deleteFeedbackScore({name: "thumbs_up", source: "user-feedback", traceId: a});
+      expect(await ids({thumbs: "down"})).toEqual([]);
+      expect(await ids({hasComment: true})).toEqual([]);
+      expect(await ids({hasComment: false})).toContain(a);
+    });
+
+    it("a changed vote matches its new direction only", async () => {
+      await vote(a, true, "actually fine");
+      expect(await ids({thumbs: "down"})).toEqual([]);
+      expect(await ids({thumbs: "up"})).toEqual([a, b].sort());
+    });
+
+    it("a deselected signal no longer matches", async () => {
+      await store.deleteFeedbackScore({name: "dismissed", source: "user-signal", traceId: c});
+      expect(await ids({signal: "dismissed"})).toEqual([]);
+    });
+
+    it("totals and pagination reflect the filtered set", async () => {
+      // The store returns totals under `meta` (the route derives `more` from them).
+      const page = await store.list({hasComment: false, limit: 1, page: 1});
+      expect(page.meta.total).toBe(3);
+      expect(page.data).toHaveLength(1);
+      expect(page.meta.page * page.meta.limit < page.meta.total).toBe(true);
+    });
+  });
+});
+
+describe("LocalTraceStore score index build failure", () => {
+  afterEach(() => {
+    resetObsScoreIndexBuild();
+  });
+
+  it("logs a failed index build and still upserts end-user scores", async () => {
+    resetObsScoreIndexBuild();
+    const ObsScore = registerObsScore();
+    // Existing duplicates make the unique index build fail with Mongo's duplicate-key code.
+    const duplicateError = Object.assign(new Error("E11000 duplicate key"), {code: 11000});
+    const initSpy = spyOn(ObsScore, "init").mockImplementation((() =>
+      Promise.reject(duplicateError)) as unknown as typeof ObsScore.init);
+    const errorSpy = spyOn(logger, "error").mockImplementation(() => logger);
+    const traceId = new mongoose.Types.ObjectId().toHexString();
+    try {
+      const store = new LocalTraceStore();
+      await store.exportScore({
+        dataType: "boolean",
+        name: "thumbs_up",
+        source: "user-feedback",
+        traceId,
+        value: false,
+      });
+      await store.exportScore({
+        dataType: "boolean",
+        name: "thumbs_up",
+        source: "user-feedback",
+        traceId,
+        value: true,
+      });
+      expect(
+        errorSpy.mock.calls.filter((call) => String(call[0]).startsWith("ObsScore indexes"))
+      ).toHaveLength(1);
+      const live = await ObsScore.find({traceId});
+      expect(live).toHaveLength(1);
+      expect(live[0]?.value).toBe(true);
+    } finally {
+      initSpy.mockRestore();
+      errorSpy.mockRestore();
+    }
+  });
+
+  it("rethrows any other index build failure and retries the build on the next write", async () => {
+    resetObsScoreIndexBuild();
+    const ObsScore = registerObsScore();
+    const realInit = ObsScore.init.bind(ObsScore);
+    const initSpy = spyOn(ObsScore, "init").mockImplementationOnce((() =>
+      Promise.reject(new Error("connection reset"))) as unknown as typeof ObsScore.init);
+    const traceId = new mongoose.Types.ObjectId().toHexString();
+    const score: ScoreRecord = {
+      dataType: "boolean",
+      name: "thumbs_up",
+      source: "user-feedback",
+      traceId,
+      value: false,
+    };
+    try {
+      const store = new LocalTraceStore();
+      await expect(store.exportScore(score)).rejects.toThrow("connection reset");
+      initSpy.mockImplementation(realInit as unknown as typeof ObsScore.init);
+      await store.exportScore(score);
+      expect(initSpy).toHaveBeenCalledTimes(2);
+      expect(await ObsScore.countDocuments({traceId})).toBe(1);
+    } finally {
+      initSpy.mockRestore();
+    }
   });
 });

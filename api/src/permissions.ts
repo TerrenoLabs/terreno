@@ -6,6 +6,7 @@ import type {ModelRouterOptions, RESTMethod} from "./api";
 import type {User} from "./auth";
 import {loadDocOr404} from "./docLoader";
 import {APIError} from "./errors";
+import {methodPermissionDeniedError} from "./modelRouterWrites";
 import {isOrgMemberPermission, OrgQueryFilter} from "./orgs/orgPermissions";
 import {getCurrentRequestContext} from "./requestContext";
 
@@ -177,11 +178,10 @@ export const permissionMiddleware = <T>(
       // All methods check for permissions.
       const methodPermissions = options.permissions?.[method] ?? [];
       if (!(await checkPermissions(method, methodPermissions, req.user))) {
-        throw new APIError({
-          status: 405,
-          title:
-            `Access to ${method.toUpperCase()} on ${model.modelName} ` +
-            `denied for ${req.user?.id}`,
+        throw methodPermissionDeniedError({
+          method,
+          modelName: model.modelName,
+          userId: req.user?.id,
         });
       }
 

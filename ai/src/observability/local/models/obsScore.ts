@@ -21,7 +21,7 @@ const obsScoreSchema = new mongoose.Schema<ObsScoreDocument, ObsScoreModel>(
     name: {description: "Score dimension or name", required: true, type: String},
     source: {
       description: "Who wrote the score",
-      enum: ["code", "human", "llm-judge", "user-feedback"],
+      enum: ["code", "human", "llm-judge", "user-feedback", "user-signal"],
       required: true,
       type: String,
     },
@@ -50,6 +50,23 @@ obsScoreSchema.plugin(isDeletedPlugin);
 obsScoreSchema.plugin(findOneOrNone);
 obsScoreSchema.plugin(findExactlyOne);
 obsScoreSchema.index({traceId: 1});
+// One live end-user score per (trace, source, name); a changed vote replaces the old one.
+obsScoreSchema.index(
+  {name: 1, source: 1, traceId: 1},
+  {
+    name: "user_feedback_unique",
+    partialFilterExpression: {deleted: false, source: "user-feedback"},
+    unique: true,
+  }
+);
+obsScoreSchema.index(
+  {name: 1, source: 1, traceId: 1},
+  {
+    name: "user_signal_unique",
+    partialFilterExpression: {deleted: false, source: "user-signal"},
+    unique: true,
+  }
+);
 
 export const registerObsScore = (): ObsScoreModel => {
   if (mongoose.models.ObsScore) {

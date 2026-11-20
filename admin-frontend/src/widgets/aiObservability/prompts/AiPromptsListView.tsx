@@ -3,8 +3,9 @@ import {
   Box,
   DataTable,
   type DataTableCellData,
+  Icon,
   Modal,
-  SegmentedControl,
+  SelectField,
   Spinner,
   Text,
   TextField,
@@ -13,7 +14,16 @@ import {DateTime} from "luxon";
 import React, {useCallback, useMemo} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
-import {ALL_FOLDERS, filterPrompts, folderCounts, type PromptListItem} from "./promptTypes";
+import {
+  ALL_FOLDERS,
+  childFolders,
+  filterPrompts,
+  formatFolderPath,
+  type PromptListItem,
+  pathSegments,
+  promptLocation,
+  promptTags,
+} from "./promptTypes";
 
 /** List rows can carry a description and labels when the backend sends them. */
 type PromptListRow = PromptListItem & {
@@ -54,8 +64,89 @@ const formatPromptLastUsed = (iso?: string): string => {
 };
 
 const promptSubline = (prompt: PromptListRow): string => {
-  return prompt.description ? `${prompt.folder} · ${prompt.description}` : prompt.folder;
+  const directory = formatFolderPath(promptLocation(prompt).directory);
+  if (prompt.description && directory) {
+    return `${directory} · ${prompt.description}`;
+  }
+  if (prompt.description) {
+    return prompt.description;
+  }
+  return directory || prompt.folder;
 };
+
+interface FolderRowCell {
+  count: number;
+  kind: "folder";
+  name: string;
+  path: string;
+}
+
+interface UpRowCell {
+  kind: "up";
+  label: string;
+  path: string;
+}
+
+type NavigationCell = FolderRowCell | UpRowCell;
+
+const isNavigationCell = (value: unknown): value is NavigationCell => {
+  if (!value || typeof value !== "object" || !("kind" in value)) {
+    return false;
+  }
+  const kind = (value as {kind?: unknown}).kind;
+  return kind === "folder" || kind === "up";
+};
+
+const promptCountLabel = (count: number): string => {
+  return `${count} ${count === 1 ? "prompt" : "prompts"}`;
+};
+
+const FolderNameCell: React.FC<{
+  cell: NavigationCell;
+  onOpen: (path: string) => void;
+}> = ({cell, onOpen}) => {
+  const handlePress = useCallback((): void => {
+    onOpen(cell.path);
+  }, [cell.path, onOpen]);
+
+  const isUp = cell.kind === "up";
+  const detail = isUp ? "Up one folder" : promptCountLabel(cell.count);
+  const testID = isUp ? "ai-prompts-folder-up" : `ai-prompts-folder-${cell.path}`;
+
+  return (
+    <Box
+      accessibilityHint={isUp ? "Goes up one folder" : "Shows the prompts in this folder"}
+      accessibilityLabel={isUp ? `Up to ${cell.label}` : `Open folder ${cell.name}, ${detail}`}
+      accessibilityRole="button"
+      alignItems="center"
+      direction="row"
+      flex="grow"
+      minWidth={0}
+      onClick={handlePress}
+      overflow="hidden"
+      testID={testID}
+    >
+      {/* A fixed width keeps the icon from collapsing under the label on web. */}
+      <Box alignItems="center" justifyContent="center" marginRight={2} width={20}>
+        <Icon color="secondaryDark" iconName={isUp ? "arrow-left" : "folder"} size="sm" />
+      </Box>
+      <Box flex="shrink" gap={1} minWidth={0} overflow="hidden">
+        <Text bold numberOfLines={1}>
+          {isUp ? cell.label : cell.name}
+        </Text>
+        <Text color="secondaryLight" numberOfLines={1} size="sm">
+          {detail}
+        </Text>
+      </Box>
+    </Box>
+  );
+};
+
+const DashCell: React.FC = () => (
+  <Box justifyContent="center">
+    <Text color="secondaryLight">—</Text>
+  </Box>
+);
 
 const buildColumns = (prompts: PromptListRow[]): ClientTableColumn<PromptListRow>[] => [
   {
@@ -129,6 +220,9 @@ const buildColumns = (prompts: PromptListRow[]): ClientTableColumn<PromptListRow
 
 const TypeBadgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
   const type = String(cellData.value ?? "") as PromptListItem["type"];
+  if (!PROMPT_TYPE_LABELS[type]) {
+    return <DashCell />;
+  }
   return (
     <Box alignItems="start" justifyContent="center">
       <Badge
@@ -143,11 +237,7 @@ const TypeBadgeCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
 
 const ProductionCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
   if (typeof cellData.value !== "number") {
-    return (
-      <Box justifyContent="center">
-        <Text color="secondaryLight">—</Text>
-      </Box>
-    );
+    return <DashCell />;
   }
   return (
     <Box alignItems="start" justifyContent="center">
@@ -158,6 +248,9 @@ const ProductionCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => 
 
 const NewestCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
   const prompt = cellData.value as PromptListRow;
+  if (!prompt || typeof prompt !== "object" || !("latestVersion" in prompt)) {
+    return <DashCell />;
+  }
   return (
     <Box alignItems="center" direction="row" gap={2}>
       <Text>{`v${prompt.latestVersion}`}</Text>
@@ -197,8 +290,10 @@ export interface AiPromptsListViewProps {
   onOpenPrompt: (name: string) => void;
   onRetry?: () => void;
   onSearchChange: (value: string) => void;
+  onTagChange: (tag: string) => void;
   prompts: PromptListItem[];
   search: string;
+  tag: string;
 }
 
 export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
@@ -226,31 +321,49 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   onOpenPrompt,
   onRetry,
   onSearchChange,
+  onTagChange,
   prompts,
   search,
+  tag,
 }) => {
+  const currentDirectory = useMemo(() => pathSegments(folder).join("/"), [folder]);
+  const browsing = search.trim().length === 0 && tag.trim().length === 0;
   const visible = useMemo((): PromptListRow[] => {
-    return filterPrompts({folder, prompts, search});
-  }, [folder, prompts, search]);
-  const folders = useMemo(() => {
-    return folderCounts(prompts);
-  }, [prompts]);
-  const folderKeys = useMemo(() => {
-    return [ALL_FOLDERS, ...folders.map((entry) => entry.folder)];
-  }, [folders]);
-  const selectedFolderIndex = Math.max(0, folderKeys.indexOf(folder));
-
-  const handleFolderIndexChange = useCallback(
-    (index: number): void => {
-      onFolderChange(folderKeys[index] ?? ALL_FOLDERS);
-    },
-    [folderKeys, onFolderChange]
-  );
+    if (!browsing) {
+      return filterPrompts({folder: ALL_FOLDERS, prompts, search, tag});
+    }
+    return prompts.filter((prompt) => promptLocation(prompt).directory === currentDirectory);
+  }, [browsing, currentDirectory, prompts, search, tag]);
+  const foldersHere = useMemo(() => {
+    if (!browsing) {
+      return [];
+    }
+    return childFolders(prompts, currentDirectory);
+  }, [browsing, currentDirectory, prompts]);
+  const upRow = useMemo((): UpRowCell | undefined => {
+    const segments = pathSegments(currentDirectory);
+    if (!browsing || segments.length === 0) {
+      return undefined;
+    }
+    const parentSegments = segments.slice(0, -1);
+    return {
+      kind: "up",
+      label:
+        parentSegments.length === 0
+          ? "All prompts"
+          : (parentSegments[parentSegments.length - 1] ?? "All prompts"),
+      path: parentSegments.join("/"),
+    };
+  }, [browsing, currentDirectory]);
+  const tags = useMemo(() => promptTags(prompts), [prompts]);
 
   const customColumnComponentMap = useMemo(
     () => ({
       number: NumberCell,
       promptName: ({cellData}: {cellData: DataTableCellData}) => {
+        if (isNavigationCell(cellData.value)) {
+          return <FolderNameCell cell={cellData.value} onOpen={onFolderChange} />;
+        }
         const prompt = cellData.value as PromptListRow;
         return (
           <Box
@@ -265,7 +378,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
           >
             <Box testID={`ai-prompt-open-${prompt.name}`}>
               <Text bold numberOfLines={1}>
-                {prompt.name}
+                {promptLocation(prompt).leaf}
               </Text>
             </Box>
             <Text color="secondaryLight" numberOfLines={1} size="sm">
@@ -278,8 +391,26 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
       promptProduction: ProductionCell,
       promptType: TypeBadgeCell,
     }),
-    [onOpenPrompt]
+    [onFolderChange, onOpenPrompt]
   );
+
+  const navigationRows = useMemo((): DataTableCellData[][] => {
+    const blank = {value: "—"};
+    const rest = [blank, blank, blank, blank, blank];
+    const rows: DataTableCellData[][] = [];
+    if (upRow) {
+      rows.push([{value: upRow}, ...rest]);
+    }
+    for (const entry of foldersHere) {
+      rows.push([
+        {
+          value: {count: entry.count, kind: "folder", name: entry.name, path: entry.path},
+        },
+        ...rest,
+      ]);
+    }
+    return rows;
+  }, [foldersHere, upRow]);
 
   const tableColumnsInput = useMemo(() => buildColumns(visible), [visible]);
   // The search box above the table already covers names, so the table adds no search.
@@ -312,10 +443,10 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
         />
       );
     }
-    if (visible.length === 0) {
+    if (visible.length === 0 && navigationRows.length === 0) {
       return (
         <ObservabilityEmptyState
-          description="Try another folder or clear the search."
+          description="Try another tag, or clear the search."
           iconName="magnifying-glass"
           testID="ai-prompts-no-matches"
           title="No prompts match"
@@ -326,6 +457,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
       <DataTable
         {...table}
         customColumnComponentMap={customColumnComponentMap}
+        data={[...navigationRows, ...table.data]}
         emptyContent={
           <ObservabilityEmptyState
             description="Clear a column filter to see more prompts."
@@ -343,24 +475,24 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   return (
     <Box gap={4} testID="ai-prompts-list">
       {prompts.length > 0 ? (
-        <Box alignItems="end" direction="row" gap={4} justifyContent="between" wrap>
-          <Box testID="ai-prompts-folders">
-            <SegmentedControl
-              badges={[
-                {count: prompts.length, status: "neutral"},
-                ...folders.map((entry) => ({count: entry.count, status: "neutral" as const})),
-              ]}
-              items={["All", ...folders.map((entry) => entry.folder)]}
-              onChange={handleFolderIndexChange}
-              selectedIndex={selectedFolderIndex}
-              size="sm"
-            />
-          </Box>
+        <Box alignItems="end" direction="row" gap={4} justifyContent="end" wrap>
+          {tags.length > 0 ? (
+            <Box minWidth={200} width={240}>
+              <SelectField
+                onChange={onTagChange}
+                options={tags.map((entry) => ({label: entry, value: entry}))}
+                placeholder="All tags"
+                testID="ai-prompts-tag"
+                title="Tag"
+                value={tag}
+              />
+            </Box>
+          ) : null}
           <Box minWidth={240} width={320}>
             <TextField
               iconName="magnifying-glass"
               onChange={onSearchChange}
-              placeholder="Search by name or folder"
+              placeholder="Search by name, folder, or tag"
               testID="ai-prompts-search"
               type="search"
               value={search}
@@ -388,12 +520,14 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
       >
         <Box gap={3} testID="ai-prompts-create-form">
           <TextField
+            helperText="Use a slash for each nested folder, such as appointmentAI/intake."
             onChange={onCreateFolderChange}
             testID="ai-prompts-create-folder"
             title="Folder"
             value={createFolder}
           />
           <TextField
+            helperText="A slash nests the name too. The last segment is the prompt."
             onChange={onCreateNameChange}
             testID="ai-prompts-create-name"
             title="Name"

@@ -167,4 +167,59 @@ describe("LocalReviewStore", () => {
     await expect(reviewStore.list(operator)).rejects.toMatchObject({status: 400});
     await expect(reviewStore.list("pending")).resolves.toHaveProperty("counts");
   });
+
+  it("findOpen returns the pending or in_progress item for a trace and evaluator", async () => {
+    expect(await reviewStore.findOpen({evaluatorId, traceId})).toBeUndefined();
+
+    const [item] = await reviewStore.enqueue({
+      evaluatorId,
+      reason: "feedback",
+      traceIds: [traceId],
+    });
+    const pending = await reviewStore.findOpen({evaluatorId, traceId});
+    expect(pending).toMatchObject({
+      evaluatorId,
+      id: item.id,
+      reason: "feedback",
+      status: "pending",
+      traceId,
+    });
+
+    await reviewStore.assign(item.id, new mongoose.Types.ObjectId().toString());
+    const inProgress = await reviewStore.findOpen({evaluatorId, traceId});
+    expect(inProgress?.id).toBe(item.id);
+    expect(inProgress?.status).toBe("in_progress");
+  });
+
+  it("findOpen ignores done and skipped items and other evaluators or traces", async () => {
+    const [done] = await reviewStore.enqueue({evaluatorId, reason: "manual", traceIds: [traceId]});
+    await reviewStore.submit({id: done.id, scores: {correct: true}, sinks: [scoreSink]});
+    const [skipped] = await reviewStore.enqueue({
+      evaluatorId,
+      reason: "manual",
+      traceIds: [traceId],
+    });
+    await reviewStore.skip(skipped.id);
+    expect(await reviewStore.findOpen({evaluatorId, traceId})).toBeUndefined();
+
+    const other = await new LocalEvaluatorStore().create({
+      dimensions: [{dataType: "boolean", key: "correct", required: true}],
+      name: "other-human",
+      target: "full trace",
+      type: "human",
+    });
+    const [otherItem] = await reviewStore.enqueue({
+      evaluatorId: other.id,
+      reason: "manual",
+      traceIds: [traceId],
+    });
+    expect(await reviewStore.findOpen({evaluatorId, traceId})).toBeUndefined();
+    expect((await reviewStore.findOpen({evaluatorId: other.id, traceId}))?.id).toBe(otherItem.id);
+    expect(
+      await reviewStore.findOpen({
+        evaluatorId: other.id,
+        traceId: new mongoose.Types.ObjectId().toString(),
+      })
+    ).toBeUndefined();
+  });
 });

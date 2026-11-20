@@ -480,7 +480,7 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
-              app) specs="todos todo-windows todo-browser profile realtime ai-chat pdf notifications socket-flags mcp-tokens" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat ai-feedback pdf notifications socket-flags mcp-tokens" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
@@ -1647,7 +1647,7 @@ jobs:
     environment:
       # A commit of joshgachnang/brewery. This job holds the App key, so the code it runs
       # is pinned; bump the sha deliberately (brewery has no release tag yet).
-      BREWERY_REF: 3e160cc6a8dbdf45fc255a399855bf32154a2ac4
+      BREWERY_REF: 969a713eb7936bce084b209f2d8b977744cf990f
     steps:
       - skip_if_fork_pull_request
       - run:

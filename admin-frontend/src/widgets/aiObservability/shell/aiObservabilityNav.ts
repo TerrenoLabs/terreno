@@ -32,6 +32,7 @@ const LIST_LEAVES = new Set(["Library", "List", "Queue"]);
 
 export const AI_OBSERVABILITY_SCREENS: Record<string, AiObservabilityScreenMeta> = {
   "ai-dataset-detail": {leaf: "Detail", section: "Datasets", title: "Dataset"},
+  "ai-dataset-item": {leaf: "Expected output", section: "Datasets", title: "Expected output"},
   "ai-datasets": {leaf: "List", section: "Datasets", title: "Datasets"},
   "ai-evaluator-detail": {leaf: "Detail", section: "Evaluators", title: "Evaluator"},
   "ai-evaluator-new": {leaf: "New", section: "Evaluators", title: "New evaluator"},

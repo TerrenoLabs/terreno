@@ -276,7 +276,7 @@ GPT project with persistent context and memories. Registered lazily: `getProject
 |----------|--------|------|-------------|
 | `/gpt/prompt` | POST | `IsAuthenticated` | SSE streaming chat turn; [body](#gptprompt-body) and [events](#sse-events) below |
 | `/gpt/remix` | POST | `IsAuthenticated` | Non-streaming text remix; body: `{text}` |
-| `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null}` |
+| `/gpt/histories/:id/rating` | PATCH | `IsAuthenticated` | Rate a prompt; body: `{promptIndex, rating: "up" \| "down" \| null, comment?}`. Owner only (**403** otherwise). When the rated row has a `traceId` whose trace exists, also records the rating (and trimmed `comment`, ≤ 2000 chars) as `thumbs_up` feedback on that trace, so a `down` can queue review (`feedbackReview`). A missing trace never fails the rating |
 | `/gpt/histories/:id/stream` | GET | `IsAuthenticated` (owner) | SSE resume of an in-flight reply; query: optional `streamId`, `offset` |
 | `/gpt/tools` | GET | `IsAuthenticated` | List builtin + MCP tools (ask tools are not listed) |
 | `/gpt/datasets/:id` | GET | owner (`IsOwner`; another user is 404) | Read a stored dataset. Mounted only when `uiBlocks` is on. Query: `grain` (`hour` \| `day` \| `week` \| `month`), `limit` (default 500, max 1000), `page`. Response `data`: `{columns, rows, rowCount, page, more}`. `grain` buckets the first date column in UTC. An offset is converted before `startOf`. A date with no zone is that UTC day. Null date cells are skipped. Number columns are summed. Without `page`, a series longer than `limit` is LTTB-downsampled and `more` is false. With `page`, rows are a page and `more` is true when another page remains. |
@@ -568,14 +568,16 @@ fail startup with `AI_OBS_PRICE_MAP_JSON` in the error.
 `POST /ai/example-summarize` (example backend) runs that seeded prompt with
 `promptLabel: "production"`, `userId`, and `sessionId` from `x-ai-session-id`. It uses the
 server `AIService` when configured, otherwise a request-scoped service built from
-`x-ai-api-key`, and returns **503** when neither exists. The example frontend calls it from
-**Todos → Summarize**.
+`x-ai-api-key`, otherwise the scripted demo model (`createDemoAgentService`), so the loop runs
+with no provider key. It mints a trace id with `createTraceId()` and responds
+`{data: {output, traceId}}`; the client sends feedback for that `traceId`. The example frontend
+calls it from **Todos → Summarize**.
 
 ### Local observability models
 
 | Model | Role |
 | --- | --- |
-| `ObsPrompt` | Named prompt (`name` unique) with `folder` and `tags[]` |
+| `ObsPrompt` | Named prompt (`name` unique) with `folder` and `tags[]`. A `/` in `folder` or `name` is a nested folder in the admin list; the last name segment is the prompt |
 | `ObsPromptVersion` | Immutable `vN` body, `variables[]`, schemas, `sensitive` (default false), `config` |
 | `ObsPromptLabel` | Movable labels; unique `(promptId, label)` |
 | `ObsTrace` | Root trace: user, session, status, `errorSummary`, `sensitive`, `prompts[]`, `scope`, `tags[]`, usage |
@@ -609,6 +611,7 @@ rows. The local score store remains the fallback when no external score sink is 
 | `skipTrace` | `false` | Skip `TraceSink.export` only; prompt resolve and `AIRequest` still run |
 | `sensitive` | inherited | Explicit value wins; otherwise the resolved prompt version's `sensitive` |
 | `sessionId` / `userId` | unset | Copied onto the exported trace |
+| `traceId` | generated | Id the trace is stored under. Mint it with `createTraceId()` (24-hex ObjectId string) before the call so the route can return it to the client for feedback. Anything else is **400** `traceId must be an object id`, before the model is called. A second trace with the same id is dropped and logged as a sink failure |
 | `priceMap` | app `priceMap` | Per-call override; `costUsd` is omitted when the model is unpriced |
 
 Missing registry, missing prompt, or missing label throws `APIError` 400 and does not call the model. Sink `export` failures are logged and never fail generate.
@@ -625,7 +628,7 @@ When `prompts.primary` is `local`, `ObservabilityApp.register` mounts admin-only
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/observability/prompts` | List. Query `folder`, `search`, `include=usage7d` (7-day calls/cost). `production` is `"—"` until a production label exists |
+| GET | `/ai/observability/prompts` | List. Query `folder` (exact string; the admin list nests `/` itself), `search`, `include=usage7d` (7-day calls/cost). Each row includes `tags`. `production` is `"—"` until a production label exists. The admin list filters those tags in the browser |
 | POST | `/ai/observability/prompts` | Create prompt in a folder as immutable v1 (`latest` label) |
 | GET | `/ai/observability/prompts/:name` | Prompt + versions + labels. Each version includes `inputSchema`, `outputSchema`, and `outputFieldNotes` when set, so judge schema checks can see required dimensions such as `helpfulness` |
 | POST | `/ai/observability/prompts/:name/versions` | Create `vN+1`; never mutates an existing version |
@@ -638,7 +641,7 @@ Prompt references: a `system` or `template` may contain `{{> <name>}}`, with an 
 
 | Method | Path | Behavior |
 | --- | --- | --- |
-| GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt` (one name, or a list such as `prompt[0]=a&prompt[1]=b` to match any; `promptVersion` needs exactly one), `status`, `userId`, `sessionId`, `scope`, `hasScore`, `sensitive`, `flaggedForDataset`, `sort`, `page`, `limit`. `sort` is one of `startedAt`, `name`, `status`, `tokens`, `cost`, `latency`, `spans`, `scores`, with a leading `-` for descending; default `-startedAt` (newest first). Sorting runs in a Mongo aggregation before skip/limit, so it holds across pages: latency is `endedAt - startedAt`, tokens is `usage.inputTokens + usage.outputTokens`, cost is `usage.costUsd`, and traces missing those values list last in both directions; spans and scores sort by row counts. An unknown key is **400**. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
+| GET | `/ai/observability/traces` | Admin list. Query `from`, `to`, `prompt` (one name, or a list such as `prompt[0]=a&prompt[1]=b` to match any; `promptVersion` needs exactly one), `status`, `userId`, `sessionId`, `scope`, `hasScore`, `sensitive`, `flaggedForDataset`, `thumbs` (`up`/`down`: a live end-user `thumbs_up` score in that direction), `signal` (one of `FEEDBACK_SIGNALS`: a live `user-signal` score of that name), `hasComment` (`true`/`false`: a live `user-feedback` score with a non-empty comment), `sort`, `page`, `limit`. Score filters ignore soft-deleted (cleared) scores and combine with each other and every other filter; an invalid `thumbs`, `signal`, or `hasComment` is **400**. `sort` is one of `startedAt`, `name`, `status`, `tokens`, `cost`, `latency`, `spans`, `scores`, with a leading `-` for descending; default `-startedAt` (newest first). Sorting runs in a Mongo aggregation before skip/limit, so it holds across pages: latency is `endedAt - startedAt`, tokens is `usage.inputTokens + usage.outputTokens`, cost is `usage.costUsd`, and traces missing those values list last in both directions; spans and scores sort by row counts. An unknown key is **400**. Body is `{data, page, limit, more, total}` so pagination survives RTK `{data}` unwrap. Each row includes `spanCount` and `scoreCount`. `prompts.length` is the `N prompts` count |
 | GET | `/ai/observability/traces/:id` | Span tree (kind, offsets, durations, I/O, cost) plus scores. `errorSummary` is the first span with `status: "error"` |
 | POST | `/ai/observability/traces/:id/scores` | Persist a score and fan out to every `ScoreSink` |
 | POST | `/ai/observability/traces/test-multi-stage` | Admin-only smoke workflow, registered only with the local trace sink. Uses `ObservabilityApp.aiService`, or `requestAiServiceFactory({apiKey})` when the server service is absent (`apiKey` comes from `x-ai-api-key`); answers **503** with the same missing-key title as playground when neither exists. Body `{input?: string}` (defaults to a built-in sample). Runs two `AIService.generateJsonObject` calls with `skipTrace: true` and named JSON output schemas (`obs-test-multi-stage-call-1` / `call-2`), a deterministic local `text-metrics` `TOOL` stage, then a final `generateJsonObject` synthesis against `obs-test-multi-stage-final`; exports exactly one parent trace with ordered child spans `LLM`, `LLM`, `TOOL`, `LLM` under a `CHAIN` root. LLM span input includes `outputSchema`. Returns `{traceId, output, stages[]}` where `output` is the final schema object (`sentence`, `phrase`, `keywords`, `metrics`). Child LLM failures export an error trace then rethrow |
@@ -689,7 +692,7 @@ Dataset list and detail include `judgments[]`: one row per question set that ans
 has a review batch built from the dataset, `{evaluatorId, evaluatorName, answered, current,
 stale, total}`. `current` answers match the question set's fingerprint now; `stale` answers were
 given to an older version of the questions; `total` is the dataset's item count.
-| PATCH/DELETE | `/ai/observability/datasets/:id/items/:itemId` | Update labels (`expectedOutput`, `proofread`, `tags`, `outcomeClass`) / delete (does not touch the source trace). PATCH `null` clears optional item fields |
+| PATCH/DELETE | `/ai/observability/datasets/:id/items/:itemId` | Update labels (`expectedOutput`, `proofread`, `tags`, `outcomeClass`) / delete (does not touch the source trace). PATCH `null` clears optional item fields. The admin item page (`/admin/ai-dataset-item`) writes this PATCH from a form: schema properties when `expectedOutputSchema` is set, otherwise one field per key in the stored JSON |
 | POST | `/ai/observability/datasets/:id/import` | **JSON:** body is an array of bare input objects, or structured rows with `input` / `expectedOutput` / `proofread` / `tags` / `outcomeClass` / `metadata`. **CSV:** `Content-Type: text/csv` with raw CSV body, or JSON `{format: "csv", content: "..."}`. Plain columns map to `input`; plain `input` / `expectedOutput` cells accept JSON values; `input.foo` and `expectedOutput.foo` nest fields; reserved `proofread`, `tags`, `outcomeClass` map metadata. Nested paths reject `__proto__`, `constructor`, and `prototype` segments. Rows validate against the dataset's bound prompt `inputSchema` when `inputSchemaPromptName` is set; 400 reports row number and JSON path |
 | POST | `/ai/observability/traces/add-to-dataset` | `{datasetId, traceId \| traceIds[]}`. Copies span I/O; `origin: "trace"`; `sourceTraceId` set; **sensitive traces always `proofread: false`** |
 
@@ -727,7 +730,47 @@ from the latest one. `version` is the judge prompt's production version when the
 compared it, otherwise the best-agreeing version. `stale` is true when the question set's
 fingerprint changed since the run.
 
-Authenticated `POST /ai/observability/traces/:id/feedback` records thumbs, outcome class, and flag-for-dataset (phase 2.6).
+### End-user feedback
+
+Chat replies carry their trace: when an `ObservabilityApp` is registered, each `/gpt/prompt`
+turn mints a trace id, records the trace under it, and writes it as `traceId` on the
+assistant rows (it syncs to clients with the history). Only the chat turn sets it: a history
+create or update keeps a row's `traceId` only when the server already stored that id, and drops
+dotted `prompts.N.traceId` writes. Send feedback for a reply with its row's `traceId`. Every
+assistant row one turn writes (tool steps and the final reply) shares that turn's trace, so a
+rating or copy on any of them is feedback on the whole turn; the latest rating wins.
+
+`POST /ai/observability/traces/:id/feedback` records the trace owner's own feedback. It uses
+plain authentication, not the admin observability middleware: only the user whose id is on the
+trace may call it (**403** for anyone else, admins included; admins score through
+`POST /traces/:id/scores`). A trace with no `userId` is **403**, an unknown trace **404**, a
+malformed id **400**, no token **401**. `recordTraceFeedback({input, traceId, user})` is the
+same logic for server code.
+
+| Body field | Values | Effect |
+| --- | --- | --- |
+| `thumbs` | `"up"`, `"down"`, `null` | Writes `{name: "thumbs_up", dataType: "boolean", source: "user-feedback", value: thumbs === "up"}` to every ScoreSink. `null` soft-deletes the live `thumbs_up` score and sends nothing to other sinks |
+| `comment` | string, trimmed, 1–2000 chars | Stored as the `comment` of the thumbs and/or outcome score in the same request and sent to every sink with it. Needs `thumbs` or `outcome` (**400** `comment needs thumbs or outcome`) |
+| `outcome` | `"tp"`, `"fp"`, `"tn"`, `"fn"` | Writes `{name: "outcome", dataType: "categorical", source: "user-feedback", value}` |
+| `signal` | `"accepted"`, `"dismissed"`, `"copied"`, `"edited"`, `"regenerated"` (`FEEDBACK_SIGNALS`) | Passive signal: writes `{name: signal, dataType: "boolean", source: "user-signal", value: true}`. Any other name is **400** listing the allowed ones |
+| `flagDataset` | boolean | Sets or clears `ObsTrace.flaggedForDataset`; operators filter on it in Traces. Moves no data |
+
+The body needs at least one field, and fields combine in one request. Response:
+`{data: {traceId, scores, flaggedForDataset, reviewItemId?}}`, where `scores` are the scores this call wrote and `reviewItemId` is the review item a thumbs down queued or reused when `ObservabilityApp` has `feedbackReview` set (see [Observe LLM calls](../how-to/observe-llm-calls.md)).
+
+Score sources: `user-feedback` is what the user said (thumbs, outcome, comment); `user-signal`
+is what the user did (passive signals). `ScoreRecord.source` and `ObsScore.source` accept both,
+including on the admin `POST /traces/:id/scores` route.
+
+The local store keeps one live `user-feedback` or `user-signal` score per (trace, source,
+name): a new vote replaces the old one in a single upsert backed by a partial unique index.
+Soft-deleted scores do not count toward `hasScore`, `scoreCount`, or the `scores` sort.
+
+Upgrading: the unique index needs at most one live `user-feedback` / `user-signal` score per
+(trace, name). A database where the admin scores route wrote duplicates of those sources cannot
+build it; feedback then keeps working without the guarantee and logs `ObsScore indexes failed
+to build` once per process. Soft-delete the older duplicates (`deleted: true`) and restart to
+build the index.
 
 ## Durable agent harness
 

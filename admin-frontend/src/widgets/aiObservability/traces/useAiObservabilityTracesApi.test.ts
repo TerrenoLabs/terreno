@@ -70,6 +70,44 @@ describe("useAiObservabilityTracesApi", () => {
     expect(result.current.data).toEqual({data: [], limit: 20, more: false, page: 1, total: 0});
   });
 
+  it("sends thumbs, signal, and hasComment and omits them when unset (Any)", async () => {
+    const calls = stub();
+    renderHook(
+      () =>
+        useAiObservabilityTracesApi().useListQuery({
+          ...emptyTraceFilters(),
+          hasComment: true,
+          signal: "dismissed",
+          thumbs: "down",
+        }),
+      {wrapper: ObservabilityTestProvider}
+    );
+    renderHook(() => useAiObservabilityTracesApi().useListQuery(emptyTraceFilters()), {
+      wrapper: ObservabilityTestProvider,
+    });
+    await flushObservabilityRequests();
+
+    const withFeedback = new URL(calls[0]?.url ?? "", "http://localhost");
+    expect(withFeedback.searchParams.get("thumbs")).toBe("down");
+    expect(withFeedback.searchParams.get("signal")).toBe("dismissed");
+    expect(withFeedback.searchParams.get("hasComment")).toBe("true");
+    const any = new URL(calls[1]?.url ?? "", "http://localhost");
+    expect(any.searchParams.has("thumbs")).toBe(false);
+    expect(any.searchParams.has("signal")).toBe(false);
+    expect(any.searchParams.has("hasComment")).toBe(false);
+  });
+
+  it("sends hasComment=false when the filter is explicitly false", async () => {
+    const calls = stub();
+    renderHook(
+      () => useAiObservabilityTracesApi().useListQuery({...emptyTraceFilters(), hasComment: false}),
+      {wrapper: ObservabilityTestProvider}
+    );
+    await flushObservabilityRequests();
+    const url = new URL(calls[0]?.url ?? "", "http://localhost");
+    expect(url.searchParams.get("hasComment")).toBe("false");
+  });
+
   it("repeats prompt for each selected prompt and drops blank ones", async () => {
     const calls = stub();
     renderHook(

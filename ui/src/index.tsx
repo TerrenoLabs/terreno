@@ -56,6 +56,7 @@ export * from "./EditableCard";
 export * from "./EmailField";
 export * from "./ErrorBoundary";
 export * from "./ErrorPage";
+export * from "./FeedbackCommentField";
 export * from "./Field";
 export * from "./FilePickerButton";
 export * from "./FilterAccordion";

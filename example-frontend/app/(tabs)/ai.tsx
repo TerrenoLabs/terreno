@@ -57,6 +57,8 @@ import {
   useAiModelsQuery,
   useLazyGetGptDatasetsByIdQuery,
   useLazyPhotoLibraryUrlQuery,
+  usePatchGptHistoriesByIdRatingMutation,
+  usePostAiObservabilityTracesByIdFeedbackMutation,
   usePostFilesUploadMutation,
   usePostGptActionsMutation,
 } from "@/store/apiSdk";
@@ -64,6 +66,11 @@ import {authProvider, GPT_HISTORIES_COLLECTION} from "@/store/syncdb";
 import type {GptHistory} from "@/types/gptHistory";
 
 type AskErrors = NonNullable<GPTChatProps["askErrors"]>;
+
+/** A transcript message with the reply's observability trace id, when the history stored one. */
+interface ChatMessageWithTrace extends GPTChatMessage {
+  traceId?: string;
+}
 
 /** Selectable AI chat models returned by GET /ai/models. */
 interface AiModelsResponse {
@@ -131,6 +138,8 @@ const mapHistoryToChat = (history: GptHistory): GPTChatHistory => ({
       }),
       rating: p.rating,
       role: p.type,
+      // Kept on the message so passive signals (copy) reach the reply's trace.
+      ...(p.traceId ? {traceId: p.traceId} : {}),
       ...(p.toolCallId && p.type === "tool-call"
         ? {toolCall: {args: p.args ?? {}, toolCallId: p.toolCallId, toolName: p.toolName ?? ""}}
         : {}),
@@ -651,6 +660,8 @@ const AiScreen: React.FC = () => {
             updated[promptIndex] = {
               ...updated[promptIndex],
               rating: rating ?? undefined,
+              // A changed vote starts a fresh comment.
+              ratingComment: undefined,
             };
           }
           return updated;
@@ -660,6 +671,53 @@ const AiScreen: React.FC = () => {
       }
     },
     [currentHistoryId]
+  );
+
+  const [rateWithComment] = usePatchGptHistoriesByIdRatingMutation();
+
+  // Re-sends the message's rating with a comment; the backend records it on the reply's trace.
+  const handleRateComment = useCallback(
+    async (promptIndex: number, comment: string): Promise<void> => {
+      const rating = currentMessages[promptIndex]?.rating;
+      if (!currentHistoryId || !rating) {
+        return;
+      }
+      // unwrap() throws on an error status, so the comment field keeps the text for a retry.
+      await rateWithComment({body: {comment, promptIndex, rating}, id: currentHistoryId}).unwrap();
+      setCurrentMessages((prev) => {
+        const updated = [...prev];
+        if (promptIndex < updated.length) {
+          updated[promptIndex] = {...updated[promptIndex], ratingComment: comment};
+        }
+        return updated;
+      });
+    },
+    [currentHistoryId, currentMessages, rateWithComment]
+  );
+
+  const [sendTraceFeedback] = usePostAiObservabilityTracesByIdFeedbackMutation();
+
+  // Passive signal: a copied reply is recorded on its trace when it has one.
+  const handleMessageSignal = useCallback(
+    (promptIndex: number, signal: "copied"): void => {
+      // A reply streamed in this session has no traceId on the transcript yet; the synced
+      // history row the turn saved does.
+      const syncedRow = historyRows.find((row) => historyIdOf(row) === currentHistoryId)?.prompts[
+        promptIndex
+      ];
+      const traceId =
+        (currentMessages[promptIndex] as ChatMessageWithTrace | undefined)?.traceId ??
+        syncedRow?.traceId;
+      if (!traceId) {
+        return;
+      }
+      sendTraceFeedback({body: {signal}, id: traceId})
+        .unwrap()
+        .catch((error: unknown) => {
+          console.warn("Failed to record copy signal", error);
+        });
+    },
+    [currentHistoryId, currentMessages, historyRows, sendTraceFeedback]
   );
 
   /**
@@ -1088,7 +1146,9 @@ const AiScreen: React.FC = () => {
       onCreateHistory={handleCreateHistory}
       onDeleteHistory={handleDeleteHistory}
       onGeminiApiKeyChange={setGeminiApiKey}
+      onMessageSignal={handleMessageSignal}
       onModelChange={setSelectedModel}
+      onRateComment={handleRateComment}
       onRateFeedback={handleRateFeedback}
       onRemoveAttachment={handleRemoveAttachment}
       onSelectHistory={handleSelectHistory}

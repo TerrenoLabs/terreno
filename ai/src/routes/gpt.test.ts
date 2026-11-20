@@ -1,4 +1,4 @@
-import {afterEach, beforeAll, describe, expect, it, spyOn} from "bun:test";
+import {afterEach, beforeAll, beforeEach, describe, expect, it, spyOn} from "bun:test";
 import {TerrenoApp} from "@terreno/api";
 import {askPromptSection, blocksPromptSection} from "@terreno/blocks";
 import {jsonSchema, type LanguageModel, type Tool, tool} from "ai";
@@ -6,6 +6,13 @@ import express from "express";
 
 import {AIRequest} from "../models/aiRequest";
 import {GptHistory} from "../models/gptHistory";
+import {LocalEvaluatorStore} from "../observability/local/evaluatorStore";
+import {createLocalObservabilityPlugin} from "../observability/local/localPlugin";
+import {registerObsEvaluator} from "../observability/local/models/obsEvaluator";
+import {registerObsReviewItem} from "../observability/local/models/obsReviewItem";
+import {registerObsScore} from "../observability/local/models/obsScore";
+import {registerObsTrace} from "../observability/local/models/obsTrace";
+import {ObservabilityApp, resetObservabilityApp} from "../observability/observabilityApp";
 import {AIService} from "../service/aiService";
 import type {MCPService} from "../service/mcpService";
 import {
@@ -3413,5 +3420,260 @@ blocks:
       blocksPromptSection({hostActions: ["approve", "scaleStepper"], richBlocks: false})
     );
     expect(blocksEventOf(events)).toEqual({errors: [], ok: true, warnings: []});
+  });
+});
+
+describe("chat trace ids and ratings", () => {
+  const REVIEW_EVALUATOR = "chat-feedback-human";
+  let ownerId: string;
+
+  const startObservability = (feedbackReview?: {evaluatorName: string}): void => {
+    resetObservabilityApp();
+    new ObservabilityApp({feedbackReview, plugins: [createLocalObservabilityPlugin()]});
+  };
+
+  // Runs one chat turn and returns the history id and the assistant row's trace id.
+  const chatTurn = async (agent: Agent): Promise<{historyId: string; traceId: string}> => {
+    const {status} = await streamPrompt(agent, {prompt: "Hi"});
+    expect(status).toBe(200);
+    const historyId = await onlyHistoryId();
+    const rows = (await loadHistory(historyId)).prompts as unknown as {
+      traceId?: string;
+      type: string;
+    }[];
+    const traceId = rows.find((row) => row.type === "assistant")?.traceId;
+    // Every test below needs the minted id, so a missing one fails here with a clear reason.
+    expect(traceId).toBeString();
+    return {historyId, traceId: traceId as string};
+  };
+
+  const rate = (
+    agent: Agent,
+    historyId: string,
+    body: Record<string, unknown>
+  ): ReturnType<Agent["patch"]> =>
+    agent.patch(`/gpt/histories/${historyId}/rating`).send({promptIndex: 1, ...body});
+
+  const liveScores = async (traceId: string): Promise<Record<string, unknown>[]> =>
+    (await registerObsScore().find({deleted: false, traceId})).map(
+      (doc) => doc.toObject() as unknown as Record<string, unknown>
+    );
+
+  beforeAll(async () => {
+    const users = await ensureTestUsers();
+    ownerId = String(users[1]?._id);
+  });
+
+  beforeEach(async () => {
+    await registerObsTrace().deleteMany({});
+    await registerObsScore().collection.deleteMany({});
+    await registerObsReviewItem().deleteMany({});
+    await registerObsEvaluator().deleteMany({});
+    startObservability();
+  });
+
+  afterEach(async () => {
+    resetObservabilityApp();
+    await AIRequest.deleteMany({});
+    await GptHistory.collection.deleteMany({});
+  });
+
+  const chatAgent = async (): Promise<Agent> =>
+    authAsUser(buildApp({model: createScriptedModel({steps: [textStep("Hello!")]})}), "notAdmin");
+
+  it("a chat turn writes a trace id on the assistant row, and that trace exists for the user", async () => {
+    const agent = await chatAgent();
+
+    const {historyId, traceId} = await chatTurn(agent);
+
+    expect(traceId).toMatch(/^[0-9a-f]{24}$/);
+    const trace = await registerObsTrace().findById(traceId);
+    expect(trace).not.toBeNull();
+    expect(String(trace?.userId)).toBe(ownerId);
+    const rows = (await loadHistory(historyId)).prompts as unknown as {traceId?: string}[];
+    expect(rows[0]?.traceId).toBeUndefined();
+  });
+
+  it("two turns get two different trace ids", async () => {
+    const model = createScriptedModel({steps: [textStep("One"), textStep("Two")]});
+    const agent = await authAsUser(buildApp({model}), "notAdmin");
+    const first = await chatTurn(agent);
+    await streamPrompt(agent, {historyId: first.historyId, prompt: "Again"});
+
+    const rows = (await loadHistory(first.historyId)).prompts as unknown as {
+      traceId?: string;
+      type: string;
+    }[];
+    const ids = rows.filter((row) => row.type === "assistant").map((row) => row.traceId);
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).toBeDefined();
+    expect(ids[1]).toBeDefined();
+    expect(ids[0]).not.toBe(ids[1]);
+  });
+
+  it("GptHistory accepts traceId on an assistant row", async () => {
+    const created = await GptHistory.create({
+      prompts: [
+        {text: "hi", type: "user"},
+        {text: "yo", traceId: "64b64b64b64b64b64b64b64b", type: "assistant"},
+      ],
+      userId: ownerId,
+    });
+    const reloaded = await GptHistory.findById(created._id);
+    const rows = reloaded?.prompts as unknown as {traceId?: string}[];
+    expect(rows[1]?.traceId).toBe("64b64b64b64b64b64b64b64b");
+  });
+
+  describe("rating", () => {
+    it("down with a comment sets the row rating and a thumbs_up false score with the comment", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+
+      const res = await rate(agent, historyId, {comment: "Too vague", rating: "down"});
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({promptIndex: 1, rating: "down"});
+      expect(rowsOf(await loadHistory(historyId))[1]).toMatchObject({rating: "down"});
+      const scores = await liveScores(traceId);
+      expect(scores).toHaveLength(1);
+      expect(scores[0]).toMatchObject({
+        comment: "Too vague",
+        name: "thumbs_up",
+        source: "user-feedback",
+        value: false,
+      });
+    });
+
+    it("up records thumbs_up true", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+
+      const res = await rate(agent, historyId, {rating: "up"});
+
+      expect(res.status).toBe(200);
+      const scores = await liveScores(traceId);
+      expect(scores).toHaveLength(1);
+      expect(scores[0]).toMatchObject({name: "thumbs_up", value: true});
+    });
+
+    it("null clears the history rating and soft-deletes the score", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+      await rate(agent, historyId, {rating: "down"});
+
+      const res = await rate(agent, historyId, {rating: null});
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({promptIndex: 1, rating: null});
+      expect(rowsOf(await loadHistory(historyId))[1]?.rating).toBeUndefined();
+      expect(await liveScores(traceId)).toHaveLength(0);
+      expect(await registerObsScore().countDocuments({deleted: true, traceId})).toBe(1);
+    });
+
+    it("with feedbackReview set, down creates one pending feedback review item", async () => {
+      await new LocalEvaluatorStore().create({
+        dimensions: [{dataType: "boolean", key: "correct", required: true}],
+        name: REVIEW_EVALUATOR,
+        target: "full trace",
+        type: "human",
+      });
+      startObservability({evaluatorName: REVIEW_EVALUATOR});
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+
+      const res = await rate(agent, historyId, {rating: "down"});
+
+      expect(res.status).toBe(200);
+      const items = await registerObsReviewItem().find({});
+      expect(items).toHaveLength(1);
+      expect(items[0]).toMatchObject({reason: "feedback", status: "pending"});
+      expect(String(items[0]?.traceId)).toBe(traceId);
+    });
+
+    it("without feedbackReview, down creates no review item", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+
+      await rate(agent, historyId, {rating: "down"});
+
+      expect(await liveScores(traceId)).toHaveLength(1);
+      expect(await registerObsReviewItem().countDocuments({})).toBe(0);
+    });
+
+    it("a row whose trace was deleted returns 200, updates the history, and writes no score", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+      expect(traceId).toBeDefined();
+      await registerObsTrace().deleteMany({});
+
+      const res = await rate(agent, historyId, {rating: "down"});
+
+      expect(res.status).toBe(200);
+      expect(res.body.data).toEqual({promptIndex: 1, rating: "down"});
+      expect(rowsOf(await loadHistory(historyId))[1]).toMatchObject({rating: "down"});
+      expect(await registerObsScore().countDocuments({})).toBe(0);
+    });
+
+    it("another user gets 403 Not authorized to access this history and no score", async () => {
+      const owner = await chatAgent();
+      const {historyId, traceId} = await chatTurn(owner);
+      const other = await authAsUser(buildApp({model: createScriptedModel({steps: []})}), "admin");
+
+      const res = await rate(other, historyId, {rating: "down"});
+
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(res.body)).toContain("Not authorized to access this history");
+      expect(rowsOf(await loadHistory(historyId))[1]?.rating).toBeUndefined();
+      expect(await liveScores(traceId)).toHaveLength(0);
+    });
+
+    it("a comment over 2000 characters returns 400 and changes nothing", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+
+      const res = await rate(agent, historyId, {comment: "x".repeat(2001), rating: "down"});
+
+      expect(res.status).toBe(400);
+      expect(rowsOf(await loadHistory(historyId))[1]?.rating).toBeUndefined();
+      expect(await liveScores(traceId)).toHaveLength(0);
+    });
+
+    it("a comment of exactly 2000 characters is accepted", async () => {
+      const agent = await chatAgent();
+      const {historyId, traceId} = await chatTurn(agent);
+
+      const res = await rate(agent, historyId, {comment: "x".repeat(2000), rating: "down"});
+
+      expect(res.status).toBe(200);
+      expect((await liveScores(traceId))[0]?.comment).toBe("x".repeat(2000));
+    });
+  });
+
+  it("an owner PATCH to the history cannot set traceId on a row", async () => {
+    const agent = await chatAgent();
+    const history = await GptHistory.create({
+      prompts: [
+        {text: "Hi", type: "user"},
+        {text: "Hello!", type: "assistant"},
+      ],
+      userId: ownerId,
+    });
+    const historyId = String(history._id);
+    const forged = "aaaaaaaaaaaaaaaaaaaaaaaa";
+
+    const res = await agent.patch(`/gpt/histories/${historyId}`).send({
+      prompts: [
+        {text: "Hi", type: "user"},
+        {text: "Hello!", traceId: forged, type: "assistant"},
+      ],
+      "prompts.1.traceId": forged,
+      title: "Renamed",
+    });
+
+    expect(res.status).toBe(200);
+    const after = await loadHistory(historyId);
+    expect(after.title).toBe("Renamed");
+    const rows = after.prompts as unknown as {traceId?: string}[];
+    expect(rows.some((row) => row.traceId === forged)).toBe(false);
   });
 });

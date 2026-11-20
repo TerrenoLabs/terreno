@@ -187,6 +187,11 @@ export const DEMO_COVERAGE_ALLOWLIST: AllowlistEntry[] = [
     reason: "Imperative sheet opened by DateTimeField; DateTimeField stories already open it",
   },
   {
+    name: "FeedbackCommentField",
+    reason:
+      'Rendered by ThumbsUpDownFeedback; its "With Comment" story exercises it with onCommentSubmit',
+  },
+  {
     name: "FilterAccordion",
     reason: "DropdownPanel story already mounts accordion sections",
   },

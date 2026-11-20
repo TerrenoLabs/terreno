@@ -76,6 +76,15 @@ obsReviewItemSchema.index(Object.fromEntries(reviewIndexSpec));
 obsReviewItemSchema.index({batchId: 1, status: 1});
 // Dataset batches skip items that already wait in an open review for the same question set.
 obsReviewItemSchema.index({datasetItemId: 1, evaluatorId: 1});
+// One pending user-feedback item per trace and evaluator, so concurrent thumbs downs queue once.
+obsReviewItemSchema.index(
+  {evaluatorId: 1, traceId: 1},
+  {
+    name: "pending_feedback_unique",
+    partialFilterExpression: {deleted: false, reason: "feedback", status: "pending"},
+    unique: true,
+  }
+);
 
 export const registerObsReviewItem = (): ObsReviewItemModel => {
   if (mongoose.models.ObsReviewItem) {

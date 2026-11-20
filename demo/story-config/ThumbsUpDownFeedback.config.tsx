@@ -2,6 +2,7 @@ import {DemoConfiguration} from "@config";
 import {
   ThumbsUpDownFeedbackDemo,
   ThumbsUpDownFeedbackStories,
+  ThumbsUpDownFeedbackWithComment,
   ThumbsUpDownFeedbackWithConfirmation,
 } from "@stories/ThumbsUpDownFeedback.stories";
 import {ThumbsUpDownFeedback} from "@terreno/ui";
@@ -60,6 +61,11 @@ export const ThumbsUpDownFeedbackConfiguration: DemoConfiguration = {
     "Inline Feedback Prompt": {
       description: "Paired with a static prompt and a confirmation line shown after feedback.",
       render: () => <ThumbsUpDownFeedbackWithConfirmation />,
+    },
+    "With Comment": {
+      description:
+        "With onCommentSubmit, a comment field and Send button appear after a selection; Send shows a thank-you in place of the field.",
+      render: () => <ThumbsUpDownFeedbackWithComment />,
     },
   },
 };

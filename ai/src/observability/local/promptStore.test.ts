@@ -67,6 +67,7 @@ describe("LocalPromptStore", () => {
     expect(listed.find((row) => row.name === "summarize")?.description).toBe(
       "Summarizes user notes for clinicians"
     );
+    expect(listed.find((row) => row.name === "summarize")?.tags).toEqual([]);
     expect(listed.find((row) => row.name === "legacy-no-description")?.description).toBeUndefined();
 
     const detail = await store.getDetail("summarize");
@@ -309,6 +310,7 @@ describe("LocalPromptStore", () => {
         latestVersion: 1,
         name: "summarize",
         production: "—",
+        tags: [],
         type: "text",
         usage7d: {calls: 1, costUsd: 0.4},
       },

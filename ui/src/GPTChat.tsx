@@ -32,6 +32,7 @@ import {BlocksView} from "./blocks/BlocksView";
 import type {BlocksViewProps} from "./Common";
 import {DropdownMenuItem} from "./DropdownMenuItem";
 import {DropdownPanel} from "./DropdownPanel";
+import {FeedbackCommentField} from "./FeedbackCommentField";
 import type {SelectedFile} from "./FilePickerButton";
 import {FilePickerButton} from "./FilePickerButton";
 import {FormContainer} from "./FormContainer";
@@ -118,6 +119,8 @@ export interface GPTChatMessage {
   id?: string;
   contentParts?: MessageContentPart[];
   rating?: "up" | "down";
+  /** A comment already sent with `rating`; shows the sent state instead of the comment field. */
+  ratingComment?: string;
   role: "user" | "assistant" | "system" | "tool-call" | "tool-result";
   toolCall?: ToolCallInfo;
   toolResult?: ToolResultInfo;
@@ -178,6 +181,13 @@ export interface GPTChatProps {
   onMemoryEdit?: (memory: string) => void;
   onModelChange?: (modelId: string) => void;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
+  /**
+   * Called with a free-text comment on a rated assistant message. When set, a comment field
+   * appears under the rating buttons of every rated assistant message.
+   */
+  onRateComment?: (promptIndex: number, comment: string) => void | Promise<void>;
+  /** Called after a passive action on an assistant message, such as a successful copy. */
+  onMessageSignal?: (promptIndex: number, signal: "copied") => void;
   onRemoveAttachment?: (index: number) => void;
   onSelectHistory: (id: string) => void;
   onSubmit: (prompt: string) => void;
@@ -949,11 +959,13 @@ const AssistantActions = ({
   handleCopyMessage,
   index,
   message,
+  onRateComment,
   onRateFeedback,
 }: {
-  handleCopyMessage: (message: GPTChatMessage) => void;
+  handleCopyMessage: (message: GPTChatMessage, index: number) => void;
   index: number;
   message: GPTChatMessage;
+  onRateComment?: (promptIndex: number, comment: string) => void | Promise<void>;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
 }): React.ReactElement | null => {
   const image = firstImagePart(message);
@@ -970,33 +982,39 @@ const AssistantActions = ({
   if (message.role !== "assistant" || (!showCopy && !onRateFeedback)) {
     return null;
   }
+  const showComment = Boolean(onRateFeedback && onRateComment && message.rating);
   return (
-    <Box
-      alignItems="center"
-      direction="row"
-      gap={1}
-      marginTop={2}
-      testID={`gpt-message-actions-${index}`}
-    >
-      {showCopy ? (
-        <IconButton
-          accessibilityLabel={image && !hasText ? "Copy image" : "Copy message"}
-          iconName="copy"
-          onClick={() => handleCopyMessage(message)}
-          testID={`gpt-copy-msg-${index}`}
-          variant="muted"
+    <Box gap={2} marginTop={2} testID={`gpt-message-actions-${index}`}>
+      <Box alignItems="center" direction="row" gap={1}>
+        {showCopy ? (
+          <IconButton
+            accessibilityLabel={image && !hasText ? "Copy image" : "Copy message"}
+            iconName="copy"
+            onClick={() => handleCopyMessage(message, index)}
+            testID={`gpt-copy-msg-${index}`}
+            variant="muted"
+          />
+        ) : null}
+        {image && Platform.OS === "web" ? (
+          <IconButton
+            accessibilityLabel="Download image"
+            iconName="download"
+            onClick={handleDownload}
+            testID={`gpt-download-image-${index}`}
+            variant="muted"
+          />
+        ) : null}
+        <RatingButtons index={index} onRateFeedback={onRateFeedback} rating={message.rating} />
+      </Box>
+      {showComment && onRateComment ? (
+        // Keyed by rating so a changed vote starts a fresh comment.
+        <FeedbackCommentField
+          key={message.rating}
+          onSubmit={(comment) => onRateComment(index, comment)}
+          sentComment={message.ratingComment}
+          testID={`gpt-rating-comment-${index}`}
         />
       ) : null}
-      {image && Platform.OS === "web" ? (
-        <IconButton
-          accessibilityLabel="Download image"
-          iconName="download"
-          onClick={handleDownload}
-          testID={`gpt-download-image-${index}`}
-          variant="muted"
-        />
-      ) : null}
-      <RatingButtons index={index} onRateFeedback={onRateFeedback} rating={message.rating} />
     </Box>
   );
 };
@@ -1152,6 +1170,7 @@ const MessageList = ({
   isStreaming,
   onAskSubmit,
   onBlockEvent,
+  onRateComment,
   onRateFeedback,
   pendingElements,
   resolveAskFiles,
@@ -1164,12 +1183,13 @@ const MessageList = ({
   askErrors?: Record<string, AskValidationError[]>;
   blockOverrides: Record<string, Record<string, Block>>;
   currentMessages: GPTChatMessage[];
-  handleCopyMessage: (message: GPTChatMessage) => void;
+  handleCopyMessage: (message: GPTChatMessage, index: number) => void;
   hostActions?: readonly string[];
   imageHosts?: readonly string[];
   isStreaming: boolean;
   onAskSubmit?: AskSubmitHandler;
   onBlockEvent: (event: BlockChatEvent) => void;
+  onRateComment?: (promptIndex: number, comment: string) => void | Promise<void>;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
   pendingElements: Record<string, readonly string[]>;
   resolveAskFiles?: AskFilesResolver;
@@ -1318,6 +1338,7 @@ const MessageList = ({
               handleCopyMessage={handleCopyMessage}
               index={sourceIndex}
               message={message}
+              onRateComment={sourceIndex >= 0 ? onRateComment : undefined}
               onRateFeedback={sourceIndex >= 0 ? onRateFeedback : undefined}
             />
           </>
@@ -1585,7 +1606,9 @@ export const GPTChat = ({
   onDeleteHistory,
   onGeminiApiKeyChange,
   onMemoryEdit,
+  onMessageSignal,
   onModelChange,
+  onRateComment,
   onRateFeedback,
   onRemoveAttachment,
   onSelectHistory,
@@ -1740,21 +1763,36 @@ export const GPTChat = ({
   }, [inputElement]);
 
   // Image-only replies have no meaningful text, so copy the image instead of a placeholder.
-  const handleCopyMessage = useCallback(async (message: GPTChatMessage) => {
-    const firstImage = message.contentParts?.find(
-      (part): part is ImageContentPart => part.type === "image"
-    );
-    if (firstImage && !message.content.trim()) {
-      try {
-        await copyImageToClipboard(firstImage);
-      } catch (error) {
-        console.warn("Failed to copy image", error);
+  // Signals "copied" only after the clipboard write succeeds, and only for stored messages.
+  const handleCopyMessage = useCallback(
+    async (message: GPTChatMessage, index: number) => {
+      const signalCopied = (): void => {
+        if (index >= 0) {
+          onMessageSignal?.(index, "copied");
+        }
+      };
+      const firstImage = message.contentParts?.find(
+        (part): part is ImageContentPart => part.type === "image"
+      );
+      if (firstImage && !message.content.trim()) {
+        try {
+          await copyImageToClipboard(firstImage);
+          signalCopied();
+        } catch (error) {
+          console.warn("Failed to copy image", error);
+        }
+        return;
       }
-      return;
-    }
-    const Clipboard = await import("expo-clipboard");
-    await Clipboard.setStringAsync(message.content);
-  }, []);
+      try {
+        const Clipboard = await import("expo-clipboard");
+        await Clipboard.setStringAsync(message.content);
+        signalCopied();
+      } catch (error) {
+        console.warn("Failed to copy message", error);
+      }
+    },
+    [onMessageSignal]
+  );
 
   const scrollToBottom = useCallback(() => {
     scrollViewRef.current?.scrollToEnd({animated: true});
@@ -1908,6 +1946,7 @@ export const GPTChat = ({
               onClick={() => onSelectHistory(history.id)}
               padding={2}
               rounding="md"
+              testID={`gpt-history-${history.id}`}
             >
               <HistoryItemTitle
                 currentHistoryId={currentHistoryId}
@@ -1968,6 +2007,7 @@ export const GPTChat = ({
                       isStreaming={isStreaming}
                       onAskSubmit={onAskSubmit}
                       onBlockEvent={handleBlockEvent}
+                      onRateComment={onRateComment}
                       onRateFeedback={onRateFeedback}
                       pendingElements={pendingElements}
                       resolveAskFiles={resolveAskFiles}

@@ -94,12 +94,20 @@ describe("local observability models", () => {
     expect(missing).toBeNull();
   });
 
-  it("does not declare a unique index on scores", () => {
+  // Updated for T2 (ai-user-feedback): judge, human, and code scores may still repeat on a trace;
+  // only live end-user scores are unique per (trace, source, name).
+  it("declares unique score indexes only for live end-user sources", () => {
     const ObsScore = registerObsScore();
     const uniqueIndexes = ObsScore.schema
       .indexes()
       .filter((entry) => Boolean((entry[1] as {unique?: boolean} | undefined)?.unique));
-    expect(uniqueIndexes.length).toBe(0);
+    expect(uniqueIndexes.map((entry) => entry[1].partialFilterExpression)).toEqual([
+      {deleted: false, source: "user-feedback"},
+      {deleted: false, source: "user-signal"},
+    ]);
+    for (const entry of uniqueIndexes) {
+      expect(entry[0]).toEqual({name: 1, source: 1, traceId: 1});
+    }
   });
 
   it("declares ObsTrace compound indexes in IP key order", () => {

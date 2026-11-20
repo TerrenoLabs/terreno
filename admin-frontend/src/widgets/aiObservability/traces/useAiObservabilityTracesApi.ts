@@ -75,6 +75,15 @@ const listParams = (args: TraceListQueryArgs): Record<string, unknown> => {
   if (args.sensitive !== undefined) {
     params.sensitive = args.sensitive;
   }
+  if (args.thumbs) {
+    params.thumbs = args.thumbs;
+  }
+  if (args.signal) {
+    params.signal = args.signal;
+  }
+  if (args.hasComment !== undefined) {
+    params.hasComment = args.hasComment;
+  }
   return params;
 };
 

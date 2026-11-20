@@ -1,4 +1,4 @@
-import {APIError} from "@terreno/api";
+import {APIError, logger} from "@terreno/api";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
@@ -44,6 +44,12 @@ export interface TraceListQuery {
   /** One of `TRACE_LIST_SORT_KEYS`, optionally prefixed with `-` for descending. */
   sort?: string;
   status?: "error" | "ok";
+  /** Traces with a live end-user `thumbs_up` score in that direction. */
+  thumbs?: "down" | "up";
+  /** Traces with a live `user-signal` score of this name. */
+  signal?: string;
+  /** Traces with (or without) a live `user-feedback` score carrying a non-empty comment. */
+  hasComment?: boolean;
   to?: string;
   userId?: string;
 }
@@ -206,7 +212,11 @@ const countLookupStages = (from: string): mongoose.PipelineStage[] => {
         as: "_sortCounts",
         from,
         let: {traceId: "$_id"},
-        pipeline: [{$match: {$expr: {$eq: ["$traceId", "$$traceId"]}}}, {$count: "n"}],
+        pipeline: [
+          // Soft-deleted rows (e.g. a cleared thumbs vote) do not count.
+          {$match: {$expr: {$eq: ["$traceId", "$$traceId"]}, deleted: {$ne: true}}},
+          {$count: "n"},
+        ],
       },
     },
     {$addFields: {_sortValue: {$ifNull: [{$arrayElemAt: ["$_sortCounts.n", 0]}, 0]}}},
@@ -290,7 +300,7 @@ const countByTraceId = async (
     return counts;
   }
   const grouped = (await model.aggregate([
-    {$match: {traceId: {$in: ids}}},
+    {$match: {deleted: {$ne: true}, traceId: {$in: ids}}},
     {$group: {_id: "$traceId", n: {$sum: 1}}},
   ])) as Array<{_id: mongoose.Types.ObjectId; n: number}>;
   for (const row of grouped) {
@@ -299,12 +309,51 @@ const countByTraceId = async (
   return counts;
 };
 
+/** Score sources written by end users; the local store keeps one live score per name. */
+const USER_SCORE_SOURCES: ReadonlySet<string> = new Set(["user-feedback", "user-signal"]);
+
+let obsScoreIndexes: Promise<unknown> | undefined;
+
+/** Builds ObsScore indexes once, so the unique user-score index exists before the first upsert. */
+const ensureObsScoreIndexes = (): Promise<unknown> => {
+  // A database that already holds duplicate live end-user scores (written through the admin
+  // scores route before these indexes existed) cannot build them. Feedback must keep working:
+  // log once and upsert without the uniqueness guarantee until the duplicates are removed.
+  obsScoreIndexes ??= registerObsScore()
+    .init()
+    .catch((error: unknown) => {
+      // Only existing duplicates are tolerated; any other failure retries on the next write.
+      if ((error as {code?: number}).code !== 11000) {
+        obsScoreIndexes = undefined;
+        throw error;
+      }
+      logger.error(
+        "ObsScore indexes failed to build; remove duplicate live user-feedback/user-signal scores per trace and name",
+        {error}
+      );
+    });
+  return obsScoreIndexes;
+};
+
+/**
+ * Forgets the index build so a test can simulate a failed build.
+ * @internal Test seam. Production builds the indexes once per process.
+ */
+export const resetObsScoreIndexBuild = (): void => {
+  obsScoreIndexes = undefined;
+};
+
 export class LocalTraceStore {
   async exportTrace(trace: TraceRecord): Promise<{id: string}> {
     const ObsTrace = registerObsTrace();
     const ObsSpan = registerObsSpan();
     const userId = objectIdOrUndefined(trace.userId);
+    // Only a 24-hex id is a caller-chosen trace id; other ids (uuids from older callers) are ignored.
+    const traceId = /^[0-9a-f]{24}$/i.test(trace.id ?? "")
+      ? new mongoose.Types.ObjectId(trace.id)
+      : undefined;
     const created = await ObsTrace.create({
+      ...(traceId ? {_id: traceId} : {}),
       endedAt: parseDate(trace.endedAt),
       errorSummary: firstErrorSummary(trace),
       flaggedForDataset: trace.flaggedForDataset ?? false,
@@ -353,6 +402,10 @@ export class LocalTraceStore {
     }
     const spanId = objectIdOrUndefined(score.spanId);
     const evaluatorId = objectIdOrUndefined(score.evaluatorId);
+    if (USER_SCORE_SOURCES.has(score.source)) {
+      await this.upsertUserScore({...score, traceId: String(traceId)});
+      return;
+    }
     await registerObsScore().create({
       comment: score.comment,
       confidence: score.confidence,
@@ -364,6 +417,64 @@ export class LocalTraceStore {
       ...(spanId ? {spanId} : {}),
       ...(evaluatorId ? {evaluatorId} : {}),
     });
+  }
+
+  /**
+   * Keeps one live score per (trace, source, name) for end-user sources, so a changed vote
+   * replaces the old one. One atomic upsert backed by a partial unique index, so concurrent
+   * taps cannot leave two live scores.
+   */
+  private async upsertUserScore(score: ScoreRecord): Promise<void> {
+    const ObsScore = registerObsScore();
+    await ensureObsScoreIndexes();
+    const filter = {
+      deleted: false,
+      name: score.name,
+      source: score.source,
+      traceId: new mongoose.Types.ObjectId(score.traceId),
+    };
+    const set: Record<string, unknown> = {
+      dataType: score.dataType,
+      updated: DateTime.utc().toJSDate(),
+      value: score.value,
+    };
+    const unset: Record<string, ""> = {};
+    if (score.comment) {
+      set.comment = score.comment;
+    } else {
+      unset.comment = "";
+    }
+    const update = {
+      $set: set,
+      $setOnInsert: {created: DateTime.utc().toJSDate()},
+      ...(Object.keys(unset).length > 0 ? {$unset: unset} : {}),
+    };
+    try {
+      await ObsScore.collection.updateOne(filter, update, {upsert: true});
+    } catch (error) {
+      // A concurrent upsert may insert first; the retry then matches and updates that row.
+      if ((error as {code?: number}).code !== 11000) {
+        throw error;
+      }
+      await ObsScore.collection.updateOne(filter, update, {upsert: true});
+    }
+  }
+
+  /** Soft-deletes the live end-user score for (trace, source, name), e.g. a cleared thumbs vote. */
+  async deleteFeedbackScore(params: {
+    name: string;
+    source: ScoreRecord["source"];
+    traceId: string;
+  }): Promise<void> {
+    await registerObsScore().collection.updateMany(
+      {
+        deleted: false,
+        name: params.name,
+        source: params.source,
+        traceId: new mongoose.Types.ObjectId(params.traceId),
+      },
+      {$set: {deleted: true, updated: DateTime.utc().toJSDate()}}
+    );
   }
 
   async list(
@@ -429,13 +540,33 @@ export class LocalTraceStore {
         ...(to ? {$lte: to} : {}),
       };
     }
+    // Score-based filters each narrow the trace ids; `$and` lets several apply at once.
+    const idConstraints: Array<Record<string, unknown>> = [];
+    const scoredTraceIds = (scoreFilter: Record<string, unknown>): Promise<unknown[]> => {
+      return registerObsScore().distinct("traceId", {deleted: {$ne: true}, ...scoreFilter});
+    };
     if (query.hasScore !== undefined) {
-      const scoredIds = await registerObsScore().distinct("traceId");
-      if (query.hasScore) {
-        filter._id = {$in: scoredIds};
-      } else {
-        filter._id = {$nin: scoredIds};
-      }
+      const scoredIds = await scoredTraceIds({});
+      idConstraints.push({_id: query.hasScore ? {$in: scoredIds} : {$nin: scoredIds}});
+    }
+    if (query.thumbs) {
+      const ids = await scoredTraceIds({
+        name: "thumbs_up",
+        source: "user-feedback",
+        value: query.thumbs === "up",
+      });
+      idConstraints.push({_id: {$in: ids}});
+    }
+    if (query.signal) {
+      const ids = await scoredTraceIds({name: query.signal, source: "user-signal"});
+      idConstraints.push({_id: {$in: ids}});
+    }
+    if (query.hasComment !== undefined) {
+      const ids = await scoredTraceIds({comment: {$nin: [null, ""]}, source: "user-feedback"});
+      idConstraints.push({_id: query.hasComment ? {$in: ids} : {$nin: ids}});
+    }
+    if (idConstraints.length > 0) {
+      filter.$and = [...((filter.$and as unknown[] | undefined) ?? []), ...idConstraints];
     }
     const ObsTrace = registerObsTrace();
     const total = await ObsTrace.countDocuments(filter);

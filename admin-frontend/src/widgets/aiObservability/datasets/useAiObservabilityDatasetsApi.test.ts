@@ -56,6 +56,7 @@ describe("useAiObservabilityDatasetsApi", () => {
           create: api.useCreateMutation(),
           createItem: api.useCreateItemMutation(),
           importItems: api.useImportMutation(),
+          updateItem: api.useUpdateItemMutation(),
         };
       },
       {wrapper: ObservabilityTestProvider}
@@ -69,6 +70,11 @@ describe("useAiObservabilityDatasetsApi", () => {
         datasetId: "ds-1",
       }).unwrap();
       await result.current.addTraces[0]({datasetId: "ds-1", traceIds: ["t-1"]}).unwrap();
+      await result.current.updateItem[0]({
+        body: {expectedOutput: {answer: "ok"}, proofread: true},
+        datasetId: "ds-1",
+        itemId: "item 1",
+      }).unwrap();
     });
 
     expect(calls.map(({body, method, url}) => ({body, method, url}))).toEqual([
@@ -83,6 +89,11 @@ describe("useAiObservabilityDatasetsApi", () => {
         body: {datasetId: "ds-1", traceIds: ["t-1"]},
         method: "POST",
         url: "/ai/observability/traces/add-to-dataset",
+      },
+      {
+        body: {expectedOutput: {answer: "ok"}, proofread: true},
+        method: "PATCH",
+        url: "/ai/observability/datasets/ds-1/items/item%201",
       },
     ]);
   });

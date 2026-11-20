@@ -9,6 +9,7 @@ export interface PromptListItem {
   latestVersion: number;
   name: string;
   production: number | "—";
+  tags?: string[];
   type: "chat" | "text";
   usage7d?: PromptUsage7d;
 }
@@ -120,12 +121,120 @@ export interface PlaygroundRunResult {
   tokens: {inputTokens?: number; outputTokens?: number; totalTokens?: number};
 }
 
-export interface FolderCount {
-  count: number;
-  folder: string;
+export const ALL_FOLDERS = "";
+
+/** Split a folder or prompt name on `/`, dropping blank segments from extra slashes. */
+export const pathSegments = (value: string): string[] => {
+  return value
+    .split("/")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+};
+
+/** Render a slash path as nested folder segments, e.g. `appointmentAI / intake`. */
+export const formatFolderPath = (folder: string): string => {
+  const segments = pathSegments(folder);
+  if (segments.length === 0) {
+    return folder.trim();
+  }
+  return segments.join(" / ");
+};
+
+export interface PromptLocation {
+  /** Nested folder segments. A slash in `folder` or in `name` (except the last) is one level. */
+  directories: string[];
+  /** `directories` joined with `/`, or `""` when the prompt has no folder segments. */
+  directory: string;
+  /** Last segment of the name. This is the prompt, not a folder. */
+  leaf: string;
 }
 
-export const ALL_FOLDERS = "";
+/**
+ * Where a prompt sits in the folder tree.
+ * Every `/` in the folder is a folder. Every `/` in the name is a folder too,
+ * except the last segment, which is the prompt itself.
+ */
+export const promptLocation = (prompt: Pick<PromptListItem, "folder" | "name">): PromptLocation => {
+  const folderParts = pathSegments(prompt.folder);
+  const nameParts = pathSegments(prompt.name);
+  const leaf =
+    nameParts.length > 0 ? (nameParts[nameParts.length - 1] ?? prompt.name) : prompt.name;
+  const nameParents = nameParts.slice(0, -1);
+  const folderKey = folderParts.join("/");
+  const nameParentKey = nameParents.join("/");
+
+  let directories = folderParts;
+  if (nameParents.length > 0) {
+    const nameExtendsFolder =
+      folderKey.length === 0 ||
+      nameParentKey === folderKey ||
+      nameParentKey.startsWith(`${folderKey}/`);
+    const folderExtendsName =
+      nameParentKey.length === 0 ||
+      folderKey === nameParentKey ||
+      folderKey.startsWith(`${nameParentKey}/`);
+    if (nameExtendsFolder) {
+      directories = nameParents;
+    } else if (folderExtendsName) {
+      directories = folderParts;
+    } else {
+      directories = [...folderParts, ...nameParents];
+    }
+  }
+
+  return {
+    directories,
+    directory: directories.join("/"),
+    leaf,
+  };
+};
+
+export interface FolderNode {
+  count: number;
+  name: string;
+  path: string;
+}
+
+/** Immediate child folders under `parent` (`""` is the root), with subtree prompt counts. */
+export const childFolders = (prompts: PromptListItem[], parent: string): FolderNode[] => {
+  const parentSegments = pathSegments(parent);
+  const counts = new Map<string, FolderNode>();
+  for (const prompt of prompts) {
+    const {directories} = promptLocation(prompt);
+    if (directories.length <= parentSegments.length) {
+      continue;
+    }
+    const isInside = parentSegments.every((segment, index) => directories[index] === segment);
+    if (!isInside) {
+      continue;
+    }
+    const name = directories[parentSegments.length];
+    if (!name) {
+      continue;
+    }
+    const path = [...parentSegments, name].join("/");
+    const current = counts.get(path);
+    counts.set(path, {
+      count: (current?.count ?? 0) + 1,
+      name,
+      path,
+    });
+  }
+  return [...counts.values()].sort((a, b) => a.path.localeCompare(b.path));
+};
+
+/** True when `folder` is the prompt's directory or a parent of it. `""` matches every prompt. */
+const promptInFolder = (
+  prompt: Pick<PromptListItem, "folder" | "name">,
+  folder: string
+): boolean => {
+  const selected = pathSegments(folder).join("/");
+  if (selected.length === 0) {
+    return true;
+  }
+  const directory = promptLocation(prompt).directory;
+  return directory === selected || directory.startsWith(`${selected}/`);
+};
 
 /**
  * The registry tag that pulls another prompt's production body into this one.
@@ -182,16 +291,18 @@ export const unwrapPromptDetail = (raw: unknown): PromptDetail | undefined => {
   return normalizePromptDetail(payload);
 };
 
-export const folderCounts = (prompts: PromptListItem[]): FolderCount[] => {
-  const counts = new Map<string, number>();
+/** Sorted unique tags across the loaded prompts. Blank tags are dropped. */
+export const promptTags = (prompts: PromptListItem[]): string[] => {
+  const tags = new Set<string>();
   for (const prompt of prompts) {
-    counts.set(prompt.folder, (counts.get(prompt.folder) ?? 0) + 1);
+    for (const tag of prompt.tags ?? []) {
+      const trimmed = tag.trim();
+      if (trimmed.length > 0) {
+        tags.add(trimmed);
+      }
+    }
   }
-  return [...counts.entries()]
-    .sort(([a], [b]) => {
-      return a.localeCompare(b);
-    })
-    .map(([folder, count]) => ({count, folder}));
+  return [...tags].sort((left, right) => left.localeCompare(right));
 };
 
 export const formatProduction = (production: number | "—"): string => {
@@ -205,22 +316,36 @@ export const filterPrompts = ({
   folder,
   prompts,
   search,
+  tag,
 }: {
   folder: string;
   prompts: PromptListItem[];
   search: string;
+  tag?: string;
 }): PromptListItem[] => {
   const needle = search.trim().toLowerCase();
+  const selectedTag = tag?.trim() ?? "";
   return prompts.filter((prompt) => {
-    if (folder && prompt.folder !== folder) {
+    if (!promptInFolder(prompt, folder)) {
+      return false;
+    }
+    if (selectedTag && !(prompt.tags ?? []).includes(selectedTag)) {
       return false;
     }
     if (!needle) {
       return true;
     }
-    return (
-      prompt.name.toLowerCase().includes(needle) || prompt.folder.toLowerCase().includes(needle)
-    );
+    const location = promptLocation(prompt);
+    const haystack = [
+      prompt.name,
+      prompt.folder,
+      location.directory,
+      location.leaf,
+      ...(prompt.tags ?? []),
+    ]
+      .join("\n")
+      .toLowerCase();
+    return haystack.includes(needle);
   });
 };
 

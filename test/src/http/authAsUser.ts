@@ -2,6 +2,8 @@ import type express from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
+import {createLoopbackServer} from "./testRequest";
+
 export interface AuthUserCredentials {
   email: string;
   password: string;
@@ -27,7 +29,7 @@ export const authAsUser = async (
   const tokenPath = options.tokenPath ?? "data.token";
   const timeoutMs = options.timeoutMs ?? 5000;
 
-  const agent = supertest.agent(app);
+  const agent = supertest.agent(createLoopbackServer(app));
   const request = agent.post(loginPath).send({
     email: credentials.email,
     password: credentials.password,

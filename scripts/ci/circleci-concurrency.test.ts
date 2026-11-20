@@ -37,6 +37,7 @@ const E2E_SHARDS: Record<string, string[]> = {
     "profile",
     "realtime",
     "ai-chat",
+    "ai-feedback",
     "pdf",
     "notifications",
     "socket-flags",

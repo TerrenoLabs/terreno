@@ -71,7 +71,7 @@ export interface ScoreRecord {
   dataType: "boolean" | "categorical" | "numeric";
   evaluatorId?: string;
   name: string;
-  source: "code" | "human" | "llm-judge" | "user-feedback";
+  source: "code" | "human" | "llm-judge" | "user-feedback" | "user-signal";
   spanId?: string;
   traceId: string;
   value: boolean | number | string;
@@ -168,6 +168,11 @@ export interface ObservabilityAppOptions {
   accessControl?: AnyTerrenoAccess;
   aiService?: ObservabilityGenerateClient;
   aiServiceFactory?: ObservabilityAiServiceFactory;
+  /**
+   * When set, an end user's thumbs down queues the trace for review (`reason: "feedback"`) against
+   * this human evaluator, unless the trace already has an open item for it. Unset: no queueing.
+   */
+  feedbackReview?: {evaluatorName: string};
   control?: {
     datasets?: ControlPrimary;
     experiments?: ControlPrimary;

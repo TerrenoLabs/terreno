@@ -4,6 +4,7 @@ import {
   addGptHistoryRoutes,
   addGptRoutes,
   addMcpRoutes,
+  createTraceId,
   createVertexProvider,
   FileStorageService,
   GptHistory,
@@ -273,6 +274,11 @@ export const aiModelsRouter = modelRouter("/ai", GptHistory, {
   },
   permissions: disabledCrud,
 });
+
+/** Replaces the cached server AIService; `undefined` makes the next call re-read the environment. */
+export const setAiService = (service: AIService | undefined): void => {
+  aiServiceInstance = service;
+};
 
 export const getAiService = (): AIService | undefined => {
   if (aiServiceInstance) {
@@ -786,6 +792,10 @@ export const addAiRoutes = (
         data: {
           properties: {
             output: {type: "string"},
+            traceId: {
+              description: "Trace id of this run, for POST /ai/observability/traces/{id}/feedback",
+              type: "string",
+            },
           },
           type: "object",
         },
@@ -793,29 +803,28 @@ export const addAiRoutes = (
       .build(),
     asyncHandler(async (req, res) => {
       const requestApiKey = req.header("x-ai-api-key");
+      // Without a server model or the user's key, the scripted demo model keeps the
+      // summarize → trace → feedback loop runnable (as chat does).
       const effectiveAiService =
         aiService ??
-        (requestApiKey ? new AIService({model: createModelFromKey(requestApiKey)}) : undefined);
-      if (!effectiveAiService) {
-        throw new APIError({
-          status: 503,
-          title:
-            "Configure GOOGLE_VERTEX_PROJECT or GEMINI_API_KEY, or save a Gemini API key in Profile",
-        });
-      }
+        (requestApiKey
+          ? new AIService({model: createModelFromKey(requestApiKey)})
+          : createDemoAgentService());
       const text = (req.body as {text?: string}).text?.trim();
       if (!text) {
         throw new APIError({status: 400, title: "text is required"});
       }
+      const traceId = createTraceId();
       const output = await effectiveAiService.generateText({
         prompt: text,
         promptLabel: "production",
         promptName: EXAMPLE_SUMMARIZE_PROMPT_NAME,
         sessionId: req.header("x-ai-session-id"),
         temperature: TemperaturePresets.LOW,
+        traceId,
         userId: req.user?._id,
       });
-      return res.json({data: {output}});
+      return res.json({data: {output, traceId}});
     }),
   ]);
 

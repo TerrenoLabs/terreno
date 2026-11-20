@@ -20,6 +20,24 @@ import {
 type ApiSdkQueryOptions<T> = Omit<UseApiQueryOptions<T, T>, "providesTags" | "transformResponse">;
 type ApiSdkLazyOptions<T> = Omit<UseLazyApiQueryOptions<T, never>, "providesTags" | "toRequest">;
 
+export interface APIError {
+  code?: string;
+  detail?: string;
+  id?: string;
+  links?: {
+    about?: string;
+    type?: string;
+  };
+  meta?: Record<string, unknown>;
+  source?: {
+    header?: string;
+    parameter?: string;
+    pointer?: string;
+  };
+  status?: number;
+  title?: string;
+}
+
 export type AdminMigrationsRunArgs = "true" | "false" | undefined;
 
 export type AdminMigrationsRunRes =
@@ -440,6 +458,53 @@ export const useDeleteAdminFeatureFlagsByIdMutation = (
   useApiMutation<DeleteAdminFeatureFlagsByIdArgs, DeleteAdminFeatureFlagsByIdRes>(
     deleteAdminFeatureFlagsByIdRequest,
     {invalidatesTags: ["featureflags"], ...options}
+  );
+
+export type DeleteAdminMcpOauthClientsByIdArgs = string;
+
+export type DeleteAdminMcpOauthClientsByIdRes = null;
+
+export const deleteAdminMcpOauthClientsByIdRequest = (
+  arg: DeleteAdminMcpOauthClientsByIdArgs
+): ApiRequestArgs => ({
+  method: "DELETE",
+  url: `/admin/mcp-oauth-clients/${encodeURIComponent(String(arg))}`,
+});
+
+export const useDeleteAdminMcpOauthClientsByIdMutation = (
+  options: UseApiMutationOptions<
+    DeleteAdminMcpOauthClientsByIdArgs,
+    DeleteAdminMcpOauthClientsByIdRes
+  > = {}
+): UseApiMutationResult<DeleteAdminMcpOauthClientsByIdArgs, DeleteAdminMcpOauthClientsByIdRes> =>
+  useApiMutation<DeleteAdminMcpOauthClientsByIdArgs, DeleteAdminMcpOauthClientsByIdRes>(
+    deleteAdminMcpOauthClientsByIdRequest,
+    {invalidatesTags: ["mcpoauthclients"], ...options}
+  );
+
+export type DeleteAdminMcpOauthConnectionsByIdArgs = string;
+
+export type DeleteAdminMcpOauthConnectionsByIdRes = null;
+
+export const deleteAdminMcpOauthConnectionsByIdRequest = (
+  arg: DeleteAdminMcpOauthConnectionsByIdArgs
+): ApiRequestArgs => ({
+  method: "DELETE",
+  url: `/admin/mcp-oauth-connections/${encodeURIComponent(String(arg))}`,
+});
+
+export const useDeleteAdminMcpOauthConnectionsByIdMutation = (
+  options: UseApiMutationOptions<
+    DeleteAdminMcpOauthConnectionsByIdArgs,
+    DeleteAdminMcpOauthConnectionsByIdRes
+  > = {}
+): UseApiMutationResult<
+  DeleteAdminMcpOauthConnectionsByIdArgs,
+  DeleteAdminMcpOauthConnectionsByIdRes
+> =>
+  useApiMutation<DeleteAdminMcpOauthConnectionsByIdArgs, DeleteAdminMcpOauthConnectionsByIdRes>(
+    deleteAdminMcpOauthConnectionsByIdRequest,
+    {invalidatesTags: ["mcpoauthtokens"], ...options}
   );
 
 export type DeleteAdminMcpServiceTokensByIdArgs = string;
@@ -2232,6 +2297,526 @@ export const useLazyGetAdminFeatureFlagsByIdQuery = (
     toRequest: getAdminFeatureFlagsByIdRequest,
   });
 
+export type GetAdminMcpOauthClientsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  q?:
+    | unknown
+    | {
+        $in?: unknown[];
+      };
+  clientName?:
+    | string
+    | {
+        $in?: string[];
+      };
+  clientId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  redirectUris?:
+    | string[]
+    | {
+        $in?: unknown[][];
+      };
+  grantTypes?:
+    | string[]
+    | {
+        $in?: unknown[][];
+      };
+  tokenEndpointAuthMethod?:
+    | ("none" | "client_secret_basic" | "client_secret_post")
+    | {
+        $in?: string[];
+      };
+  userId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  revokedAt?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  created?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+
+export type GetAdminMcpOauthClientsRes = {
+  data?: {
+    clientId: string;
+    clientName?: string;
+    clientSecretHash?: string;
+    grantTypes?: string[];
+    redirectUris?: string[];
+    responseTypes?: string[];
+    revokedAt?: string;
+    scope?: string;
+    tokenEndpointAuthMethod?: "none" | "client_secret_basic" | "client_secret_post";
+    userId?: string;
+    _id: string;
+    updated: string;
+    created: string;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+
+export const getAdminMcpOauthClientsRequest = (
+  arg: GetAdminMcpOauthClientsArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  params: {
+    _id: arg._id,
+    clientId: arg.clientId,
+    clientName: arg.clientName,
+    created: arg.created,
+    grantTypes: arg.grantTypes,
+    limit: arg.limit,
+    page: arg.page,
+    q: arg.q,
+    redirectUris: arg.redirectUris,
+    revokedAt: arg.revokedAt,
+    sort: arg.sort,
+    tokenEndpointAuthMethod: arg.tokenEndpointAuthMethod,
+    userId: arg.userId,
+  },
+  url: `/admin/mcp-oauth-clients/`,
+});
+
+export const useGetAdminMcpOauthClientsQuery = (
+  arg: GetAdminMcpOauthClientsArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpOauthClientsRes> = {}
+): UseApiQueryResult<GetAdminMcpOauthClientsRes> =>
+  useApiQuery<GetAdminMcpOauthClientsRes>(getAdminMcpOauthClientsRequest(arg), {
+    ...options,
+    providesTags: ["mcpoauthclients"],
+  });
+
+export const useLazyGetAdminMcpOauthClientsQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpOauthClientsRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpOauthClientsRes, GetAdminMcpOauthClientsArgs> =>
+  useLazyApiQuery<GetAdminMcpOauthClientsRes, GetAdminMcpOauthClientsArgs>({
+    ...options,
+    providesTags: ["mcpoauthclients"],
+    toRequest: getAdminMcpOauthClientsRequest,
+  });
+
+export type GetAdminMcpOauthClientsByIdArgs = string;
+
+export type GetAdminMcpOauthClientsByIdRes = {
+  clientId: string;
+  clientName?: string;
+  clientSecretHash?: string;
+  grantTypes?: string[];
+  redirectUris?: string[];
+  responseTypes?: string[];
+  revokedAt?: string;
+  scope?: string;
+  tokenEndpointAuthMethod?: "none" | "client_secret_basic" | "client_secret_post";
+  userId?: string;
+  _id: string;
+  updated: string;
+  created: string;
+};
+
+export const getAdminMcpOauthClientsByIdRequest = (
+  arg: GetAdminMcpOauthClientsByIdArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/admin/mcp-oauth-clients/${encodeURIComponent(String(arg))}`,
+});
+
+export const useGetAdminMcpOauthClientsByIdQuery = (
+  arg: GetAdminMcpOauthClientsByIdArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpOauthClientsByIdRes> = {}
+): UseApiQueryResult<GetAdminMcpOauthClientsByIdRes> =>
+  useApiQuery<GetAdminMcpOauthClientsByIdRes>(getAdminMcpOauthClientsByIdRequest(arg), {
+    ...options,
+    providesTags: ["mcpoauthclients"],
+  });
+
+export const useLazyGetAdminMcpOauthClientsByIdQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpOauthClientsByIdRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpOauthClientsByIdRes, GetAdminMcpOauthClientsByIdArgs> =>
+  useLazyApiQuery<GetAdminMcpOauthClientsByIdRes, GetAdminMcpOauthClientsByIdArgs>({
+    ...options,
+    providesTags: ["mcpoauthclients"],
+    toRequest: getAdminMcpOauthClientsByIdRequest,
+  });
+
+export type GetAdminMcpOauthConnectionsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  q?:
+    | unknown
+    | {
+        $in?: unknown[];
+      };
+  userId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  clientId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  familyId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  scope?:
+    | string
+    | {
+        $in?: string[];
+      };
+  accessExpiresAt?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  refreshExpiresAt?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  rotatedAt?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  revokedAt?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  created?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+
+export type GetAdminMcpOauthConnectionsRes = {
+  data?: {
+    accessExpiresAt: string;
+    accessTokenHash: string;
+    clientId: string;
+    familyId: string;
+    hasRefreshToken?: boolean;
+    refreshExpiresAt: string;
+    refreshTokenHash: string;
+    resource?: string;
+    revokedAt?: string;
+    rotatedAt?: string;
+    scope?: string;
+    tokenEpoch?: number;
+    userId: string;
+    _id: string;
+    updated: string;
+    created: string;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+
+export const getAdminMcpOauthConnectionsRequest = (
+  arg: GetAdminMcpOauthConnectionsArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  params: {
+    _id: arg._id,
+    accessExpiresAt: arg.accessExpiresAt,
+    clientId: arg.clientId,
+    created: arg.created,
+    familyId: arg.familyId,
+    limit: arg.limit,
+    page: arg.page,
+    q: arg.q,
+    refreshExpiresAt: arg.refreshExpiresAt,
+    revokedAt: arg.revokedAt,
+    rotatedAt: arg.rotatedAt,
+    scope: arg.scope,
+    sort: arg.sort,
+    userId: arg.userId,
+  },
+  url: `/admin/mcp-oauth-connections/`,
+});
+
+export const useGetAdminMcpOauthConnectionsQuery = (
+  arg: GetAdminMcpOauthConnectionsArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpOauthConnectionsRes> = {}
+): UseApiQueryResult<GetAdminMcpOauthConnectionsRes> =>
+  useApiQuery<GetAdminMcpOauthConnectionsRes>(getAdminMcpOauthConnectionsRequest(arg), {
+    ...options,
+    providesTags: ["mcpoauthtokens"],
+  });
+
+export const useLazyGetAdminMcpOauthConnectionsQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpOauthConnectionsRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpOauthConnectionsRes, GetAdminMcpOauthConnectionsArgs> =>
+  useLazyApiQuery<GetAdminMcpOauthConnectionsRes, GetAdminMcpOauthConnectionsArgs>({
+    ...options,
+    providesTags: ["mcpoauthtokens"],
+    toRequest: getAdminMcpOauthConnectionsRequest,
+  });
+
+export type GetAdminMcpOauthConnectionsByIdArgs = string;
+
+export type GetAdminMcpOauthConnectionsByIdRes = {
+  accessExpiresAt: string;
+  accessTokenHash: string;
+  clientId: string;
+  familyId: string;
+  hasRefreshToken?: boolean;
+  refreshExpiresAt: string;
+  refreshTokenHash: string;
+  resource?: string;
+  revokedAt?: string;
+  rotatedAt?: string;
+  scope?: string;
+  tokenEpoch?: number;
+  userId: string;
+  _id: string;
+  updated: string;
+  created: string;
+};
+
+export const getAdminMcpOauthConnectionsByIdRequest = (
+  arg: GetAdminMcpOauthConnectionsByIdArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/admin/mcp-oauth-connections/${encodeURIComponent(String(arg))}`,
+});
+
+export const useGetAdminMcpOauthConnectionsByIdQuery = (
+  arg: GetAdminMcpOauthConnectionsByIdArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpOauthConnectionsByIdRes> = {}
+): UseApiQueryResult<GetAdminMcpOauthConnectionsByIdRes> =>
+  useApiQuery<GetAdminMcpOauthConnectionsByIdRes>(getAdminMcpOauthConnectionsByIdRequest(arg), {
+    ...options,
+    providesTags: ["mcpoauthtokens"],
+  });
+
+export const useLazyGetAdminMcpOauthConnectionsByIdQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpOauthConnectionsByIdRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpOauthConnectionsByIdRes, GetAdminMcpOauthConnectionsByIdArgs> =>
+  useLazyApiQuery<GetAdminMcpOauthConnectionsByIdRes, GetAdminMcpOauthConnectionsByIdArgs>({
+    ...options,
+    providesTags: ["mcpoauthtokens"],
+    toRequest: getAdminMcpOauthConnectionsByIdRequest,
+  });
+
+export type GetAdminMcpRequestLogArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  q?:
+    | unknown
+    | {
+        $in?: unknown[];
+      };
+  created?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  toolName?:
+    | string
+    | {
+        $in?: string[];
+      };
+  outcome?:
+    | ("ok" | "tool_error" | "exception")
+    | {
+        $in?: string[];
+      };
+  durationMs?:
+    | number
+    | {
+        $gt?: number;
+        $gte?: number;
+        $lt?: number;
+        $lte?: number;
+      };
+  userId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  credential?:
+    | ("jwt" | "better-auth-session" | "mcp-service-token" | "oauth")
+    | {
+        $in?: string[];
+      };
+  oauthClientId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  serviceTokenId?:
+    | string
+    | {
+        $in?: string[];
+      };
+  errorName?:
+    | string
+    | {
+        $in?: string[];
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+
+export type GetAdminMcpRequestLogRes = {
+  data?: {
+    credential?: "jwt" | "better-auth-session" | "mcp-service-token" | "oauth";
+    durationMs: number;
+    errorName?: string;
+    expiresAt: string;
+    oauthClientId?: string;
+    oauthFamilyId?: string;
+    outcome: "ok" | "tool_error" | "exception";
+    serviceTokenId?: string;
+    toolName: string;
+    userId?: string;
+    _id: string;
+    updated: string;
+    created: string;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+
+export const getAdminMcpRequestLogRequest = (arg: GetAdminMcpRequestLogArgs): ApiRequestArgs => ({
+  method: "GET",
+  params: {
+    _id: arg._id,
+    created: arg.created,
+    credential: arg.credential,
+    durationMs: arg.durationMs,
+    errorName: arg.errorName,
+    limit: arg.limit,
+    oauthClientId: arg.oauthClientId,
+    outcome: arg.outcome,
+    page: arg.page,
+    q: arg.q,
+    serviceTokenId: arg.serviceTokenId,
+    sort: arg.sort,
+    toolName: arg.toolName,
+    userId: arg.userId,
+  },
+  url: `/admin/mcp-request-log/`,
+});
+
+export const useGetAdminMcpRequestLogQuery = (
+  arg: GetAdminMcpRequestLogArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpRequestLogRes> = {}
+): UseApiQueryResult<GetAdminMcpRequestLogRes> =>
+  useApiQuery<GetAdminMcpRequestLogRes>(getAdminMcpRequestLogRequest(arg), {
+    ...options,
+    providesTags: ["mcprequestlogs"],
+  });
+
+export const useLazyGetAdminMcpRequestLogQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpRequestLogRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpRequestLogRes, GetAdminMcpRequestLogArgs> =>
+  useLazyApiQuery<GetAdminMcpRequestLogRes, GetAdminMcpRequestLogArgs>({
+    ...options,
+    providesTags: ["mcprequestlogs"],
+    toRequest: getAdminMcpRequestLogRequest,
+  });
+
+export type GetAdminMcpRequestLogByIdArgs = string;
+
+export type GetAdminMcpRequestLogByIdRes = {
+  credential?: "jwt" | "better-auth-session" | "mcp-service-token" | "oauth";
+  durationMs: number;
+  errorName?: string;
+  expiresAt: string;
+  oauthClientId?: string;
+  oauthFamilyId?: string;
+  outcome: "ok" | "tool_error" | "exception";
+  serviceTokenId?: string;
+  toolName: string;
+  userId?: string;
+  _id: string;
+  updated: string;
+  created: string;
+};
+
+export const getAdminMcpRequestLogByIdRequest = (
+  arg: GetAdminMcpRequestLogByIdArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/admin/mcp-request-log/${encodeURIComponent(String(arg))}`,
+});
+
+export const useGetAdminMcpRequestLogByIdQuery = (
+  arg: GetAdminMcpRequestLogByIdArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpRequestLogByIdRes> = {}
+): UseApiQueryResult<GetAdminMcpRequestLogByIdRes> =>
+  useApiQuery<GetAdminMcpRequestLogByIdRes>(getAdminMcpRequestLogByIdRequest(arg), {
+    ...options,
+    providesTags: ["mcprequestlogs"],
+  });
+
+export const useLazyGetAdminMcpRequestLogByIdQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpRequestLogByIdRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpRequestLogByIdRes, GetAdminMcpRequestLogByIdArgs> =>
+  useLazyApiQuery<GetAdminMcpRequestLogByIdRes, GetAdminMcpRequestLogByIdArgs>({
+    ...options,
+    providesTags: ["mcprequestlogs"],
+    toRequest: getAdminMcpRequestLogByIdRequest,
+  });
+
 export type GetAdminMcpServiceTokensArgs = {
   _id?: {
     $in?: string[];
@@ -2397,6 +2982,144 @@ export const useLazyGetAdminMcpServiceTokensByIdQuery = (
     ...options,
     providesTags: ["mcpservicetokens"],
     toRequest: getAdminMcpServiceTokensByIdRequest,
+  });
+
+export type GetAdminMcpToolsArgs = {
+  _id?: {
+    $in?: string[];
+  };
+  q?:
+    | unknown
+    | {
+        $in?: unknown[];
+      };
+  name?:
+    | string
+    | {
+        $in?: string[];
+      };
+  enabled?:
+    | boolean
+    | {
+        $in?: boolean[];
+      };
+  source?:
+    | ("model" | "custom")
+    | {
+        $in?: string[];
+      };
+  registered?:
+    | boolean
+    | {
+        $in?: boolean[];
+      };
+  lastRegisteredAt?:
+    | string
+    | {
+        $gt?: string;
+        $gte?: string;
+        $lt?: string;
+        $lte?: string;
+      };
+  description?:
+    | string
+    | {
+        $in?: string[];
+      };
+  page?: number;
+  sort?: string;
+  limit?: number;
+};
+
+export type GetAdminMcpToolsRes = {
+  data?: {
+    description?: string;
+    enabled?: boolean;
+    lastRegisteredAt?: string;
+    name: string;
+    registered?: boolean;
+    source: "model" | "custom";
+    _id: string;
+    updated: string;
+    created: string;
+  }[];
+  limit?: number;
+  more?: boolean;
+  page?: number;
+  total?: number;
+};
+
+export const getAdminMcpToolsRequest = (arg: GetAdminMcpToolsArgs): ApiRequestArgs => ({
+  method: "GET",
+  params: {
+    _id: arg._id,
+    description: arg.description,
+    enabled: arg.enabled,
+    lastRegisteredAt: arg.lastRegisteredAt,
+    limit: arg.limit,
+    name: arg.name,
+    page: arg.page,
+    q: arg.q,
+    registered: arg.registered,
+    sort: arg.sort,
+    source: arg.source,
+  },
+  url: `/admin/mcp-tools/`,
+});
+
+export const useGetAdminMcpToolsQuery = (
+  arg: GetAdminMcpToolsArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpToolsRes> = {}
+): UseApiQueryResult<GetAdminMcpToolsRes> =>
+  useApiQuery<GetAdminMcpToolsRes>(getAdminMcpToolsRequest(arg), {
+    ...options,
+    providesTags: ["mcptoolsettings"],
+  });
+
+export const useLazyGetAdminMcpToolsQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpToolsRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpToolsRes, GetAdminMcpToolsArgs> =>
+  useLazyApiQuery<GetAdminMcpToolsRes, GetAdminMcpToolsArgs>({
+    ...options,
+    providesTags: ["mcptoolsettings"],
+    toRequest: getAdminMcpToolsRequest,
+  });
+
+export type GetAdminMcpToolsByIdArgs = string;
+
+export type GetAdminMcpToolsByIdRes = {
+  description?: string;
+  enabled?: boolean;
+  lastRegisteredAt?: string;
+  name: string;
+  registered?: boolean;
+  source: "model" | "custom";
+  _id: string;
+  updated: string;
+  created: string;
+};
+
+export const getAdminMcpToolsByIdRequest = (arg: GetAdminMcpToolsByIdArgs): ApiRequestArgs => ({
+  method: "GET",
+  url: `/admin/mcp-tools/${encodeURIComponent(String(arg))}`,
+});
+
+export const useGetAdminMcpToolsByIdQuery = (
+  arg: GetAdminMcpToolsByIdArgs,
+  options: ApiSdkQueryOptions<GetAdminMcpToolsByIdRes> = {}
+): UseApiQueryResult<GetAdminMcpToolsByIdRes> =>
+  useApiQuery<GetAdminMcpToolsByIdRes>(getAdminMcpToolsByIdRequest(arg), {
+    ...options,
+    providesTags: ["mcptoolsettings"],
+  });
+
+export const useLazyGetAdminMcpToolsByIdQuery = (
+  options: ApiSdkLazyOptions<GetAdminMcpToolsByIdRes> = {}
+): UseLazyApiQueryResult<GetAdminMcpToolsByIdRes, GetAdminMcpToolsByIdArgs> =>
+  useLazyApiQuery<GetAdminMcpToolsByIdRes, GetAdminMcpToolsByIdArgs>({
+    ...options,
+    providesTags: ["mcptoolsettings"],
+    toRequest: getAdminMcpToolsByIdRequest,
   });
 
 export type GetAdminTodosArgs = {
@@ -2891,6 +3614,7 @@ export const useLazyGetAiObservabilityEvaluatorsTemplatesQuery = (
 
 export type GetAiObservabilityExperimentsArgs = {
   promptName?: string;
+  kind?: "judge" | "prompt";
   page?: number;
   limit?: number;
 };
@@ -2901,7 +3625,7 @@ export const getAiObservabilityExperimentsRequest = (
   arg: GetAiObservabilityExperimentsArgs
 ): ApiRequestArgs => ({
   method: "GET",
-  params: {limit: arg.limit, page: arg.page, promptName: arg.promptName},
+  params: {kind: arg.kind, limit: arg.limit, page: arg.page, promptName: arg.promptName},
   url: `/ai/observability/experiments`,
 });
 
@@ -3066,6 +3790,75 @@ export const useLazyGetAiObservabilityReviewQuery = (
     toRequest: (): ApiRequestArgs => getAiObservabilityReviewRequest(),
   });
 
+export type GetAiObservabilityReviewBatchesArgs = void;
+
+export type GetAiObservabilityReviewBatchesRes =
+  | unknown[]
+  | {
+      data?: unknown[];
+    };
+
+export const getAiObservabilityReviewBatchesRequest = (): ApiRequestArgs => ({
+  method: "GET",
+  url: `/ai/observability/review/batches`,
+});
+
+/** List human review batches with judge agreement */
+export const useGetAiObservabilityReviewBatchesQuery = (
+  _arg?: GetAiObservabilityReviewBatchesArgs,
+  options: ApiSdkQueryOptions<GetAiObservabilityReviewBatchesRes> = {}
+): UseApiQueryResult<GetAiObservabilityReviewBatchesRes> =>
+  useApiQuery<GetAiObservabilityReviewBatchesRes>(getAiObservabilityReviewBatchesRequest(), {
+    ...options,
+    providesTags: ["observability"],
+  });
+
+export const useLazyGetAiObservabilityReviewBatchesQuery = (
+  options: ApiSdkLazyOptions<GetAiObservabilityReviewBatchesRes> = {}
+): UseLazyApiQueryResult<GetAiObservabilityReviewBatchesRes, GetAiObservabilityReviewBatchesArgs> =>
+  useLazyApiQuery<GetAiObservabilityReviewBatchesRes, GetAiObservabilityReviewBatchesArgs>({
+    ...options,
+    providesTags: ["observability"],
+    toRequest: (): ApiRequestArgs => getAiObservabilityReviewBatchesRequest(),
+  });
+
+export type GetAiObservabilityReviewBatchesByIdArgs = string;
+
+export type GetAiObservabilityReviewBatchesByIdRes =
+  | Record<string, unknown>
+  | {
+      data?: Record<string, unknown>;
+    };
+
+export const getAiObservabilityReviewBatchesByIdRequest = (
+  arg: GetAiObservabilityReviewBatchesByIdArgs
+): ApiRequestArgs => ({
+  method: "GET",
+  url: `/ai/observability/review/batches/${encodeURIComponent(String(arg))}`,
+});
+
+/** Get a review batch with human answers and judge agreement */
+export const useGetAiObservabilityReviewBatchesByIdQuery = (
+  arg: GetAiObservabilityReviewBatchesByIdArgs,
+  options: ApiSdkQueryOptions<GetAiObservabilityReviewBatchesByIdRes> = {}
+): UseApiQueryResult<GetAiObservabilityReviewBatchesByIdRes> =>
+  useApiQuery<GetAiObservabilityReviewBatchesByIdRes>(
+    getAiObservabilityReviewBatchesByIdRequest(arg),
+    {...options, providesTags: ["observability"]}
+  );
+
+export const useLazyGetAiObservabilityReviewBatchesByIdQuery = (
+  options: ApiSdkLazyOptions<GetAiObservabilityReviewBatchesByIdRes> = {}
+): UseLazyApiQueryResult<
+  GetAiObservabilityReviewBatchesByIdRes,
+  GetAiObservabilityReviewBatchesByIdArgs
+> =>
+  useLazyApiQuery<GetAiObservabilityReviewBatchesByIdRes, GetAiObservabilityReviewBatchesByIdArgs>({
+    ...options,
+    providesTags: ["observability"],
+    toRequest: getAiObservabilityReviewBatchesByIdRequest,
+  });
+
 export type GetAiObservabilityReviewByIdArgs = string;
 
 export type GetAiObservabilityReviewByIdRes =
@@ -3136,6 +3929,26 @@ export type GetAiObservabilityTracesArgs = {
   prompt?: string;
   promptVersion?: number;
   scope?: string;
+  thumbs?: "up" | "down";
+  signal?: "accepted" | "dismissed" | "copied" | "edited" | "regenerated";
+  hasComment?: boolean;
+  sort?:
+    | "cost"
+    | "-cost"
+    | "latency"
+    | "-latency"
+    | "name"
+    | "-name"
+    | "scores"
+    | "-scores"
+    | "spans"
+    | "-spans"
+    | "startedAt"
+    | "-startedAt"
+    | "status"
+    | "-status"
+    | "tokens"
+    | "-tokens";
 };
 
 export type GetAiObservabilityTracesRes =
@@ -3148,7 +3961,15 @@ export const getAiObservabilityTracesRequest = (
   arg: GetAiObservabilityTracesArgs
 ): ApiRequestArgs => ({
   method: "GET",
-  params: {prompt: arg.prompt, promptVersion: arg.promptVersion, scope: arg.scope},
+  params: {
+    hasComment: arg.hasComment,
+    prompt: arg.prompt,
+    promptVersion: arg.promptVersion,
+    scope: arg.scope,
+    signal: arg.signal,
+    sort: arg.sort,
+    thumbs: arg.thumbs,
+  },
   url: `/ai/observability/traces`,
 });
 
@@ -5899,6 +6720,47 @@ export const usePatchAdminFeatureFlagsByIdMutation = (
     {invalidatesTags: ["featureflags"], ...options}
   );
 
+export type PatchAdminMcpToolsByIdArgs = {
+  id: string;
+  body: {
+    description?: string;
+    enabled?: boolean;
+    lastRegisteredAt?: string;
+    name?: string;
+    registered?: boolean;
+    source?: "model" | "custom";
+    _id?: string;
+    updated?: string;
+    created?: string;
+  };
+};
+
+export type PatchAdminMcpToolsByIdRes = {
+  description?: string;
+  enabled?: boolean;
+  lastRegisteredAt?: string;
+  name: string;
+  registered?: boolean;
+  source: "model" | "custom";
+  _id: string;
+  updated: string;
+  created: string;
+};
+
+export const patchAdminMcpToolsByIdRequest = (arg: PatchAdminMcpToolsByIdArgs): ApiRequestArgs => ({
+  body: arg.body,
+  method: "PATCH",
+  url: `/admin/mcp-tools/${encodeURIComponent(String(arg.id))}`,
+});
+
+export const usePatchAdminMcpToolsByIdMutation = (
+  options: UseApiMutationOptions<PatchAdminMcpToolsByIdArgs, PatchAdminMcpToolsByIdRes> = {}
+): UseApiMutationResult<PatchAdminMcpToolsByIdArgs, PatchAdminMcpToolsByIdRes> =>
+  useApiMutation<PatchAdminMcpToolsByIdArgs, PatchAdminMcpToolsByIdRes>(
+    patchAdminMcpToolsByIdRequest,
+    {invalidatesTags: ["mcptoolsettings"], ...options}
+  );
+
 export type PatchAdminTodosByIdArgs = {
   id: string;
   body: {
@@ -6289,8 +7151,9 @@ export const usePatchFeatureFlagsFlagsByIdMutation = (
 export type PatchGptHistoriesByIdRatingArgs = {
   id: string;
   body: {
+    comment?: string;
     promptIndex?: number;
-    rating?: string;
+    rating?: "up" | "down" | null | null;
   };
 };
 
@@ -6963,6 +7826,102 @@ export const usePostAdminFeatureFlagsBulkPatchMutation = (
     {invalidatesTags: ["admin"], ...options}
   );
 
+export type PostAdminMcpOauthClientsBulkPatchArgs = {
+  ids: string[];
+  patch: Record<string, unknown>;
+};
+
+export type PostAdminMcpOauthClientsBulkPatchRes = {
+  failures?: unknown[];
+  updated?: number;
+};
+
+export const postAdminMcpOauthClientsBulkPatchRequest = (
+  arg: PostAdminMcpOauthClientsBulkPatchArgs
+): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/admin/mcp-oauth-clients/bulk-patch`,
+});
+
+/** Bulk patch McpOAuthClient documents */
+export const usePostAdminMcpOauthClientsBulkPatchMutation = (
+  options: UseApiMutationOptions<
+    PostAdminMcpOauthClientsBulkPatchArgs,
+    PostAdminMcpOauthClientsBulkPatchRes
+  > = {}
+): UseApiMutationResult<
+  PostAdminMcpOauthClientsBulkPatchArgs,
+  PostAdminMcpOauthClientsBulkPatchRes
+> =>
+  useApiMutation<PostAdminMcpOauthClientsBulkPatchArgs, PostAdminMcpOauthClientsBulkPatchRes>(
+    postAdminMcpOauthClientsBulkPatchRequest,
+    {invalidatesTags: ["admin"], ...options}
+  );
+
+export type PostAdminMcpOauthConnectionsBulkPatchArgs = {
+  ids: string[];
+  patch: Record<string, unknown>;
+};
+
+export type PostAdminMcpOauthConnectionsBulkPatchRes = {
+  failures?: unknown[];
+  updated?: number;
+};
+
+export const postAdminMcpOauthConnectionsBulkPatchRequest = (
+  arg: PostAdminMcpOauthConnectionsBulkPatchArgs
+): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/admin/mcp-oauth-connections/bulk-patch`,
+});
+
+/** Bulk patch McpOAuthToken documents */
+export const usePostAdminMcpOauthConnectionsBulkPatchMutation = (
+  options: UseApiMutationOptions<
+    PostAdminMcpOauthConnectionsBulkPatchArgs,
+    PostAdminMcpOauthConnectionsBulkPatchRes
+  > = {}
+): UseApiMutationResult<
+  PostAdminMcpOauthConnectionsBulkPatchArgs,
+  PostAdminMcpOauthConnectionsBulkPatchRes
+> =>
+  useApiMutation<
+    PostAdminMcpOauthConnectionsBulkPatchArgs,
+    PostAdminMcpOauthConnectionsBulkPatchRes
+  >(postAdminMcpOauthConnectionsBulkPatchRequest, {invalidatesTags: ["admin"], ...options});
+
+export type PostAdminMcpRequestLogBulkPatchArgs = {
+  ids: string[];
+  patch: Record<string, unknown>;
+};
+
+export type PostAdminMcpRequestLogBulkPatchRes = {
+  failures?: unknown[];
+  updated?: number;
+};
+
+export const postAdminMcpRequestLogBulkPatchRequest = (
+  arg: PostAdminMcpRequestLogBulkPatchArgs
+): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/admin/mcp-request-log/bulk-patch`,
+});
+
+/** Bulk patch McpRequestLog documents */
+export const usePostAdminMcpRequestLogBulkPatchMutation = (
+  options: UseApiMutationOptions<
+    PostAdminMcpRequestLogBulkPatchArgs,
+    PostAdminMcpRequestLogBulkPatchRes
+  > = {}
+): UseApiMutationResult<PostAdminMcpRequestLogBulkPatchArgs, PostAdminMcpRequestLogBulkPatchRes> =>
+  useApiMutation<PostAdminMcpRequestLogBulkPatchArgs, PostAdminMcpRequestLogBulkPatchRes>(
+    postAdminMcpRequestLogBulkPatchRequest,
+    {invalidatesTags: ["admin"], ...options}
+  );
+
 export type PostAdminMcpServiceTokensBulkPatchArgs = {
   ids: string[];
   patch: Record<string, unknown>;
@@ -6993,6 +7952,33 @@ export const usePostAdminMcpServiceTokensBulkPatchMutation = (
 > =>
   useApiMutation<PostAdminMcpServiceTokensBulkPatchArgs, PostAdminMcpServiceTokensBulkPatchRes>(
     postAdminMcpServiceTokensBulkPatchRequest,
+    {invalidatesTags: ["admin"], ...options}
+  );
+
+export type PostAdminMcpToolsBulkPatchArgs = {
+  ids: string[];
+  patch: Record<string, unknown>;
+};
+
+export type PostAdminMcpToolsBulkPatchRes = {
+  failures?: unknown[];
+  updated?: number;
+};
+
+export const postAdminMcpToolsBulkPatchRequest = (
+  arg: PostAdminMcpToolsBulkPatchArgs
+): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/admin/mcp-tools/bulk-patch`,
+});
+
+/** Bulk patch McpToolSetting documents */
+export const usePostAdminMcpToolsBulkPatchMutation = (
+  options: UseApiMutationOptions<PostAdminMcpToolsBulkPatchArgs, PostAdminMcpToolsBulkPatchRes> = {}
+): UseApiMutationResult<PostAdminMcpToolsBulkPatchArgs, PostAdminMcpToolsBulkPatchRes> =>
+  useApiMutation<PostAdminMcpToolsBulkPatchArgs, PostAdminMcpToolsBulkPatchRes>(
+    postAdminMcpToolsBulkPatchRequest,
     {invalidatesTags: ["admin"], ...options}
   );
 
@@ -7149,10 +8135,12 @@ export type PostAiExampleSummarizeArgs = {
 export type PostAiExampleSummarizeRes =
   | {
       output?: string;
+      traceId?: string;
     }
   | {
       data?: {
         output?: string;
+        traceId?: string;
       };
     };
 
@@ -7311,7 +8299,7 @@ export const postAiObservabilityExperimentsRequest = (): ApiRequestArgs => ({
   url: `/ai/observability/experiments`,
 });
 
-/** Create an experiment */
+/** Create a prompt comparison or judge calibration experiment */
 export const usePostAiObservabilityExperimentsMutation = (
   options: UseApiMutationOptions<
     PostAiObservabilityExperimentsArgs,
@@ -7514,6 +8502,67 @@ export const usePostAiObservabilityPromptsByNameVersionsMutation = (
     ...options,
   });
 
+export type PostAiObservabilityReviewBatchesArgs = void;
+
+export type PostAiObservabilityReviewBatchesRes =
+  | Record<string, unknown>
+  | {
+      data?: Record<string, unknown>;
+    };
+
+export const postAiObservabilityReviewBatchesRequest = (): ApiRequestArgs => ({
+  method: "POST",
+  url: `/ai/observability/review/batches`,
+});
+
+/** Create a review batch from traces, the most recent traces, or a dataset's unanswered items */
+export const usePostAiObservabilityReviewBatchesMutation = (
+  options: UseApiMutationOptions<
+    PostAiObservabilityReviewBatchesArgs,
+    PostAiObservabilityReviewBatchesRes
+  > = {}
+): UseApiMutationResult<
+  PostAiObservabilityReviewBatchesArgs,
+  PostAiObservabilityReviewBatchesRes
+> =>
+  useApiMutation<PostAiObservabilityReviewBatchesArgs, PostAiObservabilityReviewBatchesRes>(
+    (): ApiRequestArgs => postAiObservabilityReviewBatchesRequest(),
+    {invalidatesTags: ["observability"], ...options}
+  );
+
+export type PostAiObservabilityReviewBatchesByIdJudgeRunsArgs = string;
+
+export type PostAiObservabilityReviewBatchesByIdJudgeRunsRes =
+  | Record<string, unknown>
+  | {
+      data?: Record<string, unknown>;
+    };
+
+export const postAiObservabilityReviewBatchesByIdJudgeRunsRequest = (
+  arg: PostAiObservabilityReviewBatchesByIdJudgeRunsArgs
+): ApiRequestArgs => ({
+  method: "POST",
+  url: `/ai/observability/review/batches/${encodeURIComponent(String(arg))}/judgeRuns`,
+});
+
+/** Run an LLM judge over a review batch */
+export const usePostAiObservabilityReviewBatchesByIdJudgeRunsMutation = (
+  options: UseApiMutationOptions<
+    PostAiObservabilityReviewBatchesByIdJudgeRunsArgs,
+    PostAiObservabilityReviewBatchesByIdJudgeRunsRes
+  > = {}
+): UseApiMutationResult<
+  PostAiObservabilityReviewBatchesByIdJudgeRunsArgs,
+  PostAiObservabilityReviewBatchesByIdJudgeRunsRes
+> =>
+  useApiMutation<
+    PostAiObservabilityReviewBatchesByIdJudgeRunsArgs,
+    PostAiObservabilityReviewBatchesByIdJudgeRunsRes
+  >(postAiObservabilityReviewBatchesByIdJudgeRunsRequest, {
+    invalidatesTags: ["observability"],
+    ...options,
+  });
+
 export type PostAiObservabilityReviewByIdArgs = string;
 
 export type PostAiObservabilityReviewByIdRes =
@@ -7567,6 +8616,56 @@ export const usePostAiObservabilityTracesAddToDatasetMutation = (
     invalidatesTags: ["observability"],
     ...options,
   });
+
+export type PostAiObservabilityTracesByIdFeedbackArgs = {
+  id: string;
+  body: {
+    comment?: string;
+    flagDataset?: boolean;
+    outcome?: "tp" | "fp" | "tn" | "fn";
+    signal?: "accepted" | "dismissed" | "copied" | "edited" | "regenerated";
+    thumbs?: "up" | "down" | null | null;
+  };
+};
+
+export type PostAiObservabilityTracesByIdFeedbackRes =
+  | {
+      flaggedForDataset?: boolean;
+      reviewItemId?: string;
+      scores?: Record<string, unknown>[];
+      traceId?: string;
+    }
+  | {
+      data?: {
+        flaggedForDataset?: boolean;
+        reviewItemId?: string;
+        scores?: Record<string, unknown>[];
+        traceId?: string;
+      };
+    };
+
+export const postAiObservabilityTracesByIdFeedbackRequest = (
+  arg: PostAiObservabilityTracesByIdFeedbackArgs
+): ApiRequestArgs => ({
+  body: arg.body,
+  method: "POST",
+  url: `/ai/observability/traces/${encodeURIComponent(String(arg.id))}/feedback`,
+});
+
+/** Record the trace owner's feedback on an AI output */
+export const usePostAiObservabilityTracesByIdFeedbackMutation = (
+  options: UseApiMutationOptions<
+    PostAiObservabilityTracesByIdFeedbackArgs,
+    PostAiObservabilityTracesByIdFeedbackRes
+  > = {}
+): UseApiMutationResult<
+  PostAiObservabilityTracesByIdFeedbackArgs,
+  PostAiObservabilityTracesByIdFeedbackRes
+> =>
+  useApiMutation<
+    PostAiObservabilityTracesByIdFeedbackArgs,
+    PostAiObservabilityTracesByIdFeedbackRes
+  >(postAiObservabilityTracesByIdFeedbackRequest, {invalidatesTags: ["observability"], ...options});
 
 export type PostAiObservabilityTracesByIdScoresArgs = string;
 
@@ -8924,6 +10023,63 @@ export const useLazySettingsGcsQuery = (
     ...options,
     providesTags: ["settings"],
     toRequest: (): ApiRequestArgs => settingsGcsRequest(),
+  });
+
+export type TodosBulkArgs = {
+  atomic?: boolean;
+  operations: {
+    body?: {
+      _id?: string;
+      completed?: boolean;
+      ownerId?: string;
+      priority?: "low" | "medium" | "high";
+      tags?: string[];
+      title?: string;
+      updated?: string;
+      created?: string;
+      deleted?: boolean;
+      _syncPrevStream?: string;
+      _syncSeq?: number;
+    };
+    id?: string;
+    method: "create" | "update" | "delete";
+  }[];
+};
+
+export type TodosBulkRes = {
+  data?: {
+    _id: string;
+    completed?: boolean;
+    ownerId: string;
+    priority?: "low" | "medium" | "high";
+    tags?: string[];
+    title: string;
+    updated: string;
+    created: string;
+    deleted?: boolean;
+    _syncPrevStream?: string;
+    _syncSeq?: number;
+  };
+  error?: APIError;
+  id?: string;
+  index: number;
+  method: "create" | "update" | "delete";
+  status: number;
+}[];
+
+export const todosBulkRequest = (arg: TodosBulkArgs): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/todos/bulk`,
+});
+
+/** Bulk write todos */
+export const useTodosBulkMutation = (
+  options: UseApiMutationOptions<TodosBulkArgs, TodosBulkRes> = {}
+): UseApiMutationResult<TodosBulkArgs, TodosBulkRes> =>
+  useApiMutation<TodosBulkArgs, TodosBulkRes>(todosBulkRequest, {
+    invalidatesTags: ["todos"],
+    ...options,
   });
 
 export type TodosBulkCompleteArgs = {

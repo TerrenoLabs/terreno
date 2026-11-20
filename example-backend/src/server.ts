@@ -485,6 +485,8 @@ export const start = async (
             }
             return new AIService({model});
           },
+          // Thumbs-down feedback queues for the human evaluator the boot seed installs.
+          feedbackReview: {evaluatorName: "correctness-human"},
           plugins: [createLocalObservabilityPlugin()],
           priceMap: parseObservabilityPriceMap(process.env.AI_OBS_PRICE_MAP_JSON),
           requestAiServiceFactory: ({apiKey, modelId}) => {

@@ -13,6 +13,8 @@ import {DateTime} from "luxon";
 import type mongoose from "mongoose";
 
 import {GptHistory} from "../models/gptHistory";
+import {FEEDBACK_COMMENT_MAX_LENGTH, recordTraceFeedback} from "../observability/feedback";
+import {registerObsTrace} from "../observability/local/models/obsTrace";
 import {configureAiDatasets} from "../service/aiDatasets";
 import {assertNoReservedToolNames, resolveAskKinds} from "../service/asks";
 import {type ChatTurnSink, DEMO_RESPONSE, resolveAiService, runChatTurn} from "../service/chatTurn";
@@ -283,15 +285,25 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         .withSummary("Rate a prompt in a GPT history")
         .withPathParameter("id", {type: "string"})
         .withRequestBody({
+          comment: {
+            description:
+              "Optional comment on the rating (≤ 2000 chars), recorded on the reply's trace",
+            type: "string",
+          },
           promptIndex: {type: "number"},
-          rating: {type: "string"},
+          rating: {
+            // `null` clears the rating; listed so the request validator accepts it.
+            enum: ["up", "down", null] as unknown as string[],
+            nullable: true,
+            type: "string",
+          },
         })
         .withResponse(200, {data: {type: "object"}})
         .build(),
     ],
     asyncHandler(async (req: express.Request, res: express.Response) => {
       const {id} = req.params;
-      const {promptIndex, rating} = req.body;
+      const {comment, promptIndex, rating} = req.body;
       const userId = (req.user as {_id?: mongoose.Types.ObjectId} | undefined)?._id;
 
       if (typeof promptIndex !== "number" || !Number.isInteger(promptIndex) || promptIndex < 0) {
@@ -299,6 +311,15 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
       }
       if (rating !== null && rating !== "up" && rating !== "down") {
         throw new APIError({status: 400, title: "rating must be 'up', 'down', or null"});
+      }
+      if (comment !== undefined && typeof comment !== "string") {
+        throw new APIError({status: 400, title: "comment must be a string"});
+      }
+      if (typeof comment === "string" && comment.trim().length > FEEDBACK_COMMENT_MAX_LENGTH) {
+        throw new APIError({
+          status: 400,
+          title: `comment must be at most ${FEEDBACK_COMMENT_MAX_LENGTH} characters`,
+        });
       }
 
       const history = await GptHistory.findById(id);
@@ -318,6 +339,26 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         {_id: history._id},
         rating === null ? {$unset: {[ratingPath]: ""}} : {$set: {[ratingPath]: rating}}
       );
+
+      // The rating is also the reply's thumbs feedback when its trace exists; a missing trace
+      // (old history, no local trace sink) never fails the rating.
+      const traceId = history.prompts[promptIndex]?.traceId;
+      if (traceId && userId) {
+        const trimmed = typeof comment === "string" ? comment.trim() : "";
+        try {
+          if (!(await registerObsTrace().exists({_id: traceId}))) {
+            return res.json({data: {promptIndex, rating}});
+          }
+          await recordTraceFeedback({
+            input: {thumbs: rating, ...(trimmed && rating !== null ? {comment: trimmed} : {})},
+            traceId,
+            user: {id: userId.toString()},
+          });
+        } catch (error) {
+          // The rating is already saved; the trace score is best-effort.
+          logger.error("Failed to record chat rating as trace feedback", {error, traceId});
+        }
+      }
 
       return res.json({data: {promptIndex, rating}});
     })

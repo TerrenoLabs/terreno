@@ -41,7 +41,7 @@ import type {
   MessageContentPart,
   UiBlocksOptions,
 } from "../types";
-import {AIService} from "./aiService";
+import {AIService, createTraceId} from "./aiService";
 import {
   askFilesModelOutput,
   invalidAskResponseError,
@@ -1834,12 +1834,15 @@ export const runChatTurn = async ({
     systemPrompt,
     userId,
   });
+  // Minted up front so the assistant row carries it and feedback on the reply can find the trace.
+  const traceId = getObservabilityApp() ? createTraceId() : undefined;
   const resolvedObservability = await aiService.resolveGenerateObservability({
     promptLabel,
     promptName,
     sensitive: body.sensitive === true ? true : undefined,
     sessionId,
     systemPrompt: effectiveSystemPrompt,
+    traceId,
   });
   const observability = registryPrompt
     ? {
@@ -1954,6 +1957,7 @@ export const runChatTurn = async ({
         status: "streaming",
         streamId,
         text: "",
+        ...(traceId ? {traceId} : {}),
         type: "assistant",
       },
     ]);
@@ -2192,7 +2196,12 @@ export const runChatTurn = async ({
         fullResponse: storedResponse,
         generatedImages,
         modelId: aiService.modelId,
-      }).map((row) => ({...row, status: "complete" as const, streamId})),
+      }).map((row) => ({
+        ...row,
+        status: "complete" as const,
+        streamId,
+        ...(traceId && row.type === "assistant" ? {traceId} : {}),
+      })),
       ...(ask
         ? [
             askCallRow(ask, "pending"),

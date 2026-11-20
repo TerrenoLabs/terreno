@@ -74,6 +74,11 @@ setTerrenoTestEnv({
 
 Defaults: `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, `SESSION_SECRET`, `NODE_ENV=test`, `TZ=UTC`.
 
+`registerBackendPreload` and `registerSimpleMongoPreload` apply `testEnv` as soon as they are
+called, then again before and after each test. A test file's `beforeAll` runs before any
+`beforeEach`, so an app built there (where `TerrenoApp` registers the JWT strategy only if
+`TOKEN_SECRET` is set) sees the test env too.
+
 ## Environment variables
 
 | Variable | Effect |
@@ -99,6 +104,7 @@ If `registerBackendPreload` cannot start Mongo, every later test fails at once w
 | `getMongoServerUri` | Resolved URI after `startMongoServer`. |
 | `resolveMongoLaunchTimeoutMs` | In-memory mongod launch timeout from `TERRENO_TEST_MONGO_LAUNCH_TIMEOUT_MS` (integer ≥ 1000), default 60000. |
 | `getBaseServer` | Build an Express app for supertest from route registrars. |
+| `testRequest` / `createLoopbackServer` | `supertest(app)` bound to 127.0.0.1, closing its server after each request under Bun. |
 | `authAsUser` | Login helper returning auth headers for supertest. |
 | `createMongoTestCache` | Fixture-cache controller for fast `@terreno/api` tests. |
 | `registerLogSilencing` / `createLogSilencer` | Suppress Winston noise in tests. |
@@ -152,6 +158,21 @@ previous clock after that test. Nested freezes unwind to the outer instant. The 
 function un-freezes early. Do not mix it with direct `setSystemTime` calls in the same test.
 
 ## HTTP and assertion helpers
+
+Use `testRequest(app)` in place of `supertest(app)` in Bun tests:
+
+```typescript
+import {testRequest} from "@terreno/test";
+
+const res = await testRequest(app).get("/todos").set("Authorization", `Bearer ${token}`);
+```
+
+`supertest(app)` listens on port 0 with no host, which under Bun binds only the IPv6
+wildcard, then sends the request to `127.0.0.1`. On macOS another process can hold that
+port on 127.0.0.1 at the same time and answer instead, so a random test fails with that
+process's 404 or 401. Bun also leaves supertest's per-request servers open. `testRequest`
+binds 127.0.0.1 and closes the server after the request. `authAsUser` and `authWithToken`
+agents use the same server. For a server of your own, `createLoopbackServer(app)` returns it.
 
 `authAsUser` logs in through `POST /auth/login`, which pays the password-hash cost on every
 call. When the test is not about login, mint the token and use `authWithToken`:

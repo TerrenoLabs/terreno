@@ -2,6 +2,8 @@ import type express from "express";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
+import {createLoopbackServer} from "./testRequest";
+
 export interface AuthWithTokenOptions {
   /** Access token to send, usually minted with `@terreno/api`'s `generateTokens(user, authOptions)`. */
   token: string | null | undefined;
@@ -29,7 +31,7 @@ export const authWithToken = async (
       "authWithToken: token is empty; check that the user exists and TOKEN_SECRET is set"
     );
   }
-  const agent = supertest.agent(app);
+  const agent = supertest.agent(createLoopbackServer(app));
   await agent.set("authorization", `Bearer ${token}`);
   for (const [key, value] of Object.entries(headers)) {
     await agent.set(key, value);

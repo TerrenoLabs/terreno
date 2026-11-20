@@ -65,6 +65,11 @@ const beforeAllTimeoutMs = (): number => resolveMongoLaunchTimeoutMs() * 2 + 300
 export const registerBackendPreload = (options: BackendPreloadOptions = {}): void => {
   const connectMongoInBeforeAll = options.connectMongoInBeforeAll ?? true;
 
+  // Test files often build their app in beforeAll, which runs before any beforeEach. Code that
+  // reads env at build time (TerrenoApp registers the JWT strategy only when TOKEN_SECRET is set)
+  // must see the test env there too, so apply it now rather than waiting for the first test.
+  setTerrenoTestEnv(options.testEnv);
+
   if (options.sentryMock !== false) {
     registerSentryBunMock();
   }

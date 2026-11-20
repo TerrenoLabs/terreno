@@ -29,21 +29,25 @@ same set into a running database, including a PR preview, with Admin → Scripts
    - **Synthetic** (phase 2.4): **Generate** drafts. They land as `origin: synthetic` and `proofread: false`. Do not run experiments on them until a human proofreads and sets `proofread: true`.
 3. Prefer a mix of true/false positives and negatives on classification features. Tag critical cases.
 
-In-app **thumbs** / **false positive|negative** on a live feature write feedback scores and can **flag for dataset** (step 7). Those traces show up with `flaggedForDataset`.
+In-app **thumbs** (with an optional comment), **false positive|negative**, and passive signals on a live feature write feedback scores and can **flag for dataset** (step 7). Pull those traces in with the Traces filters (step 8). An item added from a trace the user rejected lands `proofread: false` with a `user:` tag and the feedback in `metadata.userFeedback`, so label its expected output (step 2) before experiments use it.
 
 ## 2. Label expected output
 
-1. Open the dataset item.
-2. Fill `expectedOutput` to match the schema from step 1.
-3. Set `outcomeClass` (`tp` / `fp` / `tn` / `fn`) when the feature is a flag.
-4. Add `tags` for categories you will filter on later.
-5. Set `proofread: true` on synthetic items you accept.
+The **golden label** is an item's expected output once a human has proofread it: the answer this feature must give for that input. Experiments score the live feature against proofread golden labels only, so an unproofread item never counts toward a score.
+
+1. Open the dataset and choose **Needs review**. Each row is an item that is not proofread yet. Click one to open the expected-output page (not a dialog).
+2. Read the input. It is exactly what the model received.
+3. Fix the expected output to the answer this feature should give, not the answer it gave. When the dataset has `expectedOutputSchema`, each property is a field (text, number, checkbox, or a select for an enum). The schema type wins: a number stored in a `string` property shows and saves as text. Without a schema, the form follows the JSON already stored on the item. A string label is one text field.
+4. Set **Outcome class** (`tp` / `fp` / `tn` / `fn`) when the feature is a flag.
+5. Tick **Proofread** once the expected output is right. Synthetic items stay unticked until you accept them.
+6. **Save and next** saves and opens the next item that still needs review, in list order, wrapping to the top. On the last one the button reads **Save and finish review** and returns you to the Needs review tab, which says when nothing is left. Saving a golden item from the **All** or **Human** tab returns to the dataset.
+7. **Add item** on the dataset opens the same page with empty fields shaped like the first item, or like the schema. Saving a new item returns to the dataset.
 
 Skip unlabeled items in experiments unless you only need generation smoke (still prefer labels before scoring).
 
 ## 3. Create the prompt
 
-1. Open **Admin → AI Observability → Prompts**. The folder filter shows counts; search filters name and folder. If your role lacks `aiPrompt:create`, the header **New prompt** is hidden (API writes still 403).
+1. Open **Admin → AI Observability → Prompts**. Each folder is a row. Open it to see the prompts and folders inside; **Up** goes back one level. A slash nests a folder: `appointmentAI/intake` is `intake` inside `appointmentAI`. A slash in the name does the same, and the last segment is the prompt (`appointmentAI/intake/_preamble`). Filter with the **Tag** menu (prompts that carry that tag) or search name, folder, and tag. Tag and search cover every folder, not only the one you have open. If your role lacks `aiPrompt:create`, the header **New prompt** is hidden (API writes still 403).
 2. **New prompt** (folder, name, system, user template with `{{variables}}`). That write is immutable **v1**. Open the row to the prompt hub (**Versions**, **Traces**, **Experiments**).
 3. **Versions** shows the description, folder, tags, and the editor together. Edit system/template/variables/temperature when `aiPrompt:update` is allowed, then **Save as vN+1**. There is no in-place save. System and template fields explain what each one is for. **Playground → Run once** (when `aiPrompt:playground` is allowed) compiles and calls the model; it does **not** create a version. **Traces** and **Experiments** show recent items for this prompt from prompt detail relationships.
 4. Do not paste that string into app routes. Apps call `AIService` with `promptName` + `promptLabel` (step 6).
@@ -119,29 +123,53 @@ Do this in parallel with steps 1–6 once the feature is reachable.
 
 1. Register `ObservabilityApp`. Every `generate*` emits a trace unless `skipTrace`.
 2. Pass `userId` and `sessionId` from the request.
-3. From the product UI, call `POST /ai/observability/traces/:id/feedback` as the signed-in user:
-   - `kind: "thumbs"` + `up` / `down` (helpfulness of suggestions)
-   - `kind: "outcome"` + `tp` / `fp` / `tn` / `fn` (flags)
-   - `flagDataset: true` to queue the trace as a dataset candidate
-4. In **Admin → AI Observability → Traces**, filter by time, prompt dropdown, status, user, session, score presence, or data sensitivity. Score and sensitivity dropdowns include both positive and negative states. Rows show a status dot, `sensitive` badge, error line, `N prompts`, tokens, cost, and latency. Open a row for the span tree (kind, indent, duration bar). Sensitive I/O disclosures start **collapsed**.
-5. Select one or more traces. The bulk bar warns when any selected row is `sensitive`. Choose **Send to human review**, read the queue explanation, and pick a human evaluator. The evaluator's dimensions become the score fields and its instructions guide the reviewer. Confirming posts `POST /ai/observability/traces/review` with `reason: "manual"`. Automatic (`llm-judge` / `json-assert`) evaluators cannot enter this queue.
-6. Open **Review queue**. Tabs show Pending / In progress / Done / Skipped counts, and pending
+3. Give each AI output its trace id so the product can send feedback. Mint it before the call
+   and return it with the output:
+
+   ```typescript
+   const traceId = createTraceId();
+   const output = await aiService.generateText({
+     prompt: text,
+     promptLabel: "production",
+     promptName: "example-summarize",
+     traceId,
+     userId: req.user?._id,
+   });
+   return res.json({data: {output, traceId}});
+   ```
+
+   Chat (`/gpt/prompt`) does this for you and stores `traceId` on each assistant row.
+4. From the product UI, call `POST /ai/observability/traces/:id/feedback` as the signed-in user
+   (only the trace's own user may):
+   - `thumbs: "up" | "down" | null`, with an optional `comment` (what the user said)
+   - `outcome: "tp" | "fp" | "tn" | "fn"` for classification features
+   - `signal: "accepted" | "dismissed" | "copied" | "edited" | "regenerated"` (what the user
+     did; recorded as `source: "user-signal"`)
+   - `flagDataset: true` to mark the trace as a dataset candidate
+
+   `ThumbsUpDownFeedback` takes `onCommentSubmit` for the comment, and `GPTChat` takes
+   `onRateComment` and `onMessageSignal`. Set `feedbackReview: {evaluatorName}` on
+   `ObservabilityApp` and every thumbs down also lands in **Review queue** (see
+   [Observe LLM calls](observe-llm-calls.md)).
+5. In **Admin → AI Observability → Traces**, filter by time, prompt dropdown, status, user, session, score presence, data sensitivity, thumbs, signal, or comment. Score and sensitivity dropdowns include both positive and negative states. Rows show a status dot, `sensitive` badge, error line, `N prompts`, tokens, cost, and latency. Open a row for the span tree (kind, indent, duration bar). Sensitive I/O disclosures start **collapsed**.
+6. Select one or more traces. The bulk bar warns when any selected row is `sensitive`. Choose **Send to human review**, read the queue explanation, and pick a human evaluator. The evaluator's dimensions become the score fields and its instructions guide the reviewer. Confirming posts `POST /ai/observability/traces/review` with `reason: "manual"`. Automatic (`llm-judge` / `json-assert`) evaluators cannot enter this queue.
+7. Open **Review queue**. Tabs show Pending / In progress / Done / Skipped counts, and pending
    items are oldest-first. Select the header **Review oldest pending**.
-7. On each item, compare **What the AI was given** with **What the AI wrote**. Long fields begin
+8. On each item, compare **What the AI was given** with **What the AI wrote**. Long fields begin
    collapsed with a word count; structured outputs retain field labels and reviewer notes. Use
    **Raw JSON** only when the field view is insufficient.
-8. Score every required evaluator dimension on the same screen. The segmented **Yes** / **No**
+9. Score every required evaluator dimension on the same screen. The segmented **Yes** / **No**
    control, the numeric slider, and categorical pills sit in a fixed column on the left of each
    question. On web, `Y` / `N` answer the highlighted question as soon as the item opens, `Enter`
    submits, and `S` skips. Add an optional note, then **Submit and open next**. **Skip** records
    no score. For the second phase-1 intake path, use **Assign to me** to manually claim an item
    and move it to In progress. Continue until the toast says **Queue clear**.
 
-Feedback is a score (`source: "user-feedback"`) fanned out to every ScoreSink. Non-owners who are not admin get 403.
+Feedback is a score fanned out to every ScoreSink, comment included: `user-feedback` for what the user said, `user-signal` for what they did. A new vote replaces the old one. Anyone but the trace's own user gets 403, admins included (they score through `POST /traces/:id/scores`).
 
 ## 8. Add weak production traces back to the dataset
 
-1. **Traces**: filter `thumbs=down`, `flaggedForDataset`, `failedEval`, or `lowConfidence` (filters land with task 2.6 feedback).
+1. **Traces** → **More filters**: set **Thumbs** to **Down**, pick a **Signal** such as **Dismissed**, or turn on **Has comment** (API: `thumbs=down`, `signal=dismissed`, `hasComment=true`; `flaggedForDataset=true` lists traces users flagged). Open a trace to read the user's comment under its score.
 2. **Add to dataset** (`POST /ai/observability/traces/add-to-dataset`, bulk allowed).
 3. Label the new items (step 2).
 4. Repeat steps 5–8.

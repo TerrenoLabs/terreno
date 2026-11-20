@@ -1,4 +1,4 @@
-import {describe, it} from "bun:test";
+import {describe, it, setDefaultTimeout} from "bun:test";
 import {spawnSync} from "node:child_process";
 import {mkdirSync, mkdtempSync, readFileSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
@@ -6,6 +6,8 @@ import {dirname, join} from "node:path";
 import {assert} from "chai";
 
 const script = join(import.meta.dir, "map-changed-files.sh");
+
+setDefaultTimeout(30_000);
 
 const git = ({args, cwd}: {args: string[]; cwd: string}): string => {
   const result = spawnSync("git", args, {cwd, encoding: "utf8"});

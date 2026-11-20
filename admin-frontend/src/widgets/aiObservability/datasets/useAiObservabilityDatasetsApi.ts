@@ -26,6 +26,7 @@ export interface DatasetItemWriteBody {
   input: unknown;
   metadata?: Record<string, unknown>;
   origin?: "manual" | "synthetic" | "trace";
+  outcomeClass?: "fn" | "fp" | "tn" | "tp" | null;
   proofread?: boolean;
   sourceTraceId?: string;
   tags?: string[];
@@ -56,6 +57,10 @@ export interface AiObservabilityDatasetsApi {
     options?: ObservabilityQueryOptions
   ) => AdminRpcQueryState<DatasetItemRecord[] | {data: DatasetItemRecord[]}>;
   useListQuery: () => AdminRpcQueryState<DatasetRecord[] | {data: DatasetRecord[]}>;
+  useUpdateItemMutation: () => ObservabilityMutation<
+    {body: Partial<DatasetItemWriteBody>; datasetId: string; itemId: string},
+    DatasetItemRecord
+  >;
 }
 
 const datasetUrl = (id: string): string => `${DATASETS_URL}/${encodeURIComponent(id)}`;
@@ -112,5 +117,22 @@ export const useAiObservabilityDatasetsApi = (): AiObservabilityDatasetsApi => {
         url: `${datasetUrl(id)}/items`,
       }),
     useListQuery: () => useObservabilityQuery({providesTags: DATASETS_TAGS, url: DATASETS_URL}),
+    useUpdateItemMutation: () =>
+      useObservabilityMutation({
+        invalidatesTags: DATASET_AND_ITEMS_TAGS,
+        toRequest: ({
+          body,
+          datasetId,
+          itemId,
+        }: {
+          body: Partial<DatasetItemWriteBody>;
+          datasetId: string;
+          itemId: string;
+        }) => ({
+          body: asJsonBody(body),
+          method: "PATCH",
+          url: `${datasetUrl(datasetId)}/items/${encodeURIComponent(itemId)}`,
+        }),
+      }),
   };
 };

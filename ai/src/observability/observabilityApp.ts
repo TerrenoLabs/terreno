@@ -49,6 +49,7 @@ export class ObservabilityApp implements TerrenoPlugin {
   readonly priceMap: ObservabilityAppOptions["priceMap"];
   readonly requestAiServiceFactory?: ObservabilityRequestAiServiceFactory;
   readonly sampleRate: number;
+  readonly feedbackReview?: ObservabilityAppOptions["feedbackReview"];
 
   constructor(options: ObservabilityAppOptions) {
     this.accessControl = options.accessControl;
@@ -59,6 +60,7 @@ export class ObservabilityApp implements TerrenoPlugin {
     this.priceMap = options.priceMap;
     this.requestAiServiceFactory = options.requestAiServiceFactory;
     this.sampleRate = options.sampleRate ?? 0;
+    this.feedbackReview = options.feedbackReview;
     registerObservabilityApp(this);
   }
 

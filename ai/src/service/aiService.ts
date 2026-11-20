@@ -18,7 +18,7 @@ import {
   streamText,
 } from "ai";
 import {DateTime} from "luxon";
-import type mongoose from "mongoose";
+import mongoose from "mongoose";
 
 import {AIRequest} from "../models/aiRequest";
 import {getObservabilityApp} from "../observability/observabilityAppRegistry";
@@ -138,7 +138,15 @@ interface ResolvedObservability {
   sessionId?: string;
   skipTrace: boolean;
   systemPrompt?: string;
+  traceId?: string;
 }
+
+const TRACE_ID_PATTERN = /^[0-9a-f]{24}$/i;
+
+/** Mints an id a caller can pass as `traceId` before a generate call and return to its client. */
+export const createTraceId = (): string => {
+  return new mongoose.Types.ObjectId().toHexString();
+};
 
 export class AIService {
   readonly model: LanguageModel;
@@ -265,6 +273,9 @@ export class AIService {
   private async resolveObservability(
     options: GenerateObservabilityOptions & {systemPrompt?: string}
   ): Promise<ResolvedObservability> {
+    if (options.traceId !== undefined && !TRACE_ID_PATTERN.test(options.traceId)) {
+      throw new APIError({status: 400, title: "traceId must be an object id"});
+    }
     let promptRef: PromptVersionRef | undefined;
     let systemPrompt = options.systemPrompt;
     let sensitive = options.sensitive ?? false;
@@ -296,6 +307,7 @@ export class AIService {
       sessionId: options.sessionId,
       skipTrace: options.skipTrace === true,
       systemPrompt,
+      traceId: options.traceId,
     };
   }
 
@@ -307,6 +319,7 @@ export class AIService {
       sensitive: options.sensitive,
       sessionId: options.sessionId,
       skipTrace: options.skipTrace,
+      traceId: options.traceId,
     };
   }
 
@@ -392,7 +405,7 @@ export class AIService {
     const promptRef = params.observability.promptRef;
     return {
       endedAt,
-      id: randomUUID(),
+      id: params.observability.traceId ?? randomUUID(),
       input: params.prompt,
       name: spanName,
       output: params.response,

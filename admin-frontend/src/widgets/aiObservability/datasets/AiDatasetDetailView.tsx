@@ -1,16 +1,5 @@
-import {
-  Badge,
-  Box,
-  Button,
-  Heading,
-  Modal,
-  SegmentedControl,
-  Spinner,
-  Text,
-  TextArea,
-} from "@terreno/ui";
-import {DateTime} from "luxon";
-import React, {useCallback, useMemo, useState} from "react";
+import {Badge, Box, Button, SegmentedControl, Spinner, Text} from "@terreno/ui";
+import React, {useMemo, useState} from "react";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
@@ -28,12 +17,13 @@ export interface AiDatasetDetailViewProps {
   canAddItem?: boolean;
   canRunExperiment?: boolean;
   dataset: DatasetRecord;
+  initialTab?: DatasetItemTab;
   isItemsLoading?: boolean;
   items: DatasetItemRecord[];
   itemsLoadError?: string;
-  onAddItem: (body: {expectedOutput: string; input: string}) => Promise<string | undefined>;
+  onCreateItem: () => void;
   onOpenExperiment: () => void;
-  onOpenTrace?: (traceId: string) => void;
+  onOpenItem: (itemId: string) => void;
   onRetryItems?: () => void;
   routeBase: string;
 }
@@ -63,47 +53,20 @@ const COLUMNS: ObservabilityTableColumn[] = [
   {grow: 0.7, minWidth: 90, title: "Trace"},
 ];
 
-const formatFullJson = (value: unknown): string => {
-  if (value === undefined || value === null) {
-    return "—";
-  }
-  if (typeof value === "string") {
-    return value;
-  }
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
-};
-
-const formatTimestamp = (value: string): string => {
-  const timestamp = DateTime.fromISO(value);
-  if (!timestamp.isValid) {
-    return value;
-  }
-  return timestamp.toLocal().toLocaleString(DateTime.DATETIME_MED);
-};
-
 export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
   canAddItem = true,
   canRunExperiment = true,
   dataset,
+  initialTab = "all",
   isItemsLoading,
   items,
   itemsLoadError,
-  onAddItem,
+  onCreateItem,
   onOpenExperiment,
-  onOpenTrace,
+  onOpenItem,
   onRetryItems,
 }) => {
-  const [tab, setTab] = useState<DatasetItemTab>("all");
-  const [addOpen, setAddOpen] = useState(false);
-  const [addError, setAddError] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
-  const [inputText, setInputText] = useState("{}");
-  const [expectedText, setExpectedText] = useState("{}");
-  const [selectedItem, setSelectedItem] = useState<DatasetItemRecord | undefined>();
+  const [tab, setTab] = useState<DatasetItemTab>(initialTab);
 
   const filtered = useMemo(() => {
     return filterDatasetItemsByTab(items, tab);
@@ -116,7 +79,7 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
       const attribution = item.annotatedBy?.label ?? (item.proofread ? "Human" : "Needs review");
       const traceId = item.sourceTraceId;
       return {
-        accessibilityLabel: `Open dataset item ${item.id}`,
+        accessibilityLabel: `Edit expected output for dataset item ${item.id}`,
         cells: [
           summarizeJson(item.input),
           summarizeJson(item.expectedOutput),
@@ -125,37 +88,13 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
         ],
         key: item.id,
         onClick: () => {
-          setSelectedItem(item);
+          onOpenItem(item.id);
         },
       };
     });
-  }, [filtered]);
+  }, [filtered, onOpenItem]);
 
   const selectedIndex = TAB_OPTIONS.indexOf(tab);
-  const handleAddItem = useCallback(async (): Promise<void> => {
-    setAddError("");
-    setIsAdding(true);
-    const error = await onAddItem({expectedOutput: expectedText, input: inputText});
-    setIsAdding(false);
-    if (error) {
-      setAddError(error);
-      return;
-    }
-    setAddOpen(false);
-  }, [expectedText, inputText, onAddItem]);
-
-  const handleDismissItem = useCallback((): void => {
-    setSelectedItem(undefined);
-  }, []);
-
-  const handleOpenSelectedTrace = useCallback((): void => {
-    if (!selectedItem?.sourceTraceId || !onOpenTrace) {
-      return;
-    }
-    const traceId = selectedItem.sourceTraceId;
-    setSelectedItem(undefined);
-    onOpenTrace(traceId);
-  }, [onOpenTrace, selectedItem]);
 
   return (
     <Box gap={4} testID="ai-dataset-detail">
@@ -171,10 +110,7 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
         <Box direction="row" gap={2}>
           {canAddItem ? (
             <Button
-              onClick={() => {
-                setAddError("");
-                setAddOpen(true);
-              }}
+              onClick={onCreateItem}
               testID="ai-dataset-add-item"
               text="Add item"
               variant="secondary"
@@ -189,6 +125,10 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
           ) : undefined}
         </Box>
       </Box>
+      <Text color="secondaryDark" size="sm" testID="ai-dataset-golden-guidance">
+        Each item&apos;s expected output is its golden label: the answer this feature must give for
+        that input. Experiments score the feature against proofread items only.
+      </Text>
       <SegmentedControl
         items={TAB_OPTIONS.map((option) => tabLabel(option, needsReviewCount))}
         onChange={(index) => {
@@ -200,6 +140,12 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
         selectedIndex={selectedIndex}
         testID="ai-dataset-tabs"
       />
+      {tab === "needsReview" ? (
+        <Text color="secondaryDark" size="sm" testID="ai-dataset-review-guidance">
+          Needs review items are not proofread yet. Open one, correct its expected output, tick
+          Proofread, then Save and next to move down this list.
+        </Text>
+      ) : undefined}
       {tab === "needsReview" && needsReviewCount > 0 ? (
         <Badge
           status="error"
@@ -218,90 +164,20 @@ export const AiDatasetDetailView: React.FC<AiDatasetDetailViewProps> = ({
         </Box>
       ) : filtered.length === 0 ? (
         <Box padding={4} testID="ai-dataset-items-empty">
-          <Text color="secondaryDark">No items in this tab.</Text>
+          <Text color="secondaryDark">
+            {tab === "needsReview"
+              ? "Nothing needs review. Every item is proofread."
+              : "No items in this tab."}
+          </Text>
         </Box>
       ) : (
         <Box gap={2}>
           <Text color="secondaryDark" size="sm">
-            Select an item to view its complete input, expected output, and metadata.
+            Select an item to edit its expected output.
           </Text>
           <ObservabilityTable columns={COLUMNS} rows={rows} testID="ai-dataset-items-table" />
         </Box>
       )}
-      <Modal
-        onDismiss={handleDismissItem}
-        title="Dataset item details"
-        visible={Boolean(selectedItem)}
-      >
-        {selectedItem ? (
-          <Box gap={3} maxHeight={600} padding={3} scroll testID="ai-dataset-item-modal">
-            <Box gap={1}>
-              <Heading size="sm">Input</Heading>
-              <Box color="baseAlternate" padding={3} rounding="md">
-                <Text>{formatFullJson(selectedItem.input)}</Text>
-              </Box>
-            </Box>
-            <Box gap={1}>
-              <Heading size="sm">Expected output</Heading>
-              <Box color="baseAlternate" padding={3} rounding="md">
-                <Text>{formatFullJson(selectedItem.expectedOutput)}</Text>
-              </Box>
-            </Box>
-            <Box gap={1}>
-              <Heading size="sm">Item details</Heading>
-              <Text>ID: {selectedItem.id}</Text>
-              <Text>Dataset ID: {selectedItem.datasetId}</Text>
-              <Text>Origin: {selectedItem.origin}</Text>
-              <Text>Proofread: {selectedItem.proofread ? "Yes" : "No"}</Text>
-              <Text>Outcome: {selectedItem.outcomeClass ?? "—"}</Text>
-              <Text>Source trace: {selectedItem.sourceTraceId ?? "—"}</Text>
-              <Text>Annotated by: {selectedItem.annotatedBy?.label ?? "—"}</Text>
-              <Text>Annotator user: {selectedItem.annotatedBy?.userId ?? "—"}</Text>
-              <Text>Review item: {selectedItem.annotatedBy?.reviewItemId ?? "—"}</Text>
-              <Text>Tags: {selectedItem.tags.join(", ") || "—"}</Text>
-              <Text>Created: {formatTimestamp(selectedItem.created)}</Text>
-              <Text>Updated: {formatTimestamp(selectedItem.updated)}</Text>
-            </Box>
-            <Box gap={1}>
-              <Heading size="sm">Metadata</Heading>
-              <Box color="baseAlternate" padding={3} rounding="md">
-                <Text>{formatFullJson(selectedItem.metadata)}</Text>
-              </Box>
-            </Box>
-            {selectedItem.sourceTraceId && onOpenTrace ? (
-              <Button
-                onClick={handleOpenSelectedTrace}
-                testID="ai-dataset-item-open-trace"
-                text="Open source trace"
-                variant="secondary"
-              />
-            ) : undefined}
-          </Box>
-        ) : undefined}
-      </Modal>
-      <Modal
-        onDismiss={() => {
-          setAddOpen(false);
-        }}
-        title="Add dataset item"
-        visible={addOpen}
-      >
-        <Box gap={3} padding={3}>
-          <TextArea onChange={setInputText} rows={4} title="Input (JSON)" value={inputText} />
-          <TextArea
-            onChange={setExpectedText}
-            rows={4}
-            title="Expected output (JSON)"
-            value={expectedText}
-          />
-          <Button loading={isAdding} onClick={handleAddItem} text="Add item" />
-          {addError ? (
-            <Text color="error" testID="ai-dataset-add-item-error">
-              {addError}
-            </Text>
-          ) : undefined}
-        </Box>
-      </Modal>
     </Box>
   );
 };

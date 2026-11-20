@@ -147,6 +147,11 @@ const gptHistoryPromptSchema = new mongoose.Schema(
       type: String,
     },
     toolName: {description: "Name of the tool that was invoked", type: String},
+    traceId: {
+      description:
+        "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+      type: String,
+    },
     type: {
       description: "Role of this message in the conversation",
       enum: ["user", "assistant", "system", "tool-call", "tool-result"],

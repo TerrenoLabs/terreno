@@ -93,6 +93,27 @@ export class LocalReviewStore {
     return created;
   }
 
+  /** The pending or in-progress item for a trace and evaluator, if one exists. */
+  async findOpen(params: {
+    evaluatorId: string;
+    traceId: string;
+  }): Promise<ReviewListItem | undefined> {
+    // Oldest open item: an operator may already have queued the same trace more than once.
+    const [item] = await registerObsReviewItem()
+      .find({
+        evaluatorId: objectId(params.evaluatorId, "evaluatorId"),
+        status: {$in: ["pending", "in_progress"]},
+        traceId: objectId(params.traceId, "traceId"),
+      })
+      .sort({enqueuedAt: 1})
+      .limit(1);
+    if (!item) {
+      return undefined;
+    }
+    const trace = await registerObsTrace().findOneOrNone({_id: item.traceId});
+    return this.toListItem(item, trace?.name ?? "", trace?.prompts[0]?.name);
+  }
+
   /** Queue dataset items for a human question set; items with a source trace show that trace. */
   async enqueueDatasetItems(params: {
     batchId: string;

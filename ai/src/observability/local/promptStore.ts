@@ -90,6 +90,7 @@ export interface PromptListItem {
   latestVersion: number;
   name: string;
   production: number | "—";
+  tags: string[];
   type: "chat" | "text";
   usage7d?: {calls: number; costUsd?: number};
 }
@@ -400,6 +401,7 @@ export class LocalPromptStore implements PromptRegistry {
         latestVersion: latest?.version ?? 0,
         name: prompt.name,
         production,
+        tags: prompt.tags ?? [],
         type: latest?.type ?? "text",
         ...(usageByName ? {usage7d: usageByName.get(prompt.name) ?? {calls: 0}} : {}),
       });

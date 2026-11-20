@@ -61,6 +61,12 @@ export const SYNCDB_CHAOS_USER = suiteUser("syncdb-chaos", "E2E SyncDB Chaos Use
  */
 export const SYNCDB_LOADLAB_USER = suiteUser("syncdb-loadlab", "E2E SyncDB LoadLab User");
 
+/** Owns the summary-card feedback e2e (ai-feedback.spec.ts): its todos and traces are its own. */
+export const AI_FEEDBACK_USER = suiteUser("ai-feedback", "E2E AI Feedback User");
+
+/** Owns the chat rating-comment e2e (ai-chat.spec.ts): its chat histories and traces are its own. */
+export const AI_CHAT_FEEDBACK_USER = suiteUser("ai-chat-feedback", "E2E AI Chat Feedback User");
+
 /** The member staff sign consent for in provisionalConsent.spec.ts. */
 export const PROVISIONAL_MEMBER_USER = suiteUser("provisional-member", "E2E Provisional Member");
 /** Non-admin staff granted consentResponse:signOnBehalf through an RBAC role. */
@@ -87,6 +93,8 @@ export const ALL_E2E_USERS: E2EUser[] = [
   SYNCDB_STORAGE_USER,
   SYNCDB_CHAOS_USER,
   SYNCDB_LOADLAB_USER,
+  AI_FEEDBACK_USER,
+  AI_CHAT_FEEDBACK_USER,
   PROVISIONAL_MEMBER_USER,
   PROVISIONAL_STAFF_USER,
   PROVISIONAL_OUTSIDER_USER,

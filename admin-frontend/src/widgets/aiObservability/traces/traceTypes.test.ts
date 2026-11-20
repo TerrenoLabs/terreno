@@ -11,6 +11,7 @@ import {
   promptCountLabel,
   selectedSensitiveCount,
   stringifyIo,
+  TRACE_FILTER_FIELDS,
   type TraceListItem,
   type TraceSpanNode,
   traceFiltersToFilterValues,
@@ -172,5 +173,46 @@ describe("traceTypes helpers", () => {
     });
     assert.equal(filterValuesToTraceFilters({status: ["ok", "bogus"]}).status, "ok");
     assert.equal(filterValuesToTraceFilters({hasScore: "false"}).hasScore, false);
+  });
+
+  it("exposes the feedback filter fields", () => {
+    expect(TRACE_FILTER_FIELDS.thumbs).toBe("thumbs");
+    expect(TRACE_FILTER_FIELDS.signal).toBe("signal");
+    expect(TRACE_FILTER_FIELDS.hasComment).toBe("hasComment");
+  });
+
+  it("reads thumbs, signal, and hasComment from DataTable filter values", () => {
+    const filters = filterValuesToTraceFilters({
+      hasComment: true,
+      signal: ["dismissed"],
+      thumbs: ["down"],
+    });
+    expect(filters.thumbs).toBe("down");
+    expect(filters.signal).toBe("dismissed");
+    expect(filters.hasComment).toBe(true);
+  });
+
+  it("leaves feedback filters unset for Any and ignores unknown values", () => {
+    const any = filterValuesToTraceFilters({signal: [], thumbs: []});
+    expect(any.thumbs).toBeUndefined();
+    expect(any.signal).toBeUndefined();
+    expect(any.hasComment).toBeUndefined();
+    expect(filterValuesToTraceFilters({thumbs: ["up"]}).thumbs).toBe("up");
+    const bogus = filterValuesToTraceFilters({signal: ["nope"], thumbs: ["sideways"]});
+    expect(bogus.thumbs).toBeUndefined();
+    expect(bogus.signal).toBeUndefined();
+  });
+
+  it("round-trips feedback filters through the DataTable filter values", () => {
+    const filters = {
+      ...emptyTraceFilters(),
+      hasComment: false,
+      signal: "copied" as const,
+      thumbs: "up" as const,
+    };
+    const roundTripped = filterValuesToTraceFilters(traceFiltersToFilterValues(filters));
+    expect(roundTripped.thumbs).toBe("up");
+    expect(roundTripped.signal).toBe("copied");
+    expect(roundTripped.hasComment).toBe(false);
   });
 });

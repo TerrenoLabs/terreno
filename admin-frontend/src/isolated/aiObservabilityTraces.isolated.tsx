@@ -230,7 +230,8 @@ describe("AiTraceDetailView", () => {
       expect(getByText("LLM")).toBeTruthy();
       expect(getByText("correct")).toBeTruthy();
       expect(getByText("true")).toBeTruthy();
-      expect(getByText("human")).toBeTruthy();
+      // T10 shows score sources as badges ("human" → "Human").
+      expect(getByText("Human")).toBeTruthy();
       expect(getByTestId("ai-trace-span-input")).toBeTruthy();
       expect(getByText("Input (sensitive)")).toBeTruthy();
       expect(queryByText("patient SSN 123-45-6789")).toBeNull();

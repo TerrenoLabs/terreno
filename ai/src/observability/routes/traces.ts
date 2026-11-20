@@ -1,5 +1,6 @@
-import {APIError, asyncHandler, createOpenApiBuilder} from "@terreno/api";
+import {APIError, asyncHandler, authenticateMiddleware, createOpenApiBuilder} from "@terreno/api";
 import type express from "express";
+import {FEEDBACK_SIGNALS, recordTraceFeedback, type TraceFeedbackInput} from "../feedback";
 import {
   DEFAULT_TRACE_LIST_SORT,
   type LocalTraceStore,
@@ -71,6 +72,29 @@ const parseSort = (value: unknown): string | undefined => {
   return value;
 };
 
+const parseThumbs = (value: unknown): "down" | "up" | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (value === "up" || value === "down") {
+    return value;
+  }
+  throw new APIError({status: 400, title: "thumbs must be up or down"});
+};
+
+const parseSignal = (value: unknown): string | undefined => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value === "string" && (FEEDBACK_SIGNALS as readonly string[]).includes(value)) {
+    return value;
+  }
+  throw new APIError({
+    status: 400,
+    title: `signal must be one of ${FEEDBACK_SIGNALS.join(", ")}`,
+  });
+};
+
 const parsePositiveInt = (value: unknown, fallback: number): number => {
   if (value === undefined) {
     return fallback;
@@ -102,6 +126,13 @@ export const addObservabilityTraceRoutes = (
         .withQueryParameter("prompt", {type: "string"}, {required: false})
         .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withQueryParameter("scope", {type: "string"}, {required: false})
+        .withQueryParameter("thumbs", {enum: ["up", "down"], type: "string"}, {required: false})
+        .withQueryParameter(
+          "signal",
+          {enum: [...FEEDBACK_SIGNALS], type: "string"},
+          {required: false}
+        )
+        .withQueryParameter("hasComment", {type: "boolean"}, {required: false})
         .withQueryParameter(
           "sort",
           {
@@ -121,6 +152,7 @@ export const addObservabilityTraceRoutes = (
       const listed = await options.store.list({
         flaggedForDataset: parseBoolean(req.query.flaggedForDataset),
         from: typeof req.query.from === "string" ? req.query.from : undefined,
+        hasComment: parseBoolean(req.query.hasComment),
         hasScore: parseBoolean(req.query.hasScore),
         limit: parsePositiveInt(req.query.limit, 20),
         page: parsePositiveInt(req.query.page, 1),
@@ -129,9 +161,11 @@ export const addObservabilityTraceRoutes = (
         scope: typeof req.query.scope === "string" ? req.query.scope : undefined,
         sensitive: parseBoolean(req.query.sensitive),
         sessionId: typeof req.query.sessionId === "string" ? req.query.sessionId : undefined,
+        signal: parseSignal(req.query.signal),
         sort: parseSort(req.query.sort),
         status:
           req.query.status === "ok" || req.query.status === "error" ? req.query.status : undefined,
+        thumbs: parseThumbs(req.query.thumbs),
         to: typeof req.query.to === "string" ? req.query.to : undefined,
         userId: typeof req.query.userId === "string" ? req.query.userId : undefined,
       });
@@ -160,6 +194,58 @@ export const addObservabilityTraceRoutes = (
     ),
     asyncHandler(async (req, res) => {
       const data = await options.store.getDetail(req.params.id);
+      return res.json({data});
+    })
+  );
+
+  // End-user feedback: authenticated and owner-only, so it skips the admin observability
+  // middleware every other route here uses.
+  router.post(
+    `${BASE_PATH}/traces/:id/feedback`,
+    authenticateMiddleware(),
+    builder()
+      .withTags(["observability"])
+      .withSummary("Record the trace owner's feedback on an AI output")
+      .withDescription(
+        "Thumbs (with an optional comment), outcome class, a passive signal, or flag-for-dataset. " +
+          "Only the trace's own user may call it."
+      )
+      .withPathParameter("id", {type: "string"})
+      .withRequestBody({
+        comment: {
+          description: "Free-text comment attached to the thumbs or outcome score (≤ 2000 chars)",
+          type: "string",
+        },
+        flagDataset: {description: "Flag the trace as a dataset candidate", type: "boolean"},
+        outcome: {enum: ["tp", "fp", "tn", "fn"], type: "string"},
+        signal: {enum: [...FEEDBACK_SIGNALS], type: "string"},
+        thumbs: {
+          // `null` clears the vote. The request validator checks enum membership even for a
+          // nullable field, so null must be listed (the builder's types only allow strings).
+          enum: ["up", "down", null] as unknown as string[],
+          nullable: true,
+          type: "string",
+        },
+      })
+      .withResponse(200, {
+        data: {
+          properties: {
+            flaggedForDataset: {type: "boolean"},
+            reviewItemId: {type: "string"},
+            scores: {items: {type: "object"}, type: "array"},
+            traceId: {type: "string"},
+          },
+          type: "object",
+        },
+      })
+      .build(),
+    asyncHandler(async (req, res) => {
+      const user = req.user as {_id?: unknown; admin?: boolean} | undefined;
+      const data = await recordTraceFeedback({
+        input: req.body as TraceFeedbackInput,
+        traceId: req.params.id,
+        user: {admin: user?.admin, id: String(user?._id)},
+      });
       return res.json({data});
     })
   );

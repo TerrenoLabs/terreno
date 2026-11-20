@@ -19,7 +19,9 @@ pages for features that shipped without one, run the `backfill-user-guide` skill
 | account | [profile.md](account/profile.md) | user | Update your profile |
 | account | [notification-preferences.md](account/notification-preferences.md) | user | Choose how you get notifications |
 | admin | [manage-records.md](admin/manage-records.md) | admin | Browse and edit records in the admin panel |
+| admin | [review-ai-feedback.md](admin/review-ai-feedback.md) | admin | Find what users said about AI answers |
 | admin | [set-user-password.md](admin/set-user-password.md) | admin | Set a user's password |
 | ai | [chat.md](ai/chat.md) | user | Chat with the AI assistant |
 | documents | [files.md](documents/files.md) | user | Store and organize files |
 | todos | [manage-todos.md](todos/manage-todos.md) | user | Add, complete, rename, and delete todos |
+| todos | [summarize-todos.md](todos/summarize-todos.md) | user | Summarize your todos and rate the summary |

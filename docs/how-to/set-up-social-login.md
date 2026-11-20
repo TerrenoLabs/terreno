@@ -225,7 +225,7 @@ input; a command that needs input fails and prints `skipped` instead. If every l
   each value in by hand (`--data-file=AuthKey_<key id>.p8` for the Apple key).
 
 The deploy mounts only the secrets that have a version, so a provider turns on when both of its
-values exist (all four for Apple). **Redeploy after adding a version.** The example reads them as
+values exist (all four for Apple). The deploy log prints `warning: <secret> has no version` for each one it skips. **Redeploy after adding a version.** The example reads them as
 `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
 `APPLE_CLIENT_ID`, `APPLE_TEAM_ID`, `APPLE_KEY_ID`, and `APPLE_PRIVATE_KEY`.
 

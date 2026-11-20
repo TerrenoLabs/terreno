@@ -25,6 +25,13 @@ export interface AiAppOptions {
   createModelFn?: (apiKey: string, modelId?: string) => LanguageModel;
   /** Factory function to create a LanguageModel on the server side without a per-request key (e.g. Vertex AI with ADC). Returns undefined if no provider is configured. */
   createServerModelFn?: (modelId?: string) => LanguageModel | undefined;
+  /**
+   * Decide whether this request may use the server's own models (`aiService`,
+   * `createServerModelFn`, and the title model). When it returns false, a request without an
+   * `x-ai-api-key` header is refused with 403 instead of falling back to a server model. Requests
+   * that send their own key are not affected. Omit it to let every request use server models.
+   */
+  canUseServerModel?: (req: express.Request) => boolean | Promise<boolean>;
   /** Not read: the routes send a canned demo reply whenever no AI service resolves. */
   demoMode?: boolean;
   /** File storage service for handling file uploads to GCS. */
@@ -96,6 +103,7 @@ export class AiApp implements TerrenoPlugin {
     const {
       aiService,
       asks,
+      canUseServerModel,
       createModelFn,
       createServerModelFn,
       demoMode,
@@ -115,6 +123,7 @@ export class AiApp implements TerrenoPlugin {
     const chat = {
       aiService,
       asks,
+      canUseServerModel,
       createModelFn,
       createServerModelFn,
       demoMode,

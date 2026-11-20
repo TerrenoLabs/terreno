@@ -305,15 +305,24 @@ const cleanStepText = (text: string): string => {
  * 2. Specific model requested + server-side model factory (creates a temporary AIService via createServerModelFn)
  * 3. Pre-configured aiService from route options
  * 4. undefined (triggers demo mode response)
+ *
+ * When `canUseServerModel` refuses the request, steps 2 and 3 are skipped and the request is
+ * rejected with 403, so a restricted user can only chat with their own key.
  */
-export const resolveAiService = (
+export const resolveAiService = async (
   req: express.Request,
   options: GptRouteOptions,
   modelId?: string
-): AIService | undefined => {
+): Promise<AIService | undefined> => {
   const perRequestKey = req.headers["x-ai-api-key"] as string | undefined;
   if (perRequestKey && options.createModelFn) {
     return new AIService({model: options.createModelFn(perRequestKey, modelId)});
+  }
+  if (options.canUseServerModel && !(await options.canUseServerModel(req))) {
+    throw new APIError({
+      status: 403,
+      title: "Server AI models are not available to this account. Send your own API key instead.",
+    });
   }
   if (modelId && options.createServerModelFn) {
     const serverModel = options.createServerModelFn(modelId);
@@ -1812,7 +1821,7 @@ export const runChatTurn = async ({
     hasCreateModelFn: !!options.createModelFn,
     hasPerRequestKey: !!req.headers["x-ai-api-key"],
   });
-  const aiService = resolveAiService(req, options, requestModel as string | undefined);
+  const aiService = await resolveAiService(req, options, requestModel as string | undefined);
   if (!aiService) {
     logger.debug("No AI service available, sending demo response");
     sink.open();

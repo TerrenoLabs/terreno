@@ -350,7 +350,7 @@ export const addGptRoutes = (router: express.Router, options: GptRouteOptions): 
         throw new APIError({status: 403, title: "Prompt registry selection requires admin access"});
       }
 
-      const aiService = resolveAiService(req, options);
+      const aiService = await resolveAiService(req, options);
       if (!aiService) {
         return res.json({data: DEMO_RESPONSE});
       }

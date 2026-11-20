@@ -169,6 +169,16 @@ resource "google_storage_bucket" "example_documents" {
   depends_on = [module.bootstrap]
 }
 
+# Vertex AI for the example backend's server models (GOOGLE_VERTEX_PROJECT). The app limits
+# them to Google Workspace sign-ins on VERTEX_ALLOWED_EMAIL_DOMAINS.
+resource "google_project_iam_member" "backend_runtime_vertex_user" {
+  project = var.project_id
+  role    = "roles/aiplatform.user"
+  member  = "serviceAccount:${google_service_account.backend_runtime.email}"
+
+  depends_on = [module.bootstrap]
+}
+
 resource "google_storage_bucket_iam_member" "backend_runtime_example_documents" {
   bucket = google_storage_bucket.example_documents.name
   role   = "roles/storage.objectAdmin"

@@ -24,6 +24,9 @@ export GCP_MCP_SERVICE="${GCP_MCP_SERVICE:-terreno-mcp}"
 export TF_DEPLOYMENT="${TF_DEPLOYMENT:-terreno-prod}"
 # Same bucket terraform creates as ${project_id}-example-documents.
 export GCP_DOCUMENTS_BUCKET="${GCP_DOCUMENTS_BUCKET:-flourish-terreno-example-documents}"
+# Vertex AI project for the example backend's server models. The backend only serves them to
+# Google Workspace sign-ins on VERTEX_ALLOWED_EMAIL_DOMAINS; everyone else brings their own key.
+export GCP_VERTEX_PROJECT="${GCP_VERTEX_PROJECT:-flourish-terreno}"
 
 # shellcheck source=scripts/ci/github-deployment-lib.sh
 source scripts/ci/github-deployment-lib.sh
@@ -104,7 +107,7 @@ deploy_backend() {
   secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   # The Netlify web build uses Better Auth's bearer scheme; its social sign-in returns through the
   # OAuth one-time-token handoff to CORS_ORIGINS' /login. Cookie builds keep CROSS_DOMAIN_AUTH_COOKIES.
-  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,BETTER_AUTH_OAUTH_HANDOFF=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},$(jobs_env_vars "$tag")"
+  env_vars="NODE_ENV=production,ADMIN_SPA_ENABLED=true,CROSS_DOMAIN_AUTH_COOKIES=true,BETTER_AUTH_OAUTH_HANDOFF=true,JOBS_START_WORKER=true,GCS_BUCKET=${GCP_DOCUMENTS_BUCKET},GOOGLE_VERTEX_PROJECT=${GCP_VERTEX_PROJECT},$(jobs_env_vars "$tag")"
   args=(
     run deploy "$GCP_BACKEND_SERVICE"
     "--project=$GCP_PROJECT_ID"

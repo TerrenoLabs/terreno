@@ -55,6 +55,7 @@ import {adminScripts} from "./adminScripts";
 import {
   addAiRoutes,
   aiModelsRouter,
+  configureVertexAccess,
   createModelFromKey,
   createServerModel,
   getAiService,
@@ -95,6 +96,7 @@ import {
 } from "./utils/betterAuthConfig";
 import {connectToMongoDB} from "./utils/database";
 import {parseObservabilityPriceMap} from "./utils/observabilityConfig";
+import {createVertexAccessCheck, parseVertexAllowedDomains} from "./utils/vertexAccess";
 import {createExampleInboundWebhooks} from "./webhooksExample";
 import {io} from "./websockets";
 
@@ -250,10 +252,16 @@ export const start = async (
     // middleware must be installed before any routes (admin, SPA, model routers)
     // that rely on req.user being populated from the better-auth session.
     if (betterAuthConfig) {
-      terraApp.register(
-        new BetterAuthApp({
-          config: betterAuthConfig,
-          userModel: User as unknown as TerrenoAuthUserModel,
+      const betterAuthApp = new BetterAuthApp({
+        config: betterAuthConfig,
+        userModel: User as unknown as TerrenoAuthUserModel,
+      });
+      terraApp.register(betterAuthApp);
+      // Vertex is limited to users signed in with a Google Workspace account on an allowed domain.
+      configureVertexAccess(
+        createVertexAccessCheck({
+          allowedDomains: parseVertexAllowedDomains(process.env.VERTEX_ALLOWED_EMAIL_DOMAINS),
+          getAuth: () => betterAuthApp.getAuth(),
         })
       );
     }

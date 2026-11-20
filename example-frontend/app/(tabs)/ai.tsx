@@ -102,7 +102,12 @@ interface TurnRequest {
 type TurnOutcome =
   | {kind: "streamed"}
   | {fields: AskErrors[string]; kind: "invalidAnswer"}
-  | {detail: string; kind: "conflict"};
+  | {detail: string; kind: "conflict"}
+  | {detail: string; kind: "refused"};
+
+/** Shown when the server refuses its own models and gives no reason. */
+const SERVER_MODEL_REFUSED_DETAIL =
+  "AI is not available to this account. Add your own Gemini API key in Profile.";
 
 /** The synced row's id: the entity key, which is the ObjectId `_id` as a hex string. */
 const historyIdOf = (history: GptHistory): string => history._id;
@@ -243,6 +248,7 @@ const findStreamingReply = (history?: GptHistory): {text: string} | undefined =>
  */
 const FALLBACK_MODELS = [
   {label: "Gemini 3.8 Flash", value: "gemini-3.8-flash"},
+  {label: "Gemini 4 Argon", value: "gemini-4-argon"},
   {label: "Gemini 3.5 Flash Lite", value: "gemini-3.5-flash-lite"},
   {label: "Gemini 3.1 Pro", value: "gemini-3.1-pro-preview"},
   {label: "Gemini 3 Pro Image", value: "gemini-3-pro-image"},
@@ -711,6 +717,12 @@ const AiScreen: React.FC = () => {
         const detail = errorDetailFromBody(await readJson(response));
         return {detail: detail ?? STALE_ASK_DETAIL, kind: "conflict"};
       }
+      // The server refuses its own models to accounts without access (for example, Vertex is
+      // limited to Google Workspace sign-ins); retrying will not help, so say why.
+      if (response.status === 403) {
+        const detail = errorDetailFromBody(await readJson(response));
+        return {detail: detail ?? SERVER_MODEL_REFUSED_DETAIL, kind: "refused"};
+      }
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -939,7 +951,7 @@ const AiScreen: React.FC = () => {
           },
           pendingAskId,
         });
-        if (outcome.kind === "conflict") {
+        if (outcome.kind === "conflict" || outcome.kind === "refused") {
           setCurrentMessages((prev) => [
             ...withoutEmptyAssistant(prev),
             {content: outcome.detail, role: "assistant"},
@@ -987,6 +999,12 @@ const AiScreen: React.FC = () => {
         } else if (outcome.kind === "conflict") {
           // Another tab or device already resolved the ask; show how it ended.
           await syncConversation(historyId);
+        } else if (outcome.kind === "refused") {
+          const {detail} = outcome;
+          setCurrentMessages((prev) => [
+            ...withoutEmptyAssistant(prev),
+            {content: detail, role: "assistant"},
+          ]);
         }
       } catch (err) {
         console.error("Error answering the question:", err);

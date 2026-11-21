@@ -3,7 +3,7 @@ import {randomUUID} from "node:crypto";
 import {existsSync, readdirSync, readFileSync, statSync} from "node:fs";
 import {join} from "node:path";
 
-export type EvidenceStatus = "PASS" | "FAIL" | "UNKNOWN";
+type EvidenceStatus = "PASS" | "FAIL" | "UNKNOWN";
 
 /** One rubric row's evidence, as written to `evidence.json`. */
 export interface RowEvidence {
@@ -13,7 +13,7 @@ export interface RowEvidence {
   artifacts: string[];
 }
 
-export interface MongoProbe {
+interface MongoProbe {
   /** Counts documents in `collection` matching `filter`. */
   count: (collection: string, filter: Record<string, unknown>) => Promise<number>;
 }
@@ -23,7 +23,7 @@ export interface RunResult {
   stdout: string;
 }
 
-export interface ViewportResult {
+interface ViewportResult {
   horizontalScroll: boolean;
   primaryActionVisible: boolean;
   todoCreateWorks: boolean;

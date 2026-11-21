@@ -7,8 +7,8 @@ import type {BuildResult} from "../build";
 import {collectEvidence as defaultCollect, type EvidenceFile} from "./collectEvidence";
 import {compareTimes, type TimeReport} from "./timeRegression";
 
-export const DEFAULT_SCORER_CMD = "claude -p --output-format json --allowedTools Read,Glob,Grep";
-export const MIN_VISUAL_SCORE = 4;
+const DEFAULT_SCORER_CMD = "claude -p --output-format json --allowedTools Read,Glob,Grep";
+const MIN_VISUAL_SCORE = 4;
 
 export interface RowScore {
   row: string;
@@ -16,7 +16,7 @@ export interface RowScore {
   reason: string;
 }
 
-export interface EvidenceRefs {
+interface EvidenceRefs {
   ci: string[];
   deploy: string[];
   screenshots: string[];
@@ -100,7 +100,7 @@ const tryParse = (text: string): unknown => {
 };
 
 /** Accepts bare JSON, fenced JSON, and the `{result: "<json>"}` envelope of `claude -p`. */
-export const parseScorerOutput = (stdout: string): ScorerOutput | undefined => {
+const parseScorerOutput = (stdout: string): ScorerOutput | undefined => {
   const unfence = (text: string): string =>
     text
       .trim()

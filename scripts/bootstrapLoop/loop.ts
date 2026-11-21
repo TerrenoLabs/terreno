@@ -10,7 +10,7 @@ import {scoreBuild as defaultScoreBuild, type ScoreResult} from "./score/score";
 export const DEFAULT_MAX_ITERATIONS = 3;
 
 /** The stage that owns each rubric row (see the stage table in the plan). */
-export const ROW_OWNER: Readonly<Record<string, string>> = {
+const ROW_OWNER: Readonly<Record<string, string>> = {
   R1: "admin",
   R2: "auth",
   R3: "theming",
@@ -26,7 +26,7 @@ export const ROW_OWNER: Readonly<Record<string, string>> = {
   R13: "deploy",
 };
 
-export interface IterationLog {
+interface IterationLog {
   iteration: number;
   failedRows: string[];
   rerunStages: string[];

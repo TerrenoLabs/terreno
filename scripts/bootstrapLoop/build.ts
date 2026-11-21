@@ -7,7 +7,7 @@ import {stagesDir} from "./stageResult";
 import {stageIds} from "./stages";
 import type {RunStageOptions, StageResult} from "./types";
 
-export interface BuildStageSummary {
+interface BuildStageSummary {
   id: string;
   status: "PASS" | "FAIL";
   attempts: number;
@@ -51,7 +51,7 @@ const readAttempts = (runDir: string, id: string): StageResult[] => {
     .sort((a, b) => a.attempt - b.attempt);
 };
 
-export const summarizeStage = (runDir: string, id: string): BuildStageSummary | undefined => {
+const summarizeStage = (runDir: string, id: string): BuildStageSummary | undefined => {
   const attempts = readAttempts(runDir, id);
   if (attempts.length === 0) {
     return undefined;

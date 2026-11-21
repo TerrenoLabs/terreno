@@ -1,6 +1,6 @@
 import type {BuildResult} from "../build";
 
-export interface StageTime {
+interface StageTime {
   id: string;
   totalMinutes: number;
   previous?: number;

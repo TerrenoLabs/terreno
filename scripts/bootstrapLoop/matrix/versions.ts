@@ -3,7 +3,7 @@ export const LOCAL_VERSION = "local";
 
 const STABLE = /^(\d+)\.(\d+)\.(\d+)$/;
 
-export const parseSemver = (version: string): [number, number, number] | undefined => {
+const parseSemver = (version: string): [number, number, number] | undefined => {
   const match = STABLE.exec(version);
   if (!match) {
     return undefined;
@@ -11,7 +11,7 @@ export const parseSemver = (version: string): [number, number, number] | undefin
   return [Number(match[1]), Number(match[2]), Number(match[3])];
 };
 
-export const compareSemver = (a: string, b: string): number => {
+const compareSemver = (a: string, b: string): number => {
   const left = parseSemver(a);
   const right = parseSemver(b);
   if (!left || !right) {

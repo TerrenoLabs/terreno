@@ -16,7 +16,7 @@ const LATER_STAGE_IDS = [
 ];
 
 /** Registry of the eleven stages in run order. */
-export const STAGES: StageDefinition[] = [scaffoldStage, ...LATER_STAGE_IDS.map(agentStage)];
+const STAGES: StageDefinition[] = [scaffoldStage, ...LATER_STAGE_IDS.map(agentStage)];
 
 export const stageIds = (): string[] => STAGES.map((stage) => stage.id);
 

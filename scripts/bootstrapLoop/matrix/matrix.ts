@@ -38,7 +38,7 @@ export interface MatrixResult {
 const SKIP_DIRS = new Set(["node_modules", ".git", ".vercel"]);
 
 /** Relative paths of every file in the scaffold, ignoring dependencies and VCS state. */
-export const listTree = (root: string): string[] => {
+const listTree = (root: string): string[] => {
   if (!existsSync(root)) {
     return [];
   }

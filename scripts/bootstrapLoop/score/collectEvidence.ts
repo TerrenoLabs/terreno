@@ -7,7 +7,7 @@ import {probeR3, probeR4, probeR7, probeR13} from "./probes/app";
 import type {Probe, ProbeContext, ProbeDeps, RowEvidence} from "./probes/probeKit";
 import {probeR5, probeR6, probeR9, probeR10, probeR11} from "./probes/services";
 
-export const PROBES: Record<string, Probe> = {
+const PROBES: Record<string, Probe> = {
   R1: probeR1,
   R2: probeR2,
   R3: probeR3,
@@ -35,7 +35,7 @@ const SCREENS = [
   {name: "admin", path: "/admin"},
 ];
 
-export interface RunningApp {
+interface RunningApp {
   baseUrl: string;
   webUrl: string;
   stop: () => Promise<void>;
@@ -75,10 +75,7 @@ const waitFor = async (url: string, attempts = 60): Promise<void> => {
 };
 
 /** Starts the app's backend (4000) and web export server (8082) as child processes. */
-export const startAppProcesses = async (
-  appDir: string,
-  env: NodeJS.ProcessEnv
-): Promise<RunningApp> => {
+const startAppProcesses = async (appDir: string, env: NodeJS.ProcessEnv): Promise<RunningApp> => {
   const children: ChildProcess[] = [];
   const launch = (cwd: string, args: string[], extra: NodeJS.ProcessEnv): void => {
     children.push(spawn("bun", args, {cwd, env: {...env, ...extra}, stdio: "ignore"}));

@@ -7,7 +7,7 @@ import {nextAttempt, writeStageResult} from "./stageResult";
 import {findStage, stageIds} from "./stages";
 import type {RunStageOptions, StageResult} from "./types";
 
-export const appDirFor = (runDir: string): string => join(runDir, "app");
+const appDirFor = (runDir: string): string => join(runDir, "app");
 
 /** Runs one stage against `<runDir>/app` and writes `<runDir>/stages/<stage>.json`. */
 export const runStage = async ({

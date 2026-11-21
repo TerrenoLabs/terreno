@@ -5,10 +5,10 @@ import {join, resolve} from "node:path";
 import {pathToFileURL} from "node:url";
 
 export const NAIVE_PROMPT = "make me a todo app";
-export const MIN_VERSION = "58.0.0";
-export const LOCAL_VERSION = "local";
-export const DEFAULT_APP_NAME = "todo-app";
-export const DEFAULT_APP_DISPLAY_NAME = "Todo App";
+const MIN_VERSION = "58.0.0";
+const LOCAL_VERSION = "local";
+const DEFAULT_APP_NAME = "todo-app";
+const DEFAULT_APP_DISPLAY_NAME = "Todo App";
 
 export const CHECKOUT_ROOT = resolve(import.meta.dir, "..", "..");
 
@@ -32,7 +32,7 @@ const parseVersion = (version: string): number[] | undefined => {
   return match ? [Number(match[1]), Number(match[2]), Number(match[3])] : undefined;
 };
 
-export const assertSupportedVersion = (version: string): void => {
+const assertSupportedVersion = (version: string): void => {
   if (version === LOCAL_VERSION) {
     return;
   }

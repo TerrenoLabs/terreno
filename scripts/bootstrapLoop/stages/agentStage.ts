@@ -21,7 +21,7 @@ export const stagePromptPath = (stageId: string): string =>
   );
 
 /** `<naive prompt> + <stage prompt> + <prior failures>`, the whole input of a later stage. */
-export const renderStagePrompt = (stageId: string, failures: string[]): string => {
+const renderStagePrompt = (stageId: string, failures: string[]): string => {
   const path = stagePromptPath(stageId);
   if (!existsSync(path)) {
     throw new Error(`stage prompt missing: ${path}`);

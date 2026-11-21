@@ -9,21 +9,21 @@ export interface RunSnapshot {
   files: string[];
 }
 
-export interface RowRegression {
+interface RowRegression {
   row: string;
   from: string;
   to: string;
   reason: string;
 }
 
-export interface IterationRegression {
+interface IterationRegression {
   from: string;
   to: string;
   previous: number;
   now: number;
 }
 
-export interface TimeRegression {
+interface TimeRegression {
   scope: string;
   previous: number;
   now: number;

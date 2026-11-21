@@ -1,7 +1,6 @@
 import {spawn} from "node:child_process";
 
-export const DEFAULT_BUILDER_CMD =
-  "claude -p --output-format json --permission-mode bypassPermissions";
+const DEFAULT_BUILDER_CMD = "claude -p --output-format json --permission-mode bypassPermissions";
 
 export interface BuilderRunOptions {
   prompt: string;
@@ -15,7 +14,7 @@ export interface BuilderRunResult {
   output: string;
 }
 
-export const builderCommand = (env: NodeJS.ProcessEnv = process.env): string =>
+const builderCommand = (env: NodeJS.ProcessEnv = process.env): string =>
   env.BOOTSTRAP_LOOP_BUILDER_CMD?.trim() || DEFAULT_BUILDER_CMD;
 
 /** Env every stage may see; secrets reach a stage only through its own allowlist. */

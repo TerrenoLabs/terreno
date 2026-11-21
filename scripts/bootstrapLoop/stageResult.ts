@@ -5,10 +5,10 @@ import type {StageResult} from "./types";
 
 export const stagesDir = (runDir: string): string => join(runDir, "stages");
 
-export const stageFile = (runDir: string, stage: string): string =>
+const stageFile = (runDir: string, stage: string): string =>
   join(stagesDir(runDir), `${stage}.json`);
 
-export const readStageResult = (runDir: string, stage: string): StageResult | undefined => {
+const readStageResult = (runDir: string, stage: string): StageResult | undefined => {
   const path = stageFile(runDir, stage);
   if (!existsSync(path)) {
     return undefined;

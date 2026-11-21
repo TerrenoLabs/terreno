@@ -1,6 +1,7 @@
 import {resolve} from "node:path";
 
 import {DEFAULT_MAX_ITERATIONS, runLoop} from "../loop";
+import {ensureFreshInstall} from "../preflight";
 
 const flagValue = (args: string[], name: string): string | undefined => {
   const index = args.indexOf(`--${name}`);
@@ -16,6 +17,14 @@ export const run = async (args: string[]): Promise<number> => {
   if (!version || !runDir) {
     console.error("Usage: bootstrap-loop loop --version <v|local> --run-dir <dir>");
     return 2;
+  }
+  const preflightError = ensureFreshInstall({
+    repoRoot: resolve(import.meta.dir, "../../.."),
+    version,
+  });
+  if (preflightError) {
+    console.error(preflightError);
+    return 1;
   }
   const maxIterations = Number(flagValue(args, "max-iterations") ?? DEFAULT_MAX_ITERATIONS);
   if (!Number.isInteger(maxIterations) || maxIterations < 1) {

@@ -1,5 +1,5 @@
 import {resolve} from "node:path";
-
+import {ensureFreshInstall} from "../preflight";
 import {runStage} from "../runStage";
 import {stageIds} from "../stages";
 
@@ -23,6 +23,14 @@ export const run = async (args: string[]): Promise<number> => {
   if (!version || !runDir) {
     console.error("Usage: bootstrap-loop stage <id> --version <v|local> --run-dir <dir>");
     return 2;
+  }
+  const preflightError = ensureFreshInstall({
+    repoRoot: resolve(import.meta.dir, "../../.."),
+    version,
+  });
+  if (preflightError) {
+    console.error(preflightError);
+    return 1;
   }
   const failures = args.flatMap((arg, index) => (arg === "--failure" ? [args[index + 1]] : []));
   const result = await runStage({failures, runDir: resolve(runDir), stageId, version});

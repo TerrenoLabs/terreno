@@ -60,6 +60,9 @@ const listParams = (args: TraceListQueryArgs): Record<string, unknown> => {
   if (args.sessionId.trim()) {
     params.sessionId = args.sessionId.trim();
   }
+  if (args.tag.trim()) {
+    params.tag = args.tag.trim();
+  }
   if (args.status) {
     params.status = args.status;
   }

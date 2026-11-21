@@ -174,6 +174,11 @@ describe("LocalTraceStore", () => {
       {id: newer.id, scope: "ws-1", tags: ["beta"]},
     ]);
 
+    await registerObsTrace().updateOne({_id: older.id}, {tags: ["model:glm-5.3", "key:shade"]});
+    const byTag = await store.list({tag: "model:glm-5.3"});
+    expect(byTag.data.map((row) => row.id)).toEqual([older.id]);
+    expect((await store.list({tag: "missing"})).data).toEqual([]);
+
     const bySensitive = await store.list({sensitive: true});
     expect(bySensitive.data.map((row) => row.id)).toEqual([newer.id]);
 
@@ -413,6 +418,7 @@ describe("LocalTraceStore", () => {
     const operator = {$ne: "x"} as unknown as string;
     await expect(store.list({sessionId: operator})).rejects.toMatchObject({status: 400});
     await expect(store.list({scope: operator})).rejects.toMatchObject({status: 400});
+    await expect(store.list({tag: operator})).rejects.toMatchObject({status: 400});
     await expect(store.list({status: {$ne: "ok"} as unknown as "ok"})).rejects.toMatchObject({
       status: 400,
     });

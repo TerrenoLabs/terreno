@@ -44,6 +44,7 @@ describe("useAiObservabilityTracesApi", () => {
           sessionId: "sess",
           sort: "-cost",
           status: "error",
+          tag: " model:glm-5.3 ",
           to: "2026-01-02",
           userId: "user-1",
         }),
@@ -64,6 +65,7 @@ describe("useAiObservabilityTracesApi", () => {
       sessionId: "sess",
       sort: "-cost",
       status: "error",
+      tag: "model:glm-5.3",
       to: "2026-01-02",
       userId: "user-1",
     });

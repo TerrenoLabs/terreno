@@ -44,3 +44,5 @@ Generated apps turn on the auth suite: account linking, two-factor, passkeys, la
 ## Library
 
 `generateAllFiles` returns the file list; `writeScaffold` writes it to disk. The CLI is the only supported way to scaffold an app. MCP `terreno_bootstrap_ai_rules` can add editor rules after the CLI runs.
+
+The repo's [bootstrap loop](bootstrap-loop.md) scaffolds with this CLI for every released version and scores the app that results.

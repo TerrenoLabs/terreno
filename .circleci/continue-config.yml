@@ -36,6 +36,9 @@ parameters:
   run-jobs:
     type: boolean
     default: false
+  run-bootstrap-loop:
+    type: boolean
+    default: false
   run-mcp-server:
     type: boolean
     default: false
@@ -975,6 +978,21 @@ jobs:
             bun run test:coverage
       - check_new_file_lcov:
           package: jobs
+
+  bootstrap-loop-ci:
+    # The job runs knip, which needs the newer Node that node22_knip pins.
+    executor: node22_knip
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Compile packages (the local-prompt tests read their dist)
+          command: bun run compile
+      - run:
+          name: Test the bootstrap loop harness (fakes only, no network)
+          environment:
+            CI: "true"
+          command: bun run test:bootstrap-loop
 
   mcp-server-ci:
     executor: node22
@@ -2778,6 +2796,11 @@ workflows:
     when: << pipeline.parameters.run-jobs >>
     jobs:
       - jobs-ci
+
+  bootstrap-loop:
+    when: << pipeline.parameters.run-bootstrap-loop >>
+    jobs:
+      - bootstrap-loop-ci
 
   mcp-server:
     when: << pipeline.parameters.run-mcp-server >>

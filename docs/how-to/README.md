@@ -15,6 +15,7 @@ Problem-oriented, practical steps. Use these when you know what you want to do.
 ## Contents
 
 - [Create a Terreno app](create-a-terreno-app.md) — Scaffold a full-stack app with `create-terreno-app` (Bun or npm)
+- [Run the bootstrap loop](run-bootstrap-loop.md) — Build, score and regression-test the todo app from the bootstrap skill
 - [Update dependencies](update-dependencies.md) — Daily rolling PR, exercise test, Expo fingerprint freeze
 - [Fix code scanning alerts](fix-code-scanning-alerts.md) — One PR per sweep; fixes close on rescan, reviewed false positives are dismissed after merge
 - [CircleCI](circleci.md) — Dual-run CI on CircleCI (package CI / policy / e2e; deploys later)

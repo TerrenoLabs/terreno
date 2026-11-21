@@ -1,0 +1,1 @@
+jobs: test: steps: run: bun test --coverage; store_artifacts coverage

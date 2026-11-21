@@ -86,7 +86,12 @@
         ".github/scripts/**/*.test.ts",
         "scripts/ci/prepare-package-publish.mjs",
         "scripts/charts/compareRenderedSnapshots.ts",
-        "scripts/captureListDetail.ts"
+        "scripts/captureListDetail.ts",
+        // bootstrap-loop's cli.ts imports `commands/*.ts` by a runtime-built path and the
+        // harness tests spawn `fixtures/` as subprocesses, so neither has a static importer.
+        "scripts/bootstrapLoop/cli.ts",
+        "scripts/bootstrapLoop/commands/*.ts",
+        "scripts/bootstrapLoop/fixtures/**/*.{ts,tsx}"
       ],
       // Policy/release scripts are development entries, not production modules.
       "project": [

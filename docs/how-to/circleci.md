@@ -118,10 +118,23 @@ prefer colocated `*.test.ts` files and compile `@terreno/*` dist deps only
 when the package imports them. Coverage-script unit tests run in the cheap
 `coverage-scripts` job.
 
-Playwright runs five shards after `e2e-prepare` (`auth`, `app`, `admin-core`,
-`admin-table`, `syncdb`) instead of one container per spec file. Each shard
-first checks the [affected gate](#e2e-affected-gate) and halts when no changed
-file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
+Playwright runs seven shards after `e2e-prepare` (`auth`, `app-todos`, `app-shell`,
+`app-ai`, `admin-core`, `admin-table`, `syncdb`) instead of one container per spec file.
+`e2e-prepare` compiles the workspace and exports the web app at the same time: the export
+bundles `@terreno/*` from source (`TERRENO_METRO_FROM_SOURCE`), and compile writes `dist`
+for the backend. Smoke does the same split across jobs: `smoke-compile` and one
+`smoke-export-*` job per web app run together, then `smoke` runs the package scripts.
+`smoke-compile` archives package `dist` trees, including `admin-spa/src/dist` (the
+`AdminSpaServeApp` plugin). It leaves `admin-spa/dist` out so the web export from
+`smoke-export-admin-spa` is the bundle the admin-spa smoke serves. The demo export
+compiles `@terreno/blocks` and generates `demo/ui-types-documentation.json` first, and the
+example-frontend export compiles `@terreno/test`, because those two need dist output that only
+a full compile produced before. The example-backend Docker build compiles the same packages
+through `scripts/ci/docker-compile-and-export.sh`, including `@terreno/test`, which `api` and
+`admin-backend` type-check against.
+A GCP preview builds the example-backend image once and deploys the backend and tasks
+services together. Each shard first checks the [affected gate](#e2e-affected-gate)
+and halts when no changed file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,
 which builds its own web bundle and backend (`playwright.config.ts` with
 `E2E_CROSS_SITE_BEARER=true`), has no affected gate, and is not a required check. Repository
 policy checks share one `repo-policies` job so eight small checkouts do not
@@ -129,9 +142,9 @@ sit in the concurrency queue. `repo-policies` uses Node 22.14 because Knip's
 oxc-parser throws `ERR_REQUIRE_ESM` on the shared 22.11 executor.
 The `typecheck` job runs in the same workflow: it compiles every package, then
 runs `bun run typecheck`. Require `repo-policies` and `typecheck` in branch protection. Require `e2e-auth` /
-`e2e-app` / … only as path-filtered checks; config-only PRs post `e2e-auth`
-as the smoke shard and do not run the other four. Do not require the old
-`no-barrel-imports` / `e2e-login` names.
+`e2e-app-todos` / `e2e-app-shell` / `e2e-app-ai` / … only as path-filtered checks; config-only PRs post `e2e-auth`
+as the smoke shard and do not run the other shards. Do not require the old
+`no-barrel-imports` / `e2e-login` / `e2e-app` names.
 
 ## E2E affected gate
 

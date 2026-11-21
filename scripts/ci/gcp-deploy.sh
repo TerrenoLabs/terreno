@@ -92,14 +92,16 @@ jobs_env_vars() {
 deploy_backend() {
   local tag="$1"
   local image="${GCP_BACKEND_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_BACKEND_SERVICE}/${GCP_BACKEND_SERVICE}:${CIRCLE_SHA1}"
-  configure_registry "$GCP_BACKEND_REGION"
-  docker build --file example-backend/Dockerfile --tag "$image" .
-  if [ "$tag" != "prod" ]; then
-    SMOKE_IMAGE="$image" SMOKE_MODE=preview PR_NUMBER="$PR_NUMBER" \
-      GITHUB_RUN_ID="${CIRCLE_WORKFLOW_ID:-circleci}" GITHUB_RUN_ATTEMPT=1 \
-      .github/workflows/scripts/backend-container-smoke.sh
+  if [ "${PREVIEW_IMAGES_READY:-}" != "1" ]; then
+    configure_registry "$GCP_BACKEND_REGION"
+    docker build --file example-backend/Dockerfile --tag "$image" .
+    if [ "$tag" != "prod" ]; then
+      SMOKE_IMAGE="$image" SMOKE_MODE=preview PR_NUMBER="$PR_NUMBER" \
+        GITHUB_RUN_ID="${CIRCLE_WORKFLOW_ID:-circleci}" GITHUB_RUN_ATTEMPT=1 \
+        .github/workflows/scripts/backend-container-smoke.sh
+    fi
+    docker push "$image"
   fi
-  docker push "$image"
 
   secrets="MONGO_URI=${GCP_BACKEND_SERVICE}-mongodb-uri:latest"
   # The Netlify web build uses Better Auth's bearer scheme; its social sign-in returns through the
@@ -174,9 +176,11 @@ deploy_backend() {
 deploy_tasks() {
   local tag="$1"
   local image="${GCP_BACKEND_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_TASKS_SERVICE}/${GCP_TASKS_SERVICE}:${CIRCLE_SHA1}"
-  configure_registry "$GCP_BACKEND_REGION"
-  docker build --file example-backend/Dockerfile --tag "$image" .
-  docker push "$image"
+  if [ "${PREVIEW_IMAGES_READY:-}" != "1" ]; then
+    configure_registry "$GCP_BACKEND_REGION"
+    docker build --file example-backend/Dockerfile --tag "$image" .
+    docker push "$image"
+  fi
 
   local env_vars="NODE_ENV=production,BACKEND_SERVICE=tasks,FLOURISH_SERVICE=${GCP_TASKS_SERVICE},JOBS_START_WORKER=false,$(jobs_env_vars "$tag")"
   local revision_suffix=""
@@ -278,9 +282,70 @@ case "$action" in
     scripts/ci/validate-env.sh PR_NUMBER
     export GCP_SERVICE_ACCOUNT="${GCP_CD_DEPLOYER_SA_PROD:-}"
     gcp_auth
+    # Both services ship the same image. Build and push it once, then deploy the
+    # two Cloud Run services at the same time. Each deploy gets its own gcloud
+    # config directory so the two processes do not rewrite one config.
+    build_preview_images() {
+      local tasks_image backend_image tasks_push backend_push tasks_status backend_status
+      tasks_image="${GCP_BACKEND_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_TASKS_SERVICE}/${GCP_TASKS_SERVICE}:${CIRCLE_SHA1}"
+      backend_image="${GCP_BACKEND_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${GCP_BACKEND_SERVICE}/${GCP_BACKEND_SERVICE}:${CIRCLE_SHA1}"
+      configure_registry "$GCP_BACKEND_REGION"
+      docker build --file example-backend/Dockerfile --tag "$tasks_image" --tag "$backend_image" .
+      SMOKE_IMAGE="$backend_image" SMOKE_MODE=preview PR_NUMBER="$PR_NUMBER" \
+        GITHUB_RUN_ID="${CIRCLE_WORKFLOW_ID:-circleci}" GITHUB_RUN_ATTEMPT=1 \
+        .github/workflows/scripts/backend-container-smoke.sh
+      docker push "$tasks_image" &
+      tasks_push=$!
+      docker push "$backend_image" &
+      backend_push=$!
+      tasks_status=0
+      backend_status=0
+      wait "$tasks_push" || tasks_status=$?
+      wait "$backend_push" || backend_status=$?
+      if [ "$tasks_status" -ne 0 ]; then
+        return "$tasks_status"
+      fi
+      return "$backend_status"
+    }
+    copy_gcloud_config() {
+      local dest="$1"
+      local source_config="${CLOUDSDK_CONFIG:-$HOME/.config/gcloud}"
+      mkdir -p "$dest"
+      cp -a "$source_config"/. "$dest/"
+    }
     deploy_backend_preview() {
-      deploy_tasks "pr-${PR_NUMBER}"
-      deploy_backend "pr-${PR_NUMBER}"
+      local tasks_config backend_config tasks_pid backend_pid tasks_status backend_status copy_status
+      build_preview_images
+      # The copies hold the deployer's gcloud credentials, so they are removed as soon as the
+      # deploys finish, or as soon as a copy fails.
+      tasks_config="$(mktemp -d)"
+      backend_config="$(mktemp -d)"
+      # Also covers a cancelled or killed step; the EXIT trap does not run in the deploy subshells.
+      trap "rm -rf '$tasks_config' '$backend_config'" EXIT
+      copy_status=0
+      copy_gcloud_config "$tasks_config" || copy_status=$?
+      if [ "$copy_status" -eq 0 ]; then
+        copy_gcloud_config "$backend_config" || copy_status=$?
+      fi
+      if [ "$copy_status" -ne 0 ]; then
+        rm -rf "$tasks_config" "$backend_config"
+        trap - EXIT
+        return "$copy_status"
+      fi
+      PREVIEW_IMAGES_READY=1 CLOUDSDK_CONFIG="$tasks_config" deploy_tasks "pr-${PR_NUMBER}" &
+      tasks_pid=$!
+      PREVIEW_IMAGES_READY=1 CLOUDSDK_CONFIG="$backend_config" deploy_backend "pr-${PR_NUMBER}" &
+      backend_pid=$!
+      tasks_status=0
+      wait "$tasks_pid" || tasks_status=$?
+      backend_status=0
+      wait "$backend_pid" || backend_status=$?
+      rm -rf "$tasks_config" "$backend_config"
+      trap - EXIT
+      if [ "$tasks_status" -ne 0 ]; then
+        return "$tasks_status"
+      fi
+      return "$backend_status"
     }
     with_github_deployment "example-backend-preview-pr-${PR_NUMBER}" "Backend preview pr-${PR_NUMBER}" \
       "https://pr-${PR_NUMBER}---${backend_prod_url#https://}" \

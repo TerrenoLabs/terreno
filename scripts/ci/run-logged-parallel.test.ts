@@ -1,0 +1,41 @@
+import {describe, it} from "bun:test";
+import {spawnSync} from "node:child_process";
+import {existsSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {assert} from "chai";
+
+const script = join(import.meta.dir, "run-logged-parallel.sh");
+
+const run = (args: string[]): {status: number | null; stdout: string} => {
+  const result = spawnSync("sh", [script, ...args], {encoding: "utf8"});
+  return {status: result.status, stdout: result.stdout};
+};
+
+describe("run-logged-parallel", () => {
+  it("prints both logs and fails when one command fails", () => {
+    const result = run(["ok=echo hello", "bad=echo boom && exit 3"]);
+    assert.equal(result.status, 3);
+    assert.match(result.stdout, /===== ok \(exit 0, \d+s\) =====/);
+    assert.include(result.stdout, "hello");
+    assert.match(result.stdout, /===== bad \(exit 3, \d+s\) =====/);
+    assert.include(result.stdout, "boom");
+  });
+
+  it("exits 0 when every command exits 0", () => {
+    const result = run(["a=echo one", "b=echo two"]);
+    assert.equal(result.status, 0);
+    assert.include(result.stdout, "one");
+    assert.include(result.stdout, "two");
+  });
+
+  it("rejects a malformed argument before starting any command", () => {
+    const marker = join(tmpdir(), `run-logged-parallel-${process.pid}-${Date.now()}`);
+    const result = spawnSync("sh", [script, `first=touch ${marker}`, "not-a-spec"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 2);
+    assert.include(result.stderr, "expected name=command");
+    assert.isFalse(existsSync(marker));
+  });
+});

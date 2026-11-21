@@ -165,9 +165,9 @@ executors:
   #
   # Package tests run as concurrent `bun test --shard` processes (scripts/test-shards.ts).
   # A container reports the host's cores, so each job states its shard count in
-  # TERRENO_TEST_SHARDS: 1 on medium (2 vCPU, which one backend shard already fills). Backend
-  # jobs stay at 1 even on large: every shard connects to the same sidecar mongod and database
-  # (mongodb://127.0.0.1/terreno), so concurrent shards clear each other's collections.
+  # TERRENO_TEST_SHARDS: 1 on medium (2 vCPU, which one backend shard already fills).
+  # api-ci overrides this to 2 on large. Its tests leave TERRENO_TEST_MONGODB_URI
+  # unset, so each shard starts its own memory server instead of sharing the sidecar.
   node22:
     docker:
       - image: cimg/node:22.11
@@ -480,7 +480,9 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
-              app) specs="todos todo-windows todo-browser profile realtime ai-chat ai-feedback pdf notifications socket-flags mcp-tokens" ;;
+              app-todos) specs="todos todo-windows todo-browser" ;;
+              app-shell) specs="profile realtime pdf notifications socket-flags" ;;
+              app-ai) specs="ai-chat ai-feedback mcp-tokens" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;
@@ -713,7 +715,9 @@ jobs:
     executor: node22_mongo
     resource_class: large
     environment:
-      TERRENO_TEST_SHARDS: "1"
+      # Two shards on 4 vCPU. Each process starts its own memory server
+      # (TERRENO_TEST_MONGODB_URI is unset), so they do not share the sidecar database.
+      TERRENO_TEST_SHARDS: "2"
     working_directory: ~/project
     steps:
       - checkout
@@ -726,9 +730,23 @@ jobs:
             CI: "true"
           command: |
             set -euo pipefail
-            bun run lint
             bun run compile
+            # Lint only reads source. Run it beside the coverage shards.
+            bun run lint > /tmp/api-lint.txt 2>&1 &
+            lint_pid=$!
+            set +e
             bun run test:coverage
+            test_status=$?
+            set -e
+            lint_status=0
+            wait "$lint_pid" || lint_status=$?
+            cat /tmp/api-lint.txt
+            if [ "$test_status" -ne 0 ]; then
+              exit "$test_status"
+            fi
+            if [ "$lint_status" -ne 0 ]; then
+              exit "$lint_status"
+            fi
             bash ../scripts/upload-codecov.sh api
       - check_new_file_lcov:
           package: api
@@ -1294,6 +1312,7 @@ jobs:
 
   example-backend-docker:
     executor: node22
+    resource_class: large
     steps:
       - skip_if_not_pull_request
       - checkout
@@ -1353,11 +1372,92 @@ jobs:
           path: admin-spa/test-results
           destination: admin-spa-playwright-results
 
-  # Every workspace `smoke` script (docs/how-to/run-tests-locally.md). The web builds
-  # and Chromium are prepared up front so a new browser smoke needs no config edit.
+  # Package dists for the smoke scripts. The three web exports run in sibling
+  # jobs so a 4-core container is not asked to Metro-bundle three apps at once.
+  smoke-compile:
+    executor: node22
+    resource_class: large
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Compile workspace
+          command: bun run compile
+      - run:
+          name: Archive package dists
+          command: |
+            set -euo pipefail
+            # Keep admin-spa/src/dist (compiled AdminSpaServeApp). Drop only the
+            # web export at admin-spa/dist; smoke-export-admin-spa writes that.
+            find . -type d -name dist \
+              -not -path './node_modules/*' \
+              -not -path './website/*' \
+              -not -path './demo/*' \
+              -not -path './admin-spa/dist' \
+              -not -path './admin-spa/dist/*' \
+              -not -path './example-frontend/*' \
+              -print0 | tar -czf smoke-dists.tgz --null -T -
+      - persist_to_workspace:
+          root: .
+          paths:
+            - smoke-dists.tgz
+
+  # One Expo web export per container. TERRENO_METRO_FROM_SOURCE bundles
+  # @terreno/* from src, so this job does not wait on smoke-compile. Demo and
+  # example-frontend still need narrow prerequisites that only the full compile
+  # used to provide: generated UI types (typedoc needs blocks dist) and the
+  # @terreno/test dist that the example-frontend smoke driver imports.
+  smoke-export:
+    executor: node22
+    resource_class: large
+    parameters:
+      target:
+        type: string
+      output:
+        type: string
+    environment:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      NODE_OPTIONS: "--max-old-space-size=3072"
+      TERRENO_METRO_FROM_SOURCE: "1"
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Export << parameters.target >> web
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            case "<< parameters.target >>" in
+              admin-spa)
+                cd admin-spa
+                bun run build:web
+                ;;
+              demo)
+                bun run --filter '@terreno/blocks' compile
+                bun run --cwd demo generate-types
+                cd demo
+                bun run export
+                ;;
+              example-frontend)
+                bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/test' compile
+                cd example-frontend
+                bun run export:smoke
+                ;;
+              *)
+                echo "unknown smoke export target: << parameters.target >>"
+                exit 1
+                ;;
+            esac
+      - persist_to_workspace:
+          root: .
+          paths:
+            - << parameters.output >>
+
+  # Every workspace `smoke` script (docs/how-to/run-tests-locally.md). Web builds
+  # come from the smoke-export jobs; Chromium is installed here.
   smoke:
     executor: node22_browsers_mongo_rs
-    # Three Expo web exports in one job need the large class (see executors).
     resource_class: large
     environment:
       CI: "true"
@@ -1365,25 +1465,18 @@ jobs:
     steps:
       - checkout
       - install_bun_and_deps
+      - attach_workspace:
+          at: .
+      - run:
+          name: Restore package dists and web exports
+          command: |
+            set -euo pipefail
+            tar -xzf smoke-dists.tgz
+            test -f admin-spa/src/dist/index.js
+            test -d admin-spa/dist
+            test -d demo/dist
+            test -d example-frontend/dist-smoke
       - init_mongo_replica
-      - run:
-          name: Compile workspace
-          command: bun run compile
-      - run:
-          name: Build admin-spa web
-          working_directory: ~/project/admin-spa
-          no_output_timeout: 20m
-          command: bun run build:web
-      - run:
-          name: Export demo web
-          working_directory: ~/project/demo
-          no_output_timeout: 20m
-          command: bun run export
-      - run:
-          name: Export example-frontend web for its smoke
-          working_directory: ~/project/example-frontend
-          no_output_timeout: 20m
-          command: bun run export:smoke
       - run:
           name: Install Playwright Chromium
           command: bunx playwright install --with-deps chromium
@@ -1721,48 +1814,32 @@ jobs:
       - init_mongo_replica
       - resolve_e2e_secrets
       - run:
-          name: Install Maestro system deps (Java 17, xvfb, Chrome)
-          command: |
-            set -euo pipefail
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends \
-              openjdk-17-jre-headless xvfb xauth x11-utils
-            # cimg browsers images do not ship a google-chrome binary.
-            if ! command -v google-chrome > /dev/null 2>&1; then
-              curl -fsSL -o /tmp/google-chrome.deb \
-                https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-              sudo apt-get install -y /tmp/google-chrome.deb
-            fi
-            google-chrome --version
-      - run:
-          name: Compile workspace
-          no_output_timeout: 15m
-          command: bun run compile
-      - when:
-          condition: << parameters.include-demo >>
-          steps:
-            - run:
-                name: Generate UI types
-                working_directory: ~/project/ui
-                command: bun run types
-            - run:
-                name: Export demo for web
-                working_directory: ~/project/demo
-                no_output_timeout: 15m
-                command: bun run export
-      # Exported before the backend starts: this executor shares its memory with the mongo
-      # service container, and bundling alongside a running backend gets the export
-      # OOM-killed. The export is static, so it only bakes in EXPO_PUBLIC_API_URL.
-      - run:
-          name: Export example-frontend web
-          working_directory: ~/project/example-frontend
-          no_output_timeout: 15m
+          name: Install Maestro deps, compile, and export web
+          no_output_timeout: 20m
           environment:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
             EXPO_PUBLIC_API_URL: http://localhost:4000
             NODE_OPTIONS: "--max-old-space-size=3072"
-          command: bun expo export --platform web
+            TERRENO_METRO_FROM_SOURCE: "1"
+          command: |
+            set -euo pipefail
+            # Java, compile, and the web exports do not share files. The exports
+            # read src (TERRENO_METRO_FROM_SOURCE); compile writes dist for the backend.
+            sh scripts/ci/run-logged-parallel.sh \
+              "java=sudo apt-get update && sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless xvfb xauth x11-utils && if ! command -v google-chrome > /dev/null 2>&1; then curl -fsSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt-get install -y /tmp/google-chrome.deb; fi && google-chrome --version" \
+              "compile=bun run compile" \
+              "frontend=cd example-frontend && bun expo export --platform web"
+      - when:
+          condition: << parameters.include-demo >>
+          steps:
+            - run:
+                name: Generate UI types and export demo
+                no_output_timeout: 15m
+                command: |
+                  set -euo pipefail
+                  cd ui && bun run types
+                  cd ../demo && bun run export
       - run:
           name: Seed example-backend
           working_directory: ~/project/example-backend
@@ -1928,17 +2005,20 @@ jobs:
       - install_bun_and_deps
       - resolve_affected_e2e_shards
       - run:
-          name: Compile workspace
-          command: bun run compile
-      - run:
-          name: Export example-frontend web
-          working_directory: ~/project/example-frontend
-          no_output_timeout: 15m
+          name: Compile workspace and export web
+          no_output_timeout: 20m
           environment:
             CI: "true"
             EXPO_NO_TELEMETRY: "1"
             NODE_OPTIONS: "--max-old-space-size=3072"
-          command: bun expo export --platform web
+            TERRENO_METRO_FROM_SOURCE: "1"
+          command: |
+            set -euo pipefail
+            # The export bundles @terreno/* from src. Compile writes dist for the
+            # backend shards. They do not touch the same files.
+            sh scripts/ci/run-logged-parallel.sh \
+              "compile=bun run compile" \
+              "export=cd example-frontend && bun expo export --platform web"
       - run:
           name: Archive dist trees
           command: |
@@ -2090,14 +2170,16 @@ jobs:
       - install_bun_and_deps
       - init_mongo_replica
       - run:
-          name: Compile workspace
-          command: bun run compile
-      - run:
-          name: Build admin-spa web
-          working_directory: ~/project/admin-spa
+          name: Compile workspace and build admin-spa web
+          no_output_timeout: 20m
           environment:
             CI: "true"
-          command: bun run build:web
+            TERRENO_METRO_FROM_SOURCE: "1"
+          command: |
+            set -euo pipefail
+            sh scripts/ci/run-logged-parallel.sh \
+              "compile=bun run compile" \
+              "export=cd admin-spa && bun run build:web"
       - resolve_e2e_secrets
       - run:
           name: Start example-backend (admin spa + better-auth)
@@ -2862,7 +2944,7 @@ workflows:
     jobs:
       - e2e-prepare
       # Grouped shards keep Playwright coverage while cutting ~19 medium+
-      # containers down to 5 so package CI is not stuck behind e2e-prepare.
+      # containers down to 7 so package CI is not stuck behind e2e-prepare.
       - e2e:
           requires:
             - e2e-prepare
@@ -2870,7 +2952,9 @@ workflows:
             parameters:
               shard:
                 - auth
-                - app
+                - app-todos
+                - app-shell
+                - app-ai
                 - admin-core
                 - admin-table
                 - syncdb
@@ -2901,7 +2985,25 @@ workflows:
   smoke:
     when: << pipeline.parameters.run-smoke >>
     jobs:
-      - smoke
+      - smoke-compile
+      - smoke-export:
+          name: smoke-export-admin-spa
+          target: admin-spa
+          output: admin-spa/dist
+      - smoke-export:
+          name: smoke-export-demo
+          target: demo
+          output: demo/dist
+      - smoke-export:
+          name: smoke-export-example-frontend
+          target: example-frontend
+          output: example-frontend/dist-smoke
+      - smoke:
+          requires:
+            - smoke-compile
+            - smoke-export-admin-spa
+            - smoke-export-demo
+            - smoke-export-example-frontend
 
   maestro:
     when: << pipeline.parameters.run-maestro >>

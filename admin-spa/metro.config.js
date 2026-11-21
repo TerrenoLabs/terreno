@@ -1,6 +1,7 @@
 const {getDefaultConfig} = require("expo/metro-config");
 const path = require("path");
 const fs = require("fs");
+const {applyCiMetroWorkerCap, resolveMetroFromSource} = require("../scripts/ci/metroFromSource");
 
 // Find the project and monorepo workspace directories
 const projectRoot = __dirname;
@@ -105,6 +106,11 @@ const backendOnlyModules = [
 const jspdfNativeStub = path.resolve(__dirname, "jspdf-native-stub.js");
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const fromSource = resolveMetroFromSource({moduleName, monorepoRoot});
+  if (fromSource) {
+    return {type: "sourceFile", filePath: fromSource};
+  }
+
   // jspdf uses browser/node APIs (latin1 encoding, Buffer) unavailable in Hermes —
   // stub it on native, force ESM build on web (CJS entry uses AMD require() Metro can't parse).
   if (moduleName === "jspdf") {
@@ -200,8 +206,6 @@ config.server.rewriteRequestUrl = (requestUrl) => {
 
 // CI containers report the host's CPU count, so Metro would start far more transform workers than
 // the executor has cores and cold exports run out of memory. Cap the pool at the executor's size.
-if (process.env.CI) {
-  config.maxWorkers = 4;
-}
+applyCiMetroWorkerCap(config);
 
 module.exports = config;

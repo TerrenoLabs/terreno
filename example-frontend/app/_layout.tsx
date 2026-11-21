@@ -1,8 +1,16 @@
 import FontAwesome from "@expo/vector-icons/FontAwesome";
 import {useFonts} from "expo-font";
-import {Stack, ThemeProvider, useRouter, useSegments} from "expo-router";
+import {Stack, ThemeProvider, useGlobalSearchParams, useRouter, useSegments} from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
-import React, {type FC, type ReactNode, useCallback, useEffect, useMemo, useState} from "react";
+import React, {
+  type FC,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {Platform, StatusBar} from "react-native";
 import {GestureHandlerRootView} from "react-native-gesture-handler";
 import "react-native-reanimated";
@@ -162,6 +170,11 @@ const RootLayoutNav = (): React.ReactElement => {
   });
   const segments = useSegments();
   const router = useRouter();
+  const {request: oauthConsentRequest} = useGlobalSearchParams<{request?: string}>();
+  // The MCP OAuth consent request a signed-out visitor is signing in for. Signing in remounts the
+  // Stack (spinner, then ConsentNavigator), which resets it to "(tabs)", so the auth effect below
+  // sends the user back to this request once they land there.
+  const pendingOAuthConsentRequest = useRef<string | null>(null);
   const {
     canUpdate,
     isRequired,
@@ -245,12 +258,32 @@ const RootLayoutNav = (): React.ReactElement => {
     }
 
     const isLogin = segments[0] === "login";
+    // /oauth/consent shows the login screen inline while signed out, so it is public too.
     const isPublicAuthPage =
       isLogin ||
+      segments[0] === "oauth" ||
       segments[0] === "signup" ||
       segments[0] === "forgotPassword" ||
       segments[0] === "resetPassword" ||
       segments[0] === "verifyEmail";
+
+    // Remember the consent request across sign-in: signing in remounts the Stack onto "(tabs)",
+    // and the effect can run signed in while still on "oauth" before that remount lands, so the
+    // request is only dropped once the user is sent back or goes somewhere else.
+    if (segments[0] === "oauth") {
+      if (!userId) {
+        pendingOAuthConsentRequest.current = oauthConsentRequest ?? null;
+      }
+    } else if (segments[0] && segments[0] !== "(tabs)") {
+      pendingOAuthConsentRequest.current = null;
+    }
+
+    if (userId && segments[0] === "(tabs)" && pendingOAuthConsentRequest.current) {
+      const request = pendingOAuthConsentRequest.current;
+      pendingOAuthConsentRequest.current = null;
+      router.replace({params: {request}, pathname: "/oauth/consent"});
+      return;
+    }
 
     if (!userId && !isPublicAuthPage) {
       router.replace("/login");
@@ -259,7 +292,7 @@ const RootLayoutNav = (): React.ReactElement => {
     }
     // A signed-in user on /login stays: TerrenoLoginScreen finds the session, records the
     // sign-in method for this device (a social sign-in returns here), and navigates on itself.
-  }, [userId, segments, router, isAuthLoading]);
+  }, [userId, segments, router, isAuthLoading, oauthConsentRequest]);
 
   // Hold the navigator until the session (and, for signed-in users, the profile that
   // decides the ConsentNavigator wrapper below) has settled. The wrapper choice changes
@@ -319,6 +352,7 @@ const RootLayoutNav = (): React.ReactElement => {
         <Stack.Screen name="forgotPassword" />
         <Stack.Screen name="resetPassword" />
         <Stack.Screen name="verifyEmail" />
+        <Stack.Screen name="oauth/consent" />
         <Stack.Screen name="syncdb-debug" options={{presentation: "modal"}} />
         <Stack.Screen name="settings" />
         <Stack.Screen name="notifications" />

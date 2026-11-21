@@ -95,6 +95,7 @@ export {
 } from "./session";
 export * from "./TerrenoAccountSecurityScreen";
 export * from "./TerrenoLoginScreen";
+export * from "./TerrenoOAuthConsentScreen";
 export {
   AUTH_TOKEN_KEY,
   createJwtTokenStorage,
@@ -115,3 +116,4 @@ export * from "./useAccountSecurity";
 export * from "./useAuthMethods";
 export {type UseJwtAuthResult, useJwtAuth} from "./useJwtAuth";
 export * from "./useLoginController";
+export * from "./useMcpOAuthConsent";

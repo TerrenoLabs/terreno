@@ -103,7 +103,7 @@ export const getSecurityCallbackURL = (): string => {
  * button shows when the server's `/terreno/methods` lists it: example-backend registers the
  * provider only when `MOCK_OIDC_ISSUER` is set, and never in production.
  */
-const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
+export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";
 
 /** Button labels for providers @terreno/ui does not brand. */
 export const OAUTH_PROVIDER_LABELS: Record<string, string> = {

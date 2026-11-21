@@ -211,6 +211,38 @@ export const useAnnouncementsImportReleaseMutation = (
     {invalidatesTags: ["announcements"], ...options}
   );
 
+export type ApproveMcpOAuthRequestArgs = {
+  request: string;
+  body?: {
+    scope?: string;
+  };
+};
+
+export type ApproveMcpOAuthRequestRes =
+  | {
+      redirectUrl?: string;
+    }
+  | {
+      data?: {
+        redirectUrl?: string;
+      };
+    };
+
+export const approveMcpOAuthRequestRequest = (arg: ApproveMcpOAuthRequestArgs): ApiRequestArgs => ({
+  body: arg.body,
+  method: "POST",
+  url: `/oauth/authorize/${encodeURIComponent(String(arg.request))}/approve`,
+});
+
+/** Approve a pending MCP OAuth request */
+export const useApproveMcpOAuthRequestMutation = (
+  options: UseApiMutationOptions<ApproveMcpOAuthRequestArgs, ApproveMcpOAuthRequestRes> = {}
+): UseApiMutationResult<ApproveMcpOAuthRequestArgs, ApproveMcpOAuthRequestRes> =>
+  useApiMutation<ApproveMcpOAuthRequestArgs, ApproveMcpOAuthRequestRes>(
+    approveMcpOAuthRequestRequest,
+    {invalidatesTags: ["mcp"], ...options}
+  );
+
 export type CommsTestPushArgs = {
   body?: string;
   title?: string;
@@ -916,6 +948,32 @@ export const useDeleteUsersByUserIdSecurityPasskeysByPasskeyIdMutation = (
     DeleteUsersByUserIdSecurityPasskeysByPasskeyIdRes
   >(deleteUsersByUserIdSecurityPasskeysByPasskeyIdRequest, {
     invalidatesTags: ["account-security"],
+    ...options,
+  });
+
+export type DenyMcpOAuthRequestArgs = string;
+
+export type DenyMcpOAuthRequestRes =
+  | {
+      redirectUrl?: string;
+    }
+  | {
+      data?: {
+        redirectUrl?: string;
+      };
+    };
+
+export const denyMcpOAuthRequestRequest = (arg: DenyMcpOAuthRequestArgs): ApiRequestArgs => ({
+  method: "POST",
+  url: `/oauth/authorize/${encodeURIComponent(String(arg))}/deny`,
+});
+
+/** Deny a pending MCP OAuth request */
+export const useDenyMcpOAuthRequestMutation = (
+  options: UseApiMutationOptions<DenyMcpOAuthRequestArgs, DenyMcpOAuthRequestRes> = {}
+): UseApiMutationResult<DenyMcpOAuthRequestArgs, DenyMcpOAuthRequestRes> =>
+  useApiMutation<DenyMcpOAuthRequestArgs, DenyMcpOAuthRequestRes>(denyMcpOAuthRequestRequest, {
+    invalidatesTags: ["mcp"],
     ...options,
   });
 
@@ -5652,6 +5710,68 @@ export const useLazyGetJobsStatsQuery = (
     ...options,
     providesTags: ["admin", "jobs"],
     toRequest: (): ApiRequestArgs => getJobsStatsRequest(),
+  });
+
+export type GetMcpOAuthRequestArgs = string;
+
+export type GetMcpOAuthRequestRes =
+  | {
+      clientId?: string;
+      clientName?: string;
+      expiresAt?: string;
+      grants?: {
+        access?: "read" | "write";
+        description?: string | null;
+        label?: string;
+        scope?: string;
+      }[];
+      redirectHost?: string;
+      redirectUri?: string;
+      requestId?: string;
+      resource?: string;
+      scope?: string;
+    }
+  | {
+      data?: {
+        clientId?: string;
+        clientName?: string;
+        expiresAt?: string;
+        grants?: {
+          access?: "read" | "write";
+          description?: string | null;
+          label?: string;
+          scope?: string;
+        }[];
+        redirectHost?: string;
+        redirectUri?: string;
+        requestId?: string;
+        resource?: string;
+        scope?: string;
+      };
+    };
+
+export const getMcpOAuthRequestRequest = (arg: GetMcpOAuthRequestArgs): ApiRequestArgs => ({
+  method: "GET",
+  url: `/oauth/authorize/${encodeURIComponent(String(arg))}`,
+});
+
+/** Read a pending MCP OAuth authorization request */
+export const useGetMcpOAuthRequestQuery = (
+  arg: GetMcpOAuthRequestArgs,
+  options: ApiSdkQueryOptions<GetMcpOAuthRequestRes> = {}
+): UseApiQueryResult<GetMcpOAuthRequestRes> =>
+  useApiQuery<GetMcpOAuthRequestRes>(getMcpOAuthRequestRequest(arg), {
+    ...options,
+    providesTags: ["mcp"],
+  });
+
+export const useLazyGetMcpOAuthRequestQuery = (
+  options: ApiSdkLazyOptions<GetMcpOAuthRequestRes> = {}
+): UseLazyApiQueryResult<GetMcpOAuthRequestRes, GetMcpOAuthRequestArgs> =>
+  useLazyApiQuery<GetMcpOAuthRequestRes, GetMcpOAuthRequestArgs>({
+    ...options,
+    providesTags: ["mcp"],
+    toRequest: getMcpOAuthRequestRequest,
   });
 
 export type GetOrgsArgs = void;

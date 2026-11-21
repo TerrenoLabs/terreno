@@ -42,6 +42,7 @@ const E2E_SHARDS: Record<string, string[]> = {
     "notifications",
     "socket-flags",
     "mcp-tokens",
+    "mcpOAuthConsent",
   ],
   auth: [
     "login",

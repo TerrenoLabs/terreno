@@ -282,6 +282,62 @@ describe("MCP OAuth authorization server", () => {
   });
 
   describe("authorization code flow", () => {
+    describe("under mcpOAuth.grants: readOnly", () => {
+      const authorizeWithScope = async (
+        scope: string,
+        grants: McpOAuthOptions["grants"] = "readOnly"
+      ): Promise<supertest.Response> => {
+        const readOnlyApp = buildApp({
+          mcpOAuth: {...oauthOptions, grants},
+        });
+        const clientId = await registerClient(readOnlyApp);
+        return startAuthorization(readOnlyApp, {
+          client_id: clientId,
+          code_challenge: createPkce().challenge,
+          code_challenge_method: "S256",
+          redirect_uri: REDIRECT_URI,
+          resource: `${ISSUER}/mcp`,
+          response_type: "code",
+          scope,
+          state: "state-ro",
+        });
+      };
+
+      it("redirects scope=mcp:write with error=invalid_scope", async () => {
+        const res = await authorizeWithScope("mcp:write");
+
+        expect(res.status).toBe(302);
+        const redirect = new URL(res.headers.location);
+        expect(`${redirect.origin}${redirect.pathname}`).toBe(REDIRECT_URI);
+        expect(redirect.searchParams.get("error")).toBe("invalid_scope");
+        expect(redirect.searchParams.get("state")).toBe("state-ro");
+      });
+
+      it("redirects the legacy scope=mcp with error=invalid_scope", async () => {
+        const res = await authorizeWithScope("mcp");
+
+        expect(new URL(res.headers.location).searchParams.get("error")).toBe("invalid_scope");
+      });
+
+      it("accepts scope=mcp:write under readWrite", async () => {
+        const res = await authorizeWithScope("mcp:write", "readWrite");
+
+        const redirect = new URL(res.headers.location);
+        expect(redirect.origin).toBe("https://app.example.com");
+        expect(redirect.searchParams.get("error")).toBeNull();
+      });
+
+      it("accepts scope=mcp:read and goes on to the consent page", async () => {
+        const res = await authorizeWithScope("mcp:read");
+
+        expect(res.status).toBe(302);
+        const redirect = new URL(res.headers.location);
+        expect(redirect.origin).toBe("https://app.example.com");
+        expect(redirect.searchParams.get("error")).toBeNull();
+        expect(redirect.searchParams.get("request")).toBeTruthy();
+      });
+    });
+
     it("issues access and refresh tokens that call /mcp as the approving user", async () => {
       const clientId = await registerClient(app);
       const {challenge, verifier} = createPkce();
@@ -994,6 +1050,277 @@ describe("MCP OAuth authorization server", () => {
       "approveMcpOAuthRequest"
     );
   });
+  describe("consent scope narrowing and grant metadata", () => {
+    const rwOptions: McpOAuthOptions = {...oauthOptions, grants: "readWrite"};
+
+    interface Pending {
+      clientId: string;
+      requestId: string;
+      rwApp: express.Application;
+      rwAgent: TestAgent;
+      verifier: string;
+    }
+
+    const startPending = async (
+      scope: string | undefined,
+      mcpOAuth: McpOAuthOptions = rwOptions
+    ): Promise<Pending> => {
+      const rwApp = buildApp({mcpOAuth});
+      const rwAgent = await authAsUser(rwApp, "notAdmin");
+      const clientId = await registerClient(rwApp);
+      const {challenge, verifier} = createPkce();
+      const params: Record<string, string> = {
+        client_id: clientId,
+        code_challenge: challenge,
+        code_challenge_method: "S256",
+        redirect_uri: REDIRECT_URI,
+        response_type: "code",
+        state: "state-t3",
+      };
+      if (scope !== undefined) {
+        params.scope = scope;
+      }
+      const authorize = await startAuthorization(rwApp, params);
+      expect(authorize.status).toBe(302);
+      return {
+        clientId,
+        requestId: requestIdFrom(authorize.headers.location),
+        rwAgent,
+        rwApp,
+        verifier,
+      };
+    };
+
+    const approveAndExchange = async (
+      pending: Pending,
+      body?: Record<string, unknown>
+    ): Promise<supertest.Response> => {
+      const approve =
+        body === undefined
+          ? await pending.rwAgent.post(`/oauth/authorize/${pending.requestId}/approve`)
+          : await pending.rwAgent.post(`/oauth/authorize/${pending.requestId}/approve`).send(body);
+      expect(approve.status).toBe(200);
+      const code = new URL(approve.body.data.redirectUrl).searchParams.get("code") as string;
+      return exchangeCode(pending.rwApp, {
+        clientId: pending.clientId,
+        code,
+        verifier: pending.verifier,
+      });
+    };
+
+    it("GET lists each requested grant with its preset label, in requested order", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const res = await pending.rwAgent.get(`/oauth/authorize/${pending.requestId}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.grants).toEqual([
+        {
+          access: "read",
+          description: "See your records. It cannot change anything.",
+          label: "Read your data",
+          scope: "mcp:read",
+        },
+        {
+          access: "write",
+          description: "Create, update, and delete records for you.",
+          label: "Change your data",
+          scope: "mcp:write",
+        },
+      ]);
+    });
+
+    it("GET keeps the requested order when the client asks for write first", async () => {
+      const pending = await startPending("mcp:write mcp:read");
+
+      const res = await pending.rwAgent.get(`/oauth/authorize/${pending.requestId}`);
+
+      expect(res.body.data.grants.map((grant: {scope: string}) => grant.scope)).toEqual([
+        "mcp:write",
+        "mcp:read",
+      ]);
+    });
+
+    it("GET lists only the requested subset of the grants", async () => {
+      const pending = await startPending("mcp:read");
+
+      const res = await pending.rwAgent.get(`/oauth/authorize/${pending.requestId}`);
+
+      expect(res.body.data.grants).toHaveLength(1);
+      expect(res.body.data.grants[0]).toMatchObject({label: "Read your data", scope: "mcp:read"});
+    });
+
+    it("GET synthesizes a write grant per scope when grants is unset", async () => {
+      const pending = await startPending("mcp", oauthOptions);
+
+      const res = await pending.rwAgent.get(`/oauth/authorize/${pending.requestId}`);
+
+      expect(res.body.data.grants).toEqual([
+        {access: "write", description: null, label: "mcp", scope: "mcp"},
+      ]);
+    });
+
+    it("approve {scope: mcp:read} issues a token and a refresh with scope mcp:read", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const token = await approveAndExchange(pending, {scope: "mcp:read"});
+
+      expect(token.status).toBe(200);
+      expect(token.body.scope).toBe("mcp:read");
+      const refreshed = await refresh(pending.rwApp, pending.clientId, token.body.refresh_token);
+      expect(refreshed.status).toBe(200);
+      expect(refreshed.body.scope).toBe("mcp:read");
+      const second = await refresh(pending.rwApp, pending.clientId, refreshed.body.refresh_token);
+      expect(second.body.scope).toBe("mcp:read");
+    });
+
+    it("approve with no body grants the full requested scope", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const token = await approveAndExchange(pending);
+
+      expect(token.status).toBe(200);
+      expect(token.body.scope).toBe("mcp:read mcp:write");
+    });
+
+    it("approve with an empty JSON object grants the full requested scope", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const token = await approveAndExchange(pending, {});
+
+      expect(token.body.scope).toBe("mcp:read mcp:write");
+    });
+
+    it("approve {scope: ''} is a 400 and leaves the request pending", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const empty = await pending.rwAgent
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: ""});
+      const whitespace = await pending.rwAgent
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: "   "});
+
+      expect(empty.status).toBe(400);
+      expect(empty.body.title).toBe("Choose at least one permission");
+      expect(whitespace.status).toBe(400);
+      expect(whitespace.body.title).toBe("Choose at least one permission");
+      const token = await approveAndExchange(pending, {scope: "mcp:read"});
+      expect(token.body.scope).toBe("mcp:read");
+    });
+
+    it("approve {scope: 'mcp:write admin'} is a 400 Scope was not requested", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const res = await pending.rwAgent
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: "mcp:write admin"});
+
+      expect(res.status).toBe(400);
+      expect(res.body.title).toBe("Scope was not requested");
+    });
+
+    it("never widens: approving mcp:write on a read-only request is a 400", async () => {
+      const pending = await startPending("mcp:read");
+
+      const res = await pending.rwAgent
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: "mcp:write"});
+
+      expect(res.status).toBe(400);
+      expect(await McpOAuthToken.countDocuments({})).toBe(0);
+    });
+
+    it("a rejected narrowing leaves the request pending for a valid approve", async () => {
+      const pending = await startPending("mcp:read");
+
+      await pending.rwAgent
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: "mcp:write"});
+      const token = await approveAndExchange(pending, {scope: "mcp:read"});
+
+      expect(token.body.scope).toBe("mcp:read");
+    });
+
+    it("approve without a session is 401", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      const res = await supertest(pending.rwApp)
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: "mcp:read"});
+
+      expect(res.status).toBe(401);
+    });
+
+    it("approve twice with a narrowed scope is 409 on the second call", async () => {
+      const pending = await startPending("mcp:read mcp:write");
+
+      await approveAndExchange(pending, {scope: "mcp:read"});
+      const again = await pending.rwAgent
+        .post(`/oauth/authorize/${pending.requestId}/approve`)
+        .send({scope: "mcp:read"});
+
+      expect(again.status).toBe(409);
+    });
+
+    it("client_credentials under readWrite with no stored scope gets mcp:read mcp:write", async () => {
+      const rwApp = buildApp({mcpOAuth: rwOptions});
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Sandbox agent",
+        tokenEndpointAuthMethod: "client_secret_post",
+        userId: notAdminId,
+      });
+
+      const token = await supertest(rwApp).post("/oauth/token").type("form").send({
+        client_id: created.client.clientId,
+        client_secret: created.clientSecret,
+        grant_type: "client_credentials",
+      });
+
+      expect(token.status).toBe(200);
+      expect(token.body.scope).toBe("mcp:read mcp:write");
+    });
+
+    it("client_credentials under readWrite with stored scope mcp is invalid_scope", async () => {
+      const rwApp = buildApp({mcpOAuth: rwOptions});
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Legacy agent",
+        scope: "mcp",
+        tokenEndpointAuthMethod: "client_secret_post",
+        userId: notAdminId,
+      });
+
+      const token = await supertest(rwApp).post("/oauth/token").type("form").send({
+        client_id: created.client.clientId,
+        client_secret: created.clientSecret,
+        grant_type: "client_credentials",
+      });
+
+      expect(token.status).toBe(400);
+      expect(token.body.error).toBe("invalid_scope");
+      expect(await McpOAuthToken.countDocuments({})).toBe(0);
+    });
+
+    it("client_credentials under readWrite with stored scope mcp:read gets mcp:read", async () => {
+      const rwApp = buildApp({mcpOAuth: rwOptions});
+      const created = await McpOAuthClient.issueConfidential({
+        clientName: "Reader",
+        scope: "mcp:read",
+        tokenEndpointAuthMethod: "client_secret_post",
+        userId: notAdminId,
+      });
+
+      const token = await supertest(rwApp).post("/oauth/token").type("form").send({
+        client_id: created.client.clientId,
+        client_secret: created.clientSecret,
+        grant_type: "client_credentials",
+      });
+
+      expect(token.status).toBe(200);
+      expect(token.body.scope).toBe("mcp:read");
+    });
+  });
+
   describe("client credentials", () => {
     const basicAuthorization = (clientId: string, clientSecret: string): string => {
       const encoded = Buffer.from(

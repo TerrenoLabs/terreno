@@ -23,6 +23,7 @@ const CROSS_SITE_SPEC_FILES = [
   "crossSiteLogin.spec.ts",
   "account-linking.spec.ts",
   "account-security.spec.ts",
+  "crossSiteMcpOAuthConsent.spec.ts",
 ];
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const CROSS_SITE_SPECS = new RegExp(
@@ -205,9 +206,18 @@ export default defineConfig({
           ? {
               BETTER_AUTH_OAUTH_HANDOFF: "true",
               BETTER_AUTH_URL: CROSS_SITE_API_URL,
+              // crossSiteMcpOAuthConsent.spec.ts: social sign-in from the consent screen.
+              MCP_OAUTH_CONSENT_URL: "http://localhost:8082/oauth/consent",
+              MCP_OAUTH_ENABLED: "true",
               MOCK_OIDC_ISSUER,
+              PUBLIC_API_URL: CROSS_SITE_API_URL,
             }
-          : {}),
+          : {
+              // mcpOAuthConsent.spec.ts: MCP OAuth with consent on this app's /oauth/consent route.
+              MCP_OAUTH_CONSENT_URL: "http://localhost:8082/oauth/consent",
+              MCP_OAUTH_ENABLED: "true",
+              PUBLIC_API_URL: "http://localhost:4000",
+            }),
       },
       port: 4000,
       // The cross-site run needs the backend's OAuth settings above, so it never reuses one.

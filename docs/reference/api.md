@@ -30,6 +30,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
   `Permissions.IsOrganizationMember`, `organizationSlugFromName`
 - `AuditApp`, `createAuditEventModel`, `persistRbacAuditToAuditEvent`
 - `registerMCPTool`, `getMCPRegistry`
+- MCP OAuth grants: `McpOAuthGrant`, `McpOAuthGrantAccess`, `McpOAuthGrantPreset`, `MCP_OAUTH_GRANT_PRESETS`, `canUseMcpTool`
 - `APIError`, `logger`, `asyncHandler`, `authenticateMiddleware`
 - Logging: `logger`, `createScopedLogger`, `createFeatureFlaggedLogger`, `setupLogging`, `formatLogContextSuffix`
 - Correlation: `runWithRequestContext`, `getCurrentLogContext`, `requestContextMiddleware`, `REQUEST_CONTEXT_ATTRIBUTE_NAMES`
@@ -483,7 +484,7 @@ const todoRouter = modelRouter("/todos", Todo, {
 });
 ```
 
-Named operations become tools with `mcp: {name}` on a `collectionActions` / `instanceActions` entry (see [modelRouter actions](#modelrouter-actions)). Cross-model tools use `registerMCPTool` (see the example backend's `users_todo_statuses`). How-to: [Expose MCP tools](../how-to/expose-mcp-tools.md). In-process Vercel AI SDK wrappers: `getMCPTools` from `@terreno/ai`.
+Named operations become tools with `mcp: {name}` on a `collectionActions` / `instanceActions` entry (see [modelRouter actions](#modelrouter-actions)). Cross-model tools use `registerMCPTool({name, description, zodSchema, handler, access?, scope?})` (see the example backend's `users_todo_statuses`). `access` is `"read"` or `"write"` (default `"write"`), and `scope` makes an OAuth token need exactly that scope; both apply only under [MCP OAuth grants](#mcp-oauth-grants). `MCPConfig.scopes` (`Partial<Record<MCPMethod, string>>`, for example `{delete: "todos:admin"}`) and an action's `mcp.scope` set the same per-tool scope. How-to: [Expose MCP tools](../how-to/expose-mcp-tools.md). In-process Vercel AI SDK wrappers: `getMCPTools` from `@terreno/ai`.
 
 Create, update, and delete tools share REST permission, hook, and persistence semantics: they call the same `executeCreate` / `executeUpdate` / `executeDelete` pipeline. MCP error results use `APIError.title` (for example `Create not allowed`, `preCreate hook error`). User-role stripping for RBAC User writes happens in the executor after hooks; MCP supplies the registry `modelName` for that check. List and read stay MCP handlers. `excludeFields` and `mcpResponseHandler` still apply after the executor returns. Invalid ids on instance writes 404 only when the document `_id` cannot be cast, not when a populate ref fails.
 
@@ -544,13 +545,14 @@ new TerrenoApp({
 | `dynamicClientRegistration` | `false` | Mount `POST /oauth/register` and advertise `registration_endpoint`. The endpoint is unauthenticated, so anyone who can reach the API can create a client; leave it off unless clients you cannot pre-register must connect |
 | `allowedRedirectHosts` | `[]` | Hostnames a registering client may put redirect URIs on. Required (non-empty) with `dynamicClientRegistration`, unused without it. `*.example.com` matches subdomains. Add `localhost` for loopback `http://` redirects |
 | `resource` | `${issuer}/mcp` | RFC 8707 resource identifier |
-| `scopesSupported` | `["mcp"]` | Advertised and accepted scopes. Terreno does not map scopes to tools: a token may call every tool its user can. Enforce scopes in permissions with `requireOAuthScope` (see [Request credential](#request-credential)) |
+| `grants` | — | `"readOnly"`, `"readWrite"`, or `McpOAuthGrant[]`. Enforced on every MCP tool and shown on the consent screen; sets `scopesSupported` to the grants' scopes. See [MCP OAuth grants](#mcp-oauth-grants) |
+| `scopesSupported` | `["mcp"]` | Advertised and accepted scopes, not enforced. Cannot be combined with `grants`. Without grants a token may call every tool its user can; enforce scopes in permissions with `requireOAuthScope` (see [Request credential](#request-credential)) |
 | `accessTokenTtlSeconds` | 3600 | Access token lifetime |
 | `refreshTokenTtlSeconds` | 30 days | Refresh token lifetime |
 | `authorizationRequestTtlSeconds` | 600 | How long a request waits for a consent decision |
 | `authorizationCodeTtlSeconds` | 60 | How long a code can be exchanged |
 
-Misconfiguration (an issuer with a path, a non-URL `consentUrl`, registration on with no redirect hosts) throws at boot. With registration off, create public clients yourself as `McpOAuthClient` documents (`clientId`, `clientName`, `redirectUris`, `grantTypes: ["authorization_code", "refresh_token"]`, `responseTypes: ["code"]`). Create a headless client with `McpOAuthClient.issueConfidential({clientName, tokenEndpointAuthMethod, userId})`, which returns `{client, clientSecret}` once. `/oauth/register` is 404 while registration is off, and the metadata has no `registration_endpoint`.
+Misconfiguration throws at boot: an issuer with a path, a non-URL `consentUrl`, registration on with no redirect hosts, `grants` together with `scopesSupported` (`mcpOAuth: set grants or scopesSupported, not both`), an empty or unknown `grants` value, a duplicate scope, a scope with a space, a grant without a `label`, or an `access` other than `read` or `write`. With registration off, create public clients yourself as `McpOAuthClient` documents (`clientId`, `clientName`, `redirectUris`, `grantTypes: ["authorization_code", "refresh_token"]`, `responseTypes: ["code"]`). Create a headless client with `McpOAuthClient.issueConfidential({clientName, tokenEndpointAuthMethod, userId})`, which returns `{client, clientSecret}` once. `/oauth/register` is 404 while registration is off, and the metadata has no `registration_endpoint`.
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
@@ -558,10 +560,10 @@ Misconfiguration (an issuer with a path, a non-URL `consentUrl`, registration on
 | GET | `/.well-known/oauth-authorization-server` | none | RFC 8414 metadata: `issuer`, endpoints, `response_types_supported: ["code"]`, `grant_types_supported` (`authorization_code`, `refresh_token`, `client_credentials`), `code_challenge_methods_supported: ["S256"]`, `token_endpoint_auth_methods_supported` (`none`, `client_secret_basic`, `client_secret_post`) |
 | POST | `/oauth/register` | none | Only with `dynamicClientRegistration`. RFC 7591 dynamic client registration. Public clients only. 201 with `client_id`; `invalid_redirect_uri` for a redirect outside `allowedRedirectHosts`, non-https (except loopback), or with a fragment |
 | GET | `/oauth/authorize` | none | Validates `client_id`, `redirect_uri`, `response_type=code`, PKCE (`S256` only), `scope`, and `resource`, stores a pending request, and redirects to `consentUrl?request=<id>`. An unknown or revoked client, or an unregistered redirect, is a 400 in place; other errors redirect with `error` and `state`. A loopback redirect (`localhost`, `127.0.0.1`, `[::1]`) matches a registered URI with the same scheme, host, path, and query on any port (RFC 8252 §7.3). PKCE `S256` is what stops another process on that host from exchanging a code delivered to a different port. The pending request stores the redirect the client sent, so the code returns to that port. Those three hosts do not match each other. Every other redirect must match the registered string exactly |
-| GET | `/oauth/authorize/:request` | JWT, session, or `req.user` already set | What the consent screen shows: `{data: {clientId, clientName, redirectUri, redirectHost, scope, resource, expiresAt}}` |
-| POST | `/oauth/authorize/:request/approve` | JWT, session, or `req.user` already set | `{data: {redirectUrl}}` carrying `code`, `state`, and `iss`. The grant is issued to `req.user._id` |
+| GET | `/oauth/authorize/:request` | JWT, session, or `req.user` already set | What the consent screen shows: `{data: {requestId, clientId, clientName, redirectUri, redirectHost, scope, grants, resource, expiresAt}}`. `clientName` and `scope` may be `null`. `grants` is `Array<{scope, label, description: string \| null, access: "read" \| "write"}>`, one per requested scope in requested order; without `mcpOAuth.grants` each is `{scope, label: scope, description: null, access: "write"}` |
+| POST | `/oauth/authorize/:request/approve` | JWT, session, or `req.user` already set | Optional JSON body `{scope?: string}`: a space-separated subset of the requested scope. Omitted, the full requested scope is approved. The token and every refresh carry exactly the approved scope. 400 `Choose at least one permission` (empty), 400 `Scope was not requested` (widening), 400 `Invalid scope` (not a string); the request stays pending. Returns `{data: {redirectUrl}}` carrying `code`, `state`, and `iss`. The grant is issued to `req.user._id` |
 | POST | `/oauth/authorize/:request/deny` | JWT, session, or `req.user` already set | `{data: {redirectUrl}}` carrying `error=access_denied` and `state` |
-| POST | `/oauth/token` | public: `client_id` in the body. confidential: `client_secret_basic` or `client_secret_post`, matching the client | `authorization_code` (with `code`, `redirect_uri`, `code_verifier`), `refresh_token`, or `client_credentials`. Authorization-code and refresh responses are `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}`. `client_credentials` returns the same without `refresh_token`, and the access token acts as the client's bound user. `Cache-Control: no-store` |
+| POST | `/oauth/token` | public: `client_id` in the body. confidential: `client_secret_basic` or `client_secret_post`, matching the client | `authorization_code` (with `code`, `redirect_uri`, `code_verifier`), `refresh_token`, or `client_credentials`. Authorization-code and refresh responses are `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}`. `client_credentials` returns the same without `refresh_token`, and the access token acts as the client's bound user. Its scope is the client's stored `scope` intersected with `scopesSupported` (all of `scopesSupported` when the client stores none); an empty intersection is `invalid_scope`. `Cache-Control: no-store` |
 | POST | `/oauth/revoke` | `client_id` | RFC 7009. Always 200. Revoking a refresh token revokes its whole chain |
 
 The consent endpoints are in OpenAPI (`getMcpOAuthRequest`, `approveMcpOAuthRequest`, `denyMcpOAuthRequest`) and refuse `mcp_` and `mcpat_` bearers, so an agent cannot approve its own grants. `authenticateMiddleware()` calls `next()` when `req.user` is already set, so an app with no Terreno JWT sets that user in `addMiddleware` (before these routes), from a session the app has already verified, and calls the consent routes with no bearer. The user object needs `_id`. See [Enable MCP OAuth](../how-to/enable-mcp-oauth.md#apps-without-a-terreno-jwt). A pending request that expired is 400 `Authorization request expired`; one already decided is 409. Protocol endpoints answer `{error, error_description}` per RFC 6749 and never carry the `requestId` member TerrenoApp adds to other JSON bodies. `/oauth/register`, `/oauth/authorize`, `/oauth/token`, and `/oauth/revoke` count against the `auth` rate-limit bucket.
@@ -573,6 +575,42 @@ Tokens are opaque (`mcpat_` access, `mcprt_` refresh) and stored only as SHA-256
 Models: `McpOAuthClient` (`mcpoauthclients`), `McpOAuthAuthorization` (`mcpoauthauthorizations`, TTL on `expiresAt`), `McpOAuthToken` (`mcpoauthtokens`, TTL on `refreshExpiresAt`), `McpOAuthRevokedFamily` (`mcpoauthrevokedfamilies`, unique `familyId`, TTL on `expiresAt`).
 
 With `mcpOAuth` enabled, `/mcp` resolves `mcpat_` access tokens alongside JWTs, Better Auth sessions, and `mcp_` service tokens, and answers any request it cannot authenticate (including `initialize` and `tools/list`) with `401` and `WWW-Authenticate: Bearer resource_metadata="<issuer>/.well-known/oauth-protected-resource/mcp"`, adding `error="invalid_token"` when a credential was presented. Revoked or expired tokens and disabled users are refused. Each approval, and every pair issued from it, records the user's `tokenEpoch`; after it changes (password reset, Better Auth password change, or session revocation), the code exchange and refresh answer `invalid_grant` and `/mcp` refuses the access token, and the whole family is revoked. Operator steps: [Enable MCP OAuth for a JWT app](../how-to/enable-mcp-oauth.md).
+
+#### MCP OAuth grants
+
+`mcpOAuth.grants` turns scopes into permissions the server enforces. With it set, an OAuth token (`mcpat_`) sees in `tools/list`, and can call, only the tools its scopes allow. A tool it may not use is left off that request's MCP server, so `tools/call` fails as for an unknown tool. JWTs, Better Auth sessions, `mcp_` service tokens, and apps without `grants` see every tool.
+
+```typescript
+import type {McpOAuthGrant} from "@terreno/api";
+
+interface McpOAuthGrant {
+  scope: string; // no spaces
+  label: string; // consent checkbox label
+  description?: string;
+  access: "read" | "write"; // McpOAuthGrantAccess
+}
+```
+
+`MCP_OAUTH_GRANT_PRESETS` (type `McpOAuthGrantPreset`):
+
+| Preset | Scope | Label | Description | Access |
+| --- | --- | --- | --- | --- |
+| `readOnly` | `mcp:read` | Read your data | See your records. It cannot change anything. | `read` |
+| `readWrite` | `mcp:read` | Read your data | See your records. It cannot change anything. | `read` |
+| | `mcp:write` | Change your data | Create, update, and delete records for you. | `write` |
+
+Tool access: modelRouter `list` and `read` are `read`, `create`, `update`, and `delete` are `write`. An action with `method: "GET"` is `read`, any other is `write`. `registerMCPTool` takes `access` (default `"write"`). `MCPToolDefinition` carries `access` and an optional `scope`.
+
+`canUseMcpTool({tool, credential, tokenScopes, grants}): boolean` is the rule `/mcp` applies:
+
+| Condition | Result |
+| --- | --- |
+| `credential !== "oauth"` or `grants` undefined | `true` |
+| `tool.scope` set | `true` only when `tokenScopes` contains it |
+| `read` tool | `true` when any token scope maps to a grant (`read` or `write`): write implies read |
+| `write` tool | `true` when any token scope maps to a `write` grant |
+
+Token scopes that match no grant, such as a legacy `mcp` token after an app switches to `grants`, allow nothing.
 
 ## Authentication
 
@@ -2033,10 +2071,10 @@ for REST; the MCP server sets it on `/mcp` before any tool runs. `extractAuthFro
 the same `{user, credential}` pair for custom MCP mounts, plus `scopes` for an OAuth token.
 
 For an `"oauth"` credential, `getCurrentRequestContext()?.oauthScopes` lists the scopes the
-token was granted. Terreno does not limit tools by scope on its own. With more than one entry in
-`mcpOAuth.scopesSupported`, add `requireOAuthScope(scope)` to the permissions of each action or
-method that needs it: it refuses an OAuth token without `scope` and lets every other credential
-through.
+token was granted. With `mcpOAuth.grants` set, Terreno limits tools by scope itself (see
+[MCP OAuth grants](#mcp-oauth-grants)). An app on `mcpOAuth.scopesSupported` without grants gets
+no enforcement: add `requireOAuthScope(scope)` to the permissions of each action or method that
+needs it. It refuses an OAuth token without `scope` and lets every other credential through.
 
 ``````typescript
 import {Permissions, requireOAuthScope} from "@terreno/api";

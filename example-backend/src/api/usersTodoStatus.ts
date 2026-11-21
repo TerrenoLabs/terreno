@@ -67,6 +67,8 @@ export const listUsersTodoStatuses = async ({user}: {user?: User}): Promise<MCPT
 
 export const registerUsersTodoStatusTool = (): void => {
   registerMCPTool({
+    // Only reads, so a read-only OAuth grant keeps it.
+    access: "read",
     description:
       "List every user with each of their todos and completed status. Admin only. Use this to summarize who still has open work.",
     handler: async (_args, user) => {

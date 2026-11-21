@@ -34,10 +34,11 @@ const DEFAULT_WEB_ORIGINS = ["http://localhost:8082", "http://127.0.0.1:8082"];
 const APP_SCHEMES = ["frontend://", "terreno://", "exp://"];
 
 /**
- * The example frontend's page that receives the OAuth one-time token: social sign-in starts and
- * ends on the login screen, which strips the fragment at startup and never redirects first.
+ * The example frontend's pages that receive the OAuth one-time token. Social sign-in starts and
+ * ends on the login screen, or on the MCP OAuth consent screen when a signed-out user signs in
+ * there (the `?request=` query passes through). Both strip the fragment at startup.
  */
-export const OAUTH_HANDOFF_CALLBACK_PATHS = ["/login"];
+export const OAUTH_HANDOFF_CALLBACK_PATHS = ["/login", "/oauth/consent"];
 
 /** Generic OAuth provider id of the local mock OIDC provider that e2e runs sign in with. */
 export const MOCK_OIDC_PROVIDER_ID = "mock-oidc";

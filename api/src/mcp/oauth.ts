@@ -36,6 +36,7 @@ import {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
   LOOPBACK_HOSTS,
+  type McpOAuthGrant,
   PUBLIC_CLIENT_GRANT_TYPES,
   protectedResourceMetadataPath,
   type ResolvedMcpOAuthOptions,
@@ -153,6 +154,74 @@ const parseScope = (scope: string | undefined, supported: string[]): string => {
     throw new OAuthProtocolError("invalid_scope", `Unsupported scope: ${unknown.join(" ")}`);
   }
   return requested.join(" ");
+};
+
+const splitScope = (scope: string | undefined | null): string[] => {
+  return (scope ?? "").split(" ").filter((value) => value.length > 0);
+};
+
+/** The consent-screen view of one grant. */
+interface McpOAuthConsentGrant {
+  access: McpOAuthGrant["access"];
+  description: string | null;
+  label: string;
+  scope: string;
+}
+
+/**
+ * Describe each requested scope for the consent screen, in requested order. Without configured
+ * grants a scope is shown by name and treated as full access, since nothing narrows it.
+ */
+const consentGrantsFor = (
+  scope: string | undefined | null,
+  grants: McpOAuthGrant[] | undefined
+): McpOAuthConsentGrant[] => {
+  return splitScope(scope).map((value) => {
+    const grant = grants?.find((candidate) => candidate.scope === value);
+    if (!grant) {
+      return {access: "write", description: null, label: value, scope: value};
+    }
+    return {
+      access: grant.access,
+      description: grant.description ?? null,
+      label: grant.label,
+      scope: grant.scope,
+    };
+  });
+};
+
+/**
+ * The scope the user approved: the full requested scope when the consent screen sends none, or a
+ * non-empty subset of it. Approval can narrow a request but never widen it.
+ */
+const approvedScope = (body: unknown, requested: string | undefined | null): string | undefined => {
+  const narrowed = (body as {scope?: unknown} | null | undefined)?.scope;
+  if (narrowed === undefined) {
+    return requested ?? undefined;
+  }
+  if (typeof narrowed !== "string") {
+    throw new BadRequestError({
+      detail: "scope must be a space-separated string",
+      title: "Invalid scope",
+    });
+  }
+  const chosen = [...new Set(splitScope(narrowed))];
+  if (chosen.length === 0) {
+    throw new BadRequestError({
+      detail: "Approve at least one of the requested permissions",
+      title: "Choose at least one permission",
+    });
+  }
+  const requestedScopes = splitScope(requested);
+  const extra = chosen.filter((value) => !requestedScopes.includes(value));
+  if (extra.length > 0) {
+    throw new BadRequestError({
+      detail: `Not requested by the client: ${extra.join(" ")}`,
+      title: "Scope was not requested",
+    });
+  }
+  // Keep the client's requested order so the issued scope string is stable.
+  return requestedScopes.filter((value) => chosen.includes(value)).join(" ");
 };
 
 const normalizeResource = (resource: string): string => resource.replace(/\/$/, "");
@@ -454,6 +523,18 @@ const addConsentRoutes = (
               clientId: {type: "string"},
               clientName: {type: "string"},
               expiresAt: {type: "string"},
+              grants: {
+                items: {
+                  properties: {
+                    access: {enum: ["read", "write"], type: "string"},
+                    description: {nullable: true, type: "string"},
+                    label: {type: "string"},
+                    scope: {type: "string"},
+                  },
+                  type: "object",
+                },
+                type: "array",
+              },
               redirectHost: {type: "string"},
               redirectUri: {type: "string"},
               requestId: {type: "string"},
@@ -474,6 +555,7 @@ const addConsentRoutes = (
           clientId: authorization.clientId,
           clientName: client?.clientName ?? null,
           expiresAt: authorization.expiresAt.toISOString(),
+          grants: consentGrantsFor(authorization.scope, oauth.grants),
           redirectHost: new URL(authorization.redirectUri).host,
           redirectUri: authorization.redirectUri,
           requestId: authorization.requestId,
@@ -484,7 +566,10 @@ const addConsentRoutes = (
     })
   );
 
-  const decisionOpenApi = (operationId: string, summary: string): RequestHandler =>
+  const decisionOpenApiBuilder = (
+    operationId: string,
+    summary: string
+  ): ReturnType<typeof createOpenApiBuilder> =>
     createOpenApiBuilder(openApiOptions)
       .withTags(["mcp"])
       .withOperationId(operationId)
@@ -498,18 +583,32 @@ const addConsentRoutes = (
           properties: {redirectUrl: {type: "string"}},
           type: "object",
         },
-      })
-      .build();
+      });
+
+  const decisionOpenApi = (operationId: string, summary: string): RequestHandler =>
+    decisionOpenApiBuilder(operationId, summary).build();
 
   app.post(
     "/oauth/authorize/:request/approve",
     [
       ...consentGuards,
-      decisionOpenApi("approveMcpOAuthRequest", "Approve a pending MCP OAuth request"),
+      decisionOpenApiBuilder("approveMcpOAuthRequest", "Approve a pending MCP OAuth request")
+        .withRequestBody<{scope: string}>(
+          {
+            scope: {
+              description:
+                "Space-separated subset of the requested scope the user approved. Omit to approve the full requested scope.",
+              type: "string",
+            },
+          },
+          {required: false}
+        )
+        .build(),
     ],
     asyncHandler(async (req, res) => {
       const user = requireUser(req);
       const pending = await loadPendingAuthorization(String(req.params.request));
+      const scope = approvedScope(req.body, pending.scope);
       const code = generateMcpOAuthSecret();
       const now = DateTime.now();
       const codeExpiresAt = now.plus({seconds: oauth.authorizationCodeTtlSeconds});
@@ -524,6 +623,7 @@ const addConsentRoutes = (
             codeExpiresAt: codeExpiresAt.toJSDate(),
             codeHash: hashMcpOAuthSecret(code),
             expiresAt: expiresAt.toJSDate(),
+            ...(scope === undefined ? {} : {scope}),
             status: "approved",
             tokenEpoch: userTokenEpoch(user),
             userId: new mongoose.Types.ObjectId(String(user._id)),
@@ -855,9 +955,17 @@ const exchangeClientCredentials = async (
   if (!user || userIsDisabled(user)) {
     throw new OAuthProtocolError("invalid_grant", "The user cannot be granted a token");
   }
+  // A client stored before the app switched to grants may hold scopes the server no longer
+  // supports; only the supported ones can be issued.
   const allowed = client.scope
-    ? client.scope.split(" ").filter((scope) => scope.length > 0)
+    ? splitScope(client.scope).filter((value) => oauth.scopesSupported.includes(value))
     : oauth.scopesSupported;
+  if (allowed.length === 0) {
+    throw new OAuthProtocolError(
+      "invalid_scope",
+      "The client's scope has no scope this server supports"
+    );
+  }
   const scope = parseScope(stringParam(body.scope), allowed);
   const issued = await issueOrInvalidGrant({
     accessTokenTtlSeconds: oauth.accessTokenTtlSeconds,

@@ -123,6 +123,23 @@ export interface LoginTwoFactorRequiredEvent {
  */
 export type LoginControllerClientInput = LoginControllerClient | BetterAuthClient;
 
+/**
+ * Limits the sign-in methods the login screen shows to a subset of what the server offers. It
+ * never turns on a method the server has off: enable providers in server config (`googleOAuth`,
+ * `appleOAuth`, and so on), then pick which of them to show here.
+ */
+export interface LoginMethodsFilter {
+  /**
+   * Provider ids to show, such as `["google"]`. The server's order is kept and ids the server
+   * does not offer are ignored. `[]` hides every social button; leave unset to show them all.
+   */
+  providers?: string[];
+  /** Pass `false` to hide the email and password form (and the forgot-password link). */
+  emailPassword?: boolean;
+  /** Pass `false` to hide the passkey button and passkey autofill. */
+  passkey?: boolean;
+}
+
 export interface UseLoginControllerOptions {
   /** A client from `createBetterAuthClient`, ideally with the features the server enables. */
   client: LoginControllerClientInput;
@@ -184,6 +201,12 @@ export interface UseLoginControllerOptions {
   getBearerToken?: () => string | null;
   /** The email the form starts with. */
   initialEmail?: string;
+  /**
+   * Shows only a subset of the server's sign-in methods, for example on a consent route. Leave
+   * unset to show every method the server offers. Remembered-account cards for a hidden method
+   * do not sign in with it.
+   */
+  methods?: LoginMethodsFilter;
 }
 
 /**
@@ -398,9 +421,21 @@ export const useLoginController = ({
   webAuth,
   getBearerToken,
   initialEmail,
+  methods: methodsFilter,
 }: UseLoginControllerOptions): LoginController => {
   const client = clientInput as LoginControllerClient;
   const {methods} = useAuthMethods(client);
+  // Keyed on the filter's contents so an inline object does not rerun effects every render.
+  const allowedProvidersKey = methodsFilter?.providers
+    ? JSON.stringify(methodsFilter.providers)
+    : undefined;
+  const allowedProviders = useMemo(
+    (): string[] | undefined =>
+      allowedProvidersKey === undefined ? undefined : (JSON.parse(allowedProvidersKey) as string[]),
+    [allowedProvidersKey]
+  );
+  const isEmailPasswordAllowed = methodsFilter?.emailPassword !== false;
+  const isPasskeyAllowed = methodsFilter?.passkey !== false;
   const remembered = useRememberedAccounts(rememberedAccounts);
 
   const [step, setStep] = useState<LoginControllerStep>("checking");
@@ -708,7 +743,9 @@ export const useLoginController = ({
   // Starts again each time the screen returns to the login step. There is no abort on cleanup:
   // the ceremony's abort service lives in @simplewebauthn/browser, which rtk does not depend on;
   // the next ceremony replaces it, and a cancelled run never finishes a sign-in.
-  const isPasskeyOn = Boolean(methods?.passkey && client.signIn.passkey && IsWeb);
+  const isPasskeyOn = Boolean(
+    isPasskeyAllowed && methods?.passkey && client.signIn.passkey && IsWeb
+  );
   useEffect(() => {
     if (step !== "login" || !isPasskeyOn || !passkeyAutofill) {
       return;
@@ -779,9 +816,16 @@ export const useLoginController = ({
     setStep("login");
   }, [initialEmail]);
 
-  const offeredProviders = methods?.providers;
+  const serverProviders = methods?.providers;
+  const offeredProviders = useMemo(
+    (): string[] | undefined =>
+      allowedProviders
+        ? serverProviders?.filter((provider) => allowedProviders.includes(provider))
+        : serverProviders,
+    [allowedProviders, serverProviders]
+  );
   // True while the methods load, so the form does not flash away for servers that offer it.
-  const isEmailPasswordEnabled = methods?.emailPassword !== false;
+  const isEmailPasswordEnabled = isEmailPasswordAllowed && methods?.emailPassword !== false;
   const nameMethod = useCallback(
     (method: string | undefined): string | undefined => {
       if (!method) {

@@ -15,6 +15,7 @@ import {
   syncMcpToolSettings,
 } from "./adminTracking";
 import {extractAuthFromHeaders, type MCPAuthContext, type MCPAuthResult} from "./auth";
+import {canUseMcpTool} from "./grantAccess";
 import {type ResolvedMcpOAuthOptions, sendMcpOAuthChallenge} from "./oauthMetadata";
 import {getAllMCPTools, type MCPToolDefinition} from "./toolGenerator";
 
@@ -61,7 +62,13 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
   }
 
   const buildServer = async (auth: MCPAuthResult | undefined): Promise<McpServer> => {
-    const served = options.toolSettings ? await filterEnabledMcpTools(tools) : tools;
+    const enabled = options.toolSettings ? await filterEnabledMcpTools(tools) : tools;
+    // Tools the caller's OAuth grants do not allow are left off this request's server, so
+    // tools/list hides them and tools/call fails as for an unknown tool.
+    const grants = options.mcpOAuth?.grants;
+    const served = enabled.filter((tool) =>
+      canUseMcpTool({credential: auth?.credential, grants, tokenScopes: auth?.scopes, tool})
+    );
     const onToolCall = options.requestLog
       ? (record: Omit<McpToolCallRecord, "auth">): void => {
           recordMcpToolCall({...record, auth}, options.requestLog as ResolvedMcpRequestLogOptions);

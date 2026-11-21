@@ -412,6 +412,10 @@ commands:
             export TOKEN_ISSUER=terreno-e2e
             # harness-intake asserts the deterministic demo summarizer, never a real provider.
             export CLINIC_DEMO_MODEL=true
+            # mcpOAuthConsent drives MCP OAuth consent on the example app's /oauth/consent route.
+            export MCP_OAUTH_ENABLED=true
+            export PUBLIC_API_URL=http://localhost:4000
+            export MCP_OAUTH_CONSENT_URL=http://localhost:8082/oauth/consent
             bun run src/index.ts
       - run:
           name: Wait for backend health
@@ -480,7 +484,7 @@ commands:
             shard="<< parameters.spec >>"
             case "$shard" in
               auth) specs="login login-form signup consents provisionalConsent forgot-password reset-password verify-email two-factor" ;;
-              app) specs="todos todo-windows todo-browser profile realtime ai-chat ai-feedback pdf notifications socket-flags mcp-tokens" ;;
+              app) specs="todos todo-windows todo-browser profile realtime ai-chat ai-feedback pdf notifications socket-flags mcp-tokens mcpOAuthConsent" ;;
               admin-core) specs="admin admin-home admin-form admin-todo-crud admin-title-update-depth org-admin-security admin-user-security" ;;
               admin-table) specs="admin-table-search-filter admin-table-bulk-actions admin-custom-screens admin-comms-back harness-approvals harness-intake" ;;
               syncdb) specs="syncdb-load-delta syncdb-offline syncdb-conflicts syncdb-storage syncdb-chaos" ;;

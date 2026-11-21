@@ -9,13 +9,20 @@ import {
   registerCollection,
   replaceCollectionOptions,
 } from "../collectionRegistry";
-import type {MCPConfig, MCPRegistryEntry, MCPToolArgs, MCPToolResult} from "./types";
+import type {MCPConfig, MCPRegistryEntry, MCPToolAccess, MCPToolArgs, MCPToolResult} from "./types";
 
 export interface MCPCustomTool {
   description: string;
   handler: (args: MCPToolArgs, user?: User) => Promise<MCPToolResult>;
   name: string;
   zodSchema: ZodType;
+  /**
+   * `read` for tools that only read data, `write` for tools that can change it. Default:
+   * `"write"`, so a read-only OAuth grant cannot call the tool until it declares `"read"`.
+   */
+  access?: MCPToolAccess;
+  /** When set, an OAuth token must hold exactly this scope to see and call the tool. */
+  scope?: string;
 }
 
 const mcpCustomTools: MCPCustomTool[] = [];

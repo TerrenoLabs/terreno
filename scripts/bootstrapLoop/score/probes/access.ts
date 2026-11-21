@@ -202,11 +202,11 @@ export const probeR8: Probe = async (context) => {
   }
   const {mongo} = context.deps ?? {};
   if (mongo) {
-    for (const role of ["operator", "org-admin"]) {
-      const count = await mongo.count("roles", {name: role});
-      findings.check(count >= 1, `role ${role} exists`, `role ${role} missing`);
-    }
-    const holders = await mongo.count("roleassignments", {role: "org-admin"});
+    // The framework stores platform roles in `rbacroles` and the org-level `org-admin` role as a
+    // membership's `roleName`.
+    const operator = await mongo.count("rbacroles", {name: "operator"});
+    findings.check(operator >= 1, "role operator exists", "role operator missing");
+    const holders = await mongo.count("memberships", {roleName: "org-admin"});
     findings.check(holders >= 1, "org-admin is assigned", "no user holds org-admin");
   } else {
     findings.missing("BOOTSTRAP_LOOP_MONGO_URI");

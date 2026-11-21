@@ -16,8 +16,10 @@ import type {AdminScreenProps} from "./types";
 import {resolveAdminBases} from "./types";
 import {
   normalizeRoles,
+  normalizeStatementDescriptions,
   normalizeStatements,
   type RbacRoleRow,
+  type StatementDescriptions,
   useAdminRoles,
 } from "./useAdminRoles";
 
@@ -40,6 +42,12 @@ export interface AdminRolesListProps extends AdminScreenProps {
    * another, so the predicate receives both. Omit to show every action.
    */
   isActionVisible?: RoleActionVisibility;
+  /**
+   * Show the colored action badges (read, update, delete, and the rest) on role cards
+   * and the available-permissions list. When false, a described permission shows its
+   * description and an undescribed one shows the action name as text. Defaults to true.
+   */
+  showActionBadges?: boolean;
 }
 
 interface RoleFormState {
@@ -173,14 +181,64 @@ const groupPermissions = (
   return grouped;
 };
 
+export const descriptionFor = (
+  descriptions: StatementDescriptions,
+  resource: string,
+  action: string
+): string | undefined => {
+  const description = descriptions[resource]?.[action]?.trim();
+  if (!description) {
+    return undefined;
+  }
+  return description;
+};
+
+export interface PermissionActionLabelProps {
+  action: string;
+  description?: string;
+  showActionBadges: boolean;
+  testID: string;
+}
+
+export const PermissionActionLabel: React.FC<PermissionActionLabelProps> = ({
+  action,
+  description,
+  showActionBadges,
+  testID,
+}) => {
+  if (!showActionBadges) {
+    return (
+      <Text color="secondaryDark" size="sm" testID={testID}>
+        {description ?? action}
+      </Text>
+    );
+  }
+  return (
+    <Box alignItems="center" direction="row" gap={1}>
+      <Badge
+        status={PERMISSION_KIND_STATUS[permissionKind(action)]}
+        testID={testID}
+        value={action}
+      />
+      {description ? (
+        <Text color="secondaryDark" size="sm" testID={`${testID}-description`}>
+          {description}
+        </Text>
+      ) : null}
+    </Box>
+  );
+};
+
 /**
  * Custom permissions first, then model permissions. Each group has one row per resource with
- * color-coded action badges (read green, write amber, delete red).
+ * color-coded action badges (read green, write amber, delete red), unless badges are hidden.
  */
 const PermissionRows: React.FC<{
+  descriptions: StatementDescriptions;
   permissions: Record<string, readonly string[]>;
+  showActionBadges: boolean;
   testIDPrefix: string;
-}> = ({permissions, testIDPrefix}) => {
+}> = ({descriptions, permissions, showActionBadges, testIDPrefix}) => {
   const grouped = groupPermissions(permissions);
   const groups = PERMISSION_GROUPS.filter((group) => grouped[group.key].length > 0);
   if (groups.length === 0) {
@@ -195,7 +253,7 @@ const PermissionRows: React.FC<{
           </Text>
           {grouped[group.key].map(([resource, actions]) => (
             <Box
-              alignItems="center"
+              alignItems={showActionBadges ? "center" : "start"}
               direction="row"
               gap={2}
               key={resource}
@@ -207,13 +265,14 @@ const PermissionRows: React.FC<{
                   {resource}
                 </Text>
               </Box>
-              <Box direction="row" gap={1} wrap>
+              <Box direction={showActionBadges ? "row" : "column"} gap={1} wrap>
                 {sortActionsByKind(actions).map((action) => (
-                  <Badge
+                  <PermissionActionLabel
+                    action={action}
+                    description={descriptionFor(descriptions, resource, action)}
                     key={action}
-                    status={PERMISSION_KIND_STATUS[permissionKind(action)]}
+                    showActionBadges={showActionBadges}
                     testID={`${testIDPrefix}-${resource}-${action}`}
-                    value={action}
                   />
                 ))}
               </Box>
@@ -269,6 +328,7 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
   apiBase,
   baseUrl,
   isActionVisible,
+  showActionBadges = true,
 }) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl});
   const {useCreateRoleMutation, useListRolesQuery, useListStatementsQuery, useUpdateRoleMutation} =
@@ -283,6 +343,10 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
   const [updateRole, {isLoading: isUpdating}] = useUpdateRoleMutation();
   const roles = normalizeRoles(data);
   const statements = normalizeStatements(statementsData);
+  const statementDescriptions = useMemo(
+    () => normalizeStatementDescriptions(statementsData),
+    [statementsData]
+  );
   const resources = useMemo(() => Object.keys(statements).sort(), [statements]);
   const hasAdminPageStatement =
     statements[ADMIN_PAGE_RESOURCE]?.includes(ADMIN_PAGE_ACTION) ?? false;
@@ -465,10 +529,12 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
                 </Text>
                 {role.description ? <Text size="sm">{role.description}</Text> : null}
                 <PermissionRows
+                  descriptions={statementDescriptions}
                   permissions={shownPermissions({
                     isActionVisible,
                     permissions: role.permissions ?? {},
                   })}
+                  showActionBadges={showActionBadges}
                   testIDPrefix={`admin-roles-item-${role.name}-permission`}
                 />
               </Box>
@@ -481,7 +547,9 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
             {statementsError ? <Text color="error">Failed to load permissions.</Text> : null}
             {!areStatementsLoading && !statementsError ? (
               <PermissionRows
+                descriptions={statementDescriptions}
                 permissions={shownPermissions({isActionVisible, permissions: statements})}
+                showActionBadges={showActionBadges}
                 testIDPrefix="admin-permissions"
               />
             ) : null}
@@ -593,6 +661,7 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
                     <Box direction="row" gap={3} wrap>
                       {customActions.map((action) => {
                         const isSelected = form.permissions[resource]?.includes(action) ?? false;
+                        const description = descriptionFor(statementDescriptions, resource, action);
                         return (
                           <Box
                             accessibilityHint={`Toggles the ${action} permission for ${resource}`}
@@ -605,7 +674,18 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
                             testID={`admin-role-permission-${resource}-${action}`}
                           >
                             <CheckBox selected={isSelected} />
-                            <Text>{action}</Text>
+                            <Box>
+                              <Text>{action}</Text>
+                              {description ? (
+                                <Text
+                                  color="secondaryDark"
+                                  size="sm"
+                                  testID={`admin-role-permission-${resource}-${action}-description`}
+                                >
+                                  {description}
+                                </Text>
+                              ) : null}
+                            </Box>
                           </Box>
                         );
                       })}

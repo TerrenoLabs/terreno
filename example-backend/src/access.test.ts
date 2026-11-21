@@ -1,7 +1,7 @@
 import {describe, it} from "bun:test";
 import {assert} from "chai";
 
-import {appStatements} from "./access";
+import {access, appStatements} from "./access";
 
 describe("example-backend access statements", () => {
   it("declares admin-exposed models so superadmin * can list them", () => {
@@ -30,5 +30,15 @@ describe("example-backend access statements", () => {
     assert.deepEqual([...appStatements.adminUser], ["read", "write", "writeOwned"]);
     assert.includeMembers([...appStatements.adminScreen], ["showcase", "syncLab"]);
     assert.includeMembers([...appStatements.admin], ["access", "jobs"]);
+  });
+
+  it("gives every grantable permission an optional description", () => {
+    for (const [resource, actions] of Object.entries(appStatements)) {
+      for (const action of actions) {
+        const description = access.statementDescriptions[resource]?.[action];
+        assert.isString(description, `${resource}.${action}`);
+        assert.isAbove((description ?? "").trim().length, 0, `${resource}.${action}`);
+      }
+    }
   });
 });

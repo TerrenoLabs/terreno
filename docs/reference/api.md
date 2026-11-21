@@ -1438,8 +1438,13 @@ routes. Pass `accessControl` from `createAccess` on `ObservabilityApp` to enforc
 | `aiEvaluator` | `create`, `list`, `read`, `update`, `delete` |
 | `aiExperiment` | `list`, `read`, `create`, `promote` |
 
-Human-readable labels for the admin role editor live in `terrenoStatementDescriptions`
-(optional on `createAccess({ statementDescriptions })`).
+Human-readable labels for every framework permission live in `terrenoStatementDescriptions`.
+Each action's label is optional. `createAccess({ statementDescriptions })` merges app labels
+over those defaults: an app string replaces the framework label for that action, and a blank
+string is ignored. `adminModelDescriptions` and `modelCrudDescriptions` build the admin
+read/write/writeOwned labels and the model CRUD labels. `GET /rbac/statements` returns the
+merged map as `data.statementDescriptions` next to `data.statements`. The admin roles screen
+shows a label beside its action badge, and in the role editor under the action name.
 
 | Role | Observability grants |
 | --- | --- |

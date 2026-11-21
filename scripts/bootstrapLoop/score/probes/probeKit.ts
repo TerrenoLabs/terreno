@@ -206,6 +206,13 @@ export const api = async (
   return {body, status: response.status};
 };
 
+/** Rows the run owner dropped from scope (BOOTSTRAP_LOOP_DESCOPE="R5,R9,R13"). */
+export const isDescoped = (env: Record<string, string | undefined>, row: string): boolean =>
+  (env.BOOTSTRAP_LOOP_DESCOPE ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .includes(row);
+
 export const envOr = (
   env: Record<string, string | undefined>,
   name: string,

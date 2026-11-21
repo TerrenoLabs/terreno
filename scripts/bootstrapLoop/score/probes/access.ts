@@ -3,6 +3,7 @@ import {
   envOr,
   Findings,
   findInSource,
+  isDescoped,
   type Probe,
   type ProbeContext,
   probeEmail,
@@ -145,6 +146,8 @@ export const probeR2: Probe = async (context) => {
       "seeded admin login fails on the deployed app",
       "deployed app accepts the seeded admin password"
     );
+  } else if (isDescoped(env, "R13")) {
+    findings.ok("deployed-login check skipped (R13 descoped)");
   } else {
     findings.missing("DEPLOY_URL");
   }

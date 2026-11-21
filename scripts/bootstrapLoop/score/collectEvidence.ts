@@ -1,8 +1,9 @@
-import {type ChildProcess, spawn} from "node:child_process";
+import {type ChildProcess, spawn, spawnSync} from "node:child_process";
 import {mkdirSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 
-import {startReplicaSetMongo} from "./database";
+import {adminLogin, measureViewport, memberLogin, screenshotPage} from "./browser";
+import {mongoCounter, startReplicaSetMongo} from "./database";
 import {probeR1, probeR2, probeR8, probeR12} from "./probes/access";
 import {probeR3, probeR4, probeR7, probeR13} from "./probes/app";
 import type {Probe, ProbeContext, ProbeDeps, RowEvidence} from "./probes/probeKit";
@@ -31,10 +32,10 @@ const VIEWPORTS = [
   {height: 844, label: "mobile", width: 390},
 ];
 const SCREENS = [
-  {name: "login", path: "/login"},
-  {name: "todos", path: "/"},
-  {name: "admin", path: "/admin"},
-];
+  {as: undefined, name: "login", path: "/login"},
+  {as: "member", name: "todos", path: "/"},
+  {as: "admin", name: "admin", path: "/admin"},
+] as const;
 
 interface RunningApp {
   baseUrl: string;
@@ -53,6 +54,7 @@ export interface CollectEvidenceOptions {
     width: number;
     height: number;
     path: string;
+    login?: {email: string; password: string};
   }) => Promise<void>;
   deps?: ProbeDeps;
 }
@@ -78,6 +80,8 @@ const waitFor = async (url: string, attempts = 60): Promise<void> => {
 /** Starts the app's backend (4000) and web export server (8082) as child processes. */
 const startAppProcesses = async (appDir: string, env: NodeJS.ProcessEnv): Promise<RunningApp> => {
   const mongo = await startReplicaSetMongo({appDir, env});
+  // The owner's first step after install is the seed script, so scoring starts from a seeded database.
+  spawnSync("bun", ["run", "seed"], {cwd: join(appDir, "backend"), env, stdio: "ignore"});
   const children: ChildProcess[] = [];
   const launch = (cwd: string, args: string[], extra: NodeJS.ProcessEnv): void => {
     children.push(spawn("bun", args, {cwd, env: {...env, ...extra}, stdio: "ignore"}));
@@ -107,25 +111,6 @@ const startAppProcesses = async (appDir: string, env: NodeJS.ProcessEnv): Promis
   };
 };
 
-/** Playwright is the app's own dependency, so it loads lazily and only when screenshots run. */
-const playwrightScreenshot: NonNullable<CollectEvidenceOptions["screenshot"]> = async ({
-  height,
-  path,
-  url,
-  width,
-}) => {
-  const moduleName = "playwright";
-  const {chromium} = await import(moduleName);
-  const browser = await chromium.launch();
-  try {
-    const page = await browser.newPage({viewport: {height, width}});
-    await page.goto(url, {waitUntil: "networkidle"});
-    await page.screenshot({fullPage: true, path});
-  } finally {
-    await browser.close();
-  }
-};
-
 /**
  * Runs the probe for every rubric row against the running app and writes
  * `<runDir>/evidence/evidence.json` plus the screenshots. A probe that throws is recorded
@@ -139,14 +124,28 @@ export const collectEvidence = async (options: CollectEvidenceOptions): Promise<
 
   const app = await (options.startApp ?? startAppProcesses)(appDir, env);
   const screenshots: string[] = [];
+  // Real runs measure the app with mongosh and Playwright; tests that fake the app supply their own.
+  const defaultDeps: ProbeDeps = options.startApp
+    ? {}
+    : {
+        mongo: {count: mongoCounter({appDir, env})},
+        viewport: ({height, url, width}) =>
+          measureViewport({height, login: memberLogin(env), url, width}),
+      };
   try {
-    const shoot = options.screenshot ?? playwrightScreenshot;
+    const shoot = options.screenshot ?? screenshotPage;
     for (const viewport of VIEWPORTS) {
       for (const screen of SCREENS) {
         const path = join(evidenceDir, `${screen.name}-${viewport.label}.png`);
         try {
           await shoot({
             height: viewport.height,
+            login:
+              screen.as === "admin"
+                ? adminLogin(env)
+                : screen.as === "member"
+                  ? memberLogin(env)
+                  : undefined,
             path,
             url: `${app.webUrl}${screen.path}`,
             width: viewport.width,
@@ -160,7 +159,7 @@ export const collectEvidence = async (options: CollectEvidenceOptions): Promise<
     const context: ProbeContext = {
       appDir,
       baseUrl: app.baseUrl,
-      deps: options.deps,
+      deps: {...defaultDeps, ...options.deps},
       env: env as Record<string, string | undefined>,
       screenshots,
       webUrl: app.webUrl,

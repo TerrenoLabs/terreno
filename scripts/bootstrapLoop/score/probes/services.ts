@@ -95,7 +95,7 @@ export const probeR6: Probe = async (context) => {
   );
   if (forms[0]?._id) {
     const accepted = await api(context, baseUrl, "/consents/respond", {
-      body: {agreed: true, formId: forms[0]._id},
+      body: {agreed: true, consentFormId: forms[0]._id, locale: "en"},
       method: "POST",
       session,
     });

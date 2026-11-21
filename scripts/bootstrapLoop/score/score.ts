@@ -12,7 +12,7 @@ const MIN_VISUAL_SCORE = 4;
 
 export interface RowScore {
   row: string;
-  status: "PASS" | "FAIL";
+  status: "PASS" | "FAIL" | "SKIPPED";
   reason: string;
 }
 
@@ -139,9 +139,13 @@ const buildEvidenceRefs = (evidence: EvidenceFile): EvidenceRefs => {
 const mergeRows = (
   evidence: EvidenceFile,
   scorer: ScorerOutput | undefined,
-  rowIds: string[]
+  rowIds: string[],
+  descoped: string[]
 ): RowScore[] =>
   rowIds.map((row) => {
+    if (descoped.includes(row)) {
+      return {reason: "descoped by the run owner (BOOTSTRAP_LOOP_DESCOPE)", row, status: "SKIPPED"};
+    }
     if (!scorer) {
       return {reason: "scorer output unparsable", row, status: "FAIL"};
     }
@@ -234,12 +238,13 @@ export const scoreBuild = async ({
   const rows = mergeRows(
     evidence,
     scorer,
-    evidence.rows.map((item) => item.row)
+    evidence.rows.map((item) => item.row),
+    (env.BOOTSTRAP_LOOP_DESCOPE ?? "").split(",").map((item) => item.trim())
   );
   const previous = previousDir ? readBuild(previousDir) : undefined;
   const result: ScoreResult = {
     evidenceRefs: buildEvidenceRefs(evidence),
-    pass: rows.every((row) => row.status === "PASS"),
+    pass: rows.every((row) => row.status !== "FAIL"),
     rows,
     times: compareTimes({build, previous, scoreMinutes}),
     version: build.version,

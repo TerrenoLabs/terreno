@@ -1,5 +1,5 @@
 import {type ChildProcess, spawn, spawnSync} from "node:child_process";
-import {mkdirSync} from "node:fs";
+import {existsSync, mkdirSync, readFileSync} from "node:fs";
 import {connect} from "node:net";
 import {join} from "node:path";
 
@@ -89,4 +89,37 @@ export const startReplicaSetMongo = async ({
     await stop();
     throw error;
   }
+};
+
+const dbNameFromUri = (uri: string): string => {
+  const match = uri.match(/^mongodb(?:\+srv)?:\/\/[^/]+\/([^?]+)/);
+  return match?.[1] ?? "test";
+};
+
+/** Reads `MONGO_URI` from the app's backend `.env`, the database the app itself uses. */
+const appMongoUri = (appDir: string): string | undefined => {
+  const path = join(appDir, "backend", ".env");
+  if (!existsSync(path)) {
+    return undefined;
+  }
+  return readFileSync(path, "utf8")
+    .match(/^MONGO_URI=(.+)$/m)?.[1]
+    ?.trim();
+};
+
+/** Counts documents with mongosh against the app's own database, for the access probes. */
+export const mongoCounter = ({
+  appDir,
+  env,
+  port = 27017,
+}: StartMongoOptions): ((
+  collection: string,
+  filter: Record<string, unknown>
+) => Promise<number>) => {
+  const db = dbNameFromUri(appMongoUri(appDir) ?? "");
+  return async (collection, filter) => {
+    const script = `db.getSiblingDB(${JSON.stringify(db)}).getCollection(${JSON.stringify(collection)}).countDocuments(${JSON.stringify(filter)})`;
+    const count = Number(mongosh(env, port, script));
+    return Number.isFinite(count) ? count : 0;
+  };
 };

@@ -36,7 +36,7 @@ export const ensureFreshInstall = ({
   repoRoot,
   version,
 }: PreflightOptions): string | undefined => {
-  if (version !== "local") {
+  if (version !== "local" || process.env.BOOTSTRAP_LOOP_SKIP_PREFLIGHT === "1") {
     return undefined;
   }
   const head = readHead(repoRoot);

@@ -1,0 +1,1 @@
+> **McpToolSettingMethods** = `Record`\<`string`, `never`\>

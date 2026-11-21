@@ -35,6 +35,11 @@ Run in this order. Each is independently runnable and writes `<run-dir>/stages/<
 
 ## Commands
 
+0. Default, one prompt: `bun run bootstrap-loop single --version <v|local> --run-dir <dir>`
+   runs the naive prompt plus the version's `terreno_bootstrap` prompt in one builder session
+   (`scaffold` only), then scores it. It sets `BOOTSTRAP_LOOP_DESCOPE=R5,R9,R13` unless you
+   already did, so AI, CI and deploy rows read SKIPPED and never count as PASS. `local`
+   recompiles `mcp-server` first. A single run takes 15-30 minutes and about $3-4.
 1. Run one stage on an existing run dir:
    `bun run bootstrap-loop stage <id> --version <v|local> --run-dir <dir>`
 2. Run the full build, score it, and rerun failing stages until the rubric passes:

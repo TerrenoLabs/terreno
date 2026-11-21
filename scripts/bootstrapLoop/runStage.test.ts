@@ -177,6 +177,8 @@ describe("cli", () => {
           ...process.env,
           BOOTSTRAP_LOOP_BUILDER_CMD: FAKE_BUILDER,
           BOOTSTRAP_LOOP_FAKE_MODE: "fail3",
+          // A fresh checkout has no install stamp; the real preflight would reinstall everything.
+          BOOTSTRAP_LOOP_SKIP_PREFLIGHT: "1",
         },
       }
     );

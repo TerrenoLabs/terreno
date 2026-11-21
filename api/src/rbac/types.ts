@@ -7,7 +7,7 @@ import type {User, UserModel} from "../auth";
 import type {PermissionMethod} from "../permissions";
 import type {RbacAuditWrite} from "./auditModel";
 import type {RbacRoleDocument, RoleDefinition} from "./roleModel";
-import type {PermissionSet, Statements} from "./statements";
+import type {PermissionSet, StatementDescriptions, Statements} from "./statements";
 
 /**
  * Non-generic TerrenoAccess for runtime wiring (modelRouter, rbacRouter, TerrenoApp).
@@ -170,7 +170,12 @@ export interface AccessOptions<S extends Statements> {
   readActions?: readonly string[];
   cacheTtlMs?: number;
   resolvePermissions?: (args: {user: User}) => Promise<PermissionSet | null>;
-  statementDescriptions?: Record<string, Record<string, string>>;
+  /**
+   * Optional labels for permissions (resource → action → description). Merged over
+   * `terrenoStatementDescriptions`; a blank string does not erase a framework label.
+   * Returned by `GET /rbac/statements`.
+   */
+  statementDescriptions?: StatementDescriptions;
   /**
    * Extra destinations for RoleManager audit records (e.g. a consuming-app audit log).
    * The built-in `RbacAudit` collection is still written unless `persistAudit` is false.
@@ -185,6 +190,8 @@ export interface AccessOptions<S extends Statements> {
 
 export interface TerrenoAccess<S extends Statements> {
   readonly statements: S;
+  /** Labels for permissions, including framework defaults and `createAccess` overrides. */
+  readonly statementDescriptions: StatementDescriptions;
   readonly ac: ReturnType<typeof createAccessControl<S>>;
   can: (args: AccessCheckArgs<S>) => Promise<AccessResult>;
   /**

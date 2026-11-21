@@ -83,6 +83,11 @@ export type Statements = Record<string, readonly string[]>;
 
 export type PermissionSet = {[resource: string]: readonly string[]};
 
+/** Optional human labels for permissions, keyed by resource then action. */
+export interface StatementDescriptions {
+  [resource: string]: Record<string, string>;
+}
+
 export const READ_ACTIONS = ["read", "list", "view"] as const;
 
 export const READ_ONLY_ROLE_PERMISSIONS = {readOnly: true} as const;
@@ -103,7 +108,34 @@ export const mergeStatements = <S extends Statements>(appStatements: S): Stateme
   };
 };
 
-export const terrenoStatementDescriptions: Record<string, Record<string, string>> = {
+export const adminModelDescriptions = (noun: string): Record<string, string> => ({
+  read: `View ${noun} in the admin panel`,
+  write: `Create and update any ${noun} in the admin panel`,
+  writeOwned: `Create and update ${noun} you own in the admin panel`,
+});
+
+export const modelCrudDescriptions = (noun: string): Record<string, string> => ({
+  create: `Create ${noun}`,
+  delete: `Delete ${noun}`,
+  list: `List ${noun}`,
+  read: `View ${noun}`,
+  update: `Update ${noun}`,
+});
+
+export const terrenoStatementDescriptions: StatementDescriptions = {
+  admin: {
+    access: "Open the admin panel",
+    jobs: "Open the jobs admin screen",
+    runScripts: "Run admin scripts",
+    viewBackgroundTasks: "View background tasks",
+  },
+  adminAnnouncement: adminModelDescriptions("announcements"),
+  adminAnnouncementAcknowledgement: adminModelDescriptions("announcement acknowledgements"),
+  adminAnnouncementClickEvent: adminModelDescriptions("announcement click events"),
+  adminAnnouncementImpression: adminModelDescriptions("announcement impressions"),
+  adminConsentForm: adminModelDescriptions("consent forms"),
+  adminConsentResponse: adminModelDescriptions("consent responses"),
+  adminFeatureFlag: adminModelDescriptions("feature flags"),
   aiDataset: {
     create: "Create datasets",
     delete: "Delete datasets",
@@ -142,18 +174,85 @@ export const terrenoStatementDescriptions: Record<string, Record<string, string>
     list: "List traces and observability status",
     read: "View trace detail and run trace test helpers",
   },
+  announcement: modelCrudDescriptions("announcements"),
+  announcementAcknowledgement: {
+    list: "List announcement acknowledgements",
+    read: "View announcement acknowledgements",
+  },
+  announcementImpression: {
+    list: "List announcement impressions",
+    read: "View announcement impressions",
+  },
+  configuration: {
+    read: "View configuration",
+    update: "Update configuration",
+  },
+  consentForm: modelCrudDescriptions("consent forms"),
   consentResponse: {
     list: "List consent responses",
     read: "View consent responses",
     signOnBehalf: "Record, view, and void provisional consent signatures for other users",
   },
+  featureFlag: modelCrudDescriptions("feature flags"),
+  organization: {
+    create: "Create organizations",
+    delete: "Delete organizations",
+    disable: "Disable an organization",
+    list: "List organizations",
+    manageMembers: "Add, update, and remove organization members",
+    read: "View an organization",
+    update: "Update an organization",
+  },
+  rbac: {
+    assignRoles: "Assign roles to users",
+    manageRoles: "Create and edit roles",
+    read: "View roles and the permission vocabulary",
+  },
   user: {
+    ...modelCrudDescriptions("users"),
+    impersonate: "Sign in as another user",
     issueSignInLink:
       "Create a sign-in account for a legacy user and hand them a set-password link (AccountSecurityApp)",
     manageSecurity: "View any user's sign-in methods and run account recovery (AccountSecurityApp)",
+    setPassword: "Set another user's password",
     updateIdentity:
       "Change another user's email, disabled flag, email verification, or linked Better Auth and GitHub ids",
   },
+};
+
+const copyStatementDescriptions = (
+  target: StatementDescriptions,
+  source: StatementDescriptions | undefined
+): void => {
+  for (const [resource, actions] of Object.entries(source ?? {})) {
+    const next: Record<string, string> = {...(target[resource] ?? {})};
+    for (const [action, description] of Object.entries(actions ?? {})) {
+      if (typeof description !== "string") {
+        continue;
+      }
+      const trimmed = description.trim();
+      if (trimmed.length === 0) {
+        continue;
+      }
+      next[action] = trimmed;
+    }
+    if (Object.keys(next).length > 0) {
+      target[resource] = next;
+    }
+  }
+};
+
+/**
+ * Framework labels, then the app's. An app label replaces the framework label for that
+ * action. A blank string is ignored, so it does not erase a framework label.
+ */
+export const mergeStatementDescriptions = (
+  appDescriptions?: StatementDescriptions
+): StatementDescriptions => {
+  const merged: StatementDescriptions = {};
+  copyStatementDescriptions(merged, terrenoStatementDescriptions);
+  copyStatementDescriptions(merged, appDescriptions);
+  return merged;
 };
 
 /** Add missing actions for selected resources without removing consumer-defined grants. */

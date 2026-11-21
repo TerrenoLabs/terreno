@@ -6,7 +6,7 @@ import type {AiSuggestionProps, ThumbsUpDownFeedbackValue} from "./Common";
 import {SparklesIcon} from "./icons/SparklesIcon";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
-import {ThumbsUpDownFeedback} from "./ThumbsUpDownFeedback";
+import {ThumbsUpDownButtons} from "./ThumbsUpDownButtons";
 
 export interface AiSuggestionBoxProps extends AiSuggestionProps {
   testID?: string;
@@ -116,14 +116,14 @@ export const AiSuggestionBox: FC<AiSuggestionBoxProps> = ({
       if (!onFeedback) {
         return;
       }
-      // ThumbsUpDownFeedback already clears a repeated selection, so undefined means "no feedback".
+      // ThumbsUpDownButtons already clears a repeated selection, so undefined means "no feedback".
       onFeedback(nextValue === undefined ? null : nextValue === "positive" ? "like" : "dislike");
     },
     [onFeedback]
   );
 
   const renderFeedback = () => (
-    <ThumbsUpDownFeedback
+    <ThumbsUpDownButtons
       onChange={handleFeedbackChange}
       testID={testID ? `${testID}-feedback` : undefined}
       value={feedback === "like" ? "positive" : feedback === "dislike" ? "negative" : undefined}

@@ -90,6 +90,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       "profile",
       "realtime",
       "ai-chat",
+      "ai-feedback",
       "pdf",
       "notifications",
       "socket-flags",

@@ -1,4 +1,4 @@
-import type {GPTChatHistory, GPTChatMessage, SelectedFile} from "@terreno/ui";
+import type {GPTChatHistory, GPTChatMessage, MCPToolDetail, SelectedFile} from "@terreno/ui";
 import {Box, GPTChat, Heading, Text} from "@terreno/ui";
 import type React from "react";
 import {useCallback, useState} from "react";
@@ -17,11 +17,57 @@ const STATIC_HISTORIES: GPTChatHistory[] = [
 const DEMO_IMAGE_URL =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAIAAAAlC+aJAAAAUElEQVR42u3PQQkAAAgEsOtjKTPY/2EE38JgBZbqeS0CAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICApcFG3TQ4h4AqHMAAAAASUVORK5CYII=";
 
+const DEMO_TOOLS: MCPToolDetail[] = [
+  {
+    description: "List records the signed-in user is allowed to see.",
+    inputSchema: {
+      properties: {
+        limit: {description: "Maximum records to return.", type: "number"},
+        status: {
+          description: "Filter by status, such as outreach or discharged.",
+          type: "string",
+        },
+      },
+      required: ["limit"],
+      type: "object",
+    },
+    name: "users_list",
+  },
+  {
+    description: "Read one record by id.",
+    name: "users_read",
+  },
+];
+
+const DEMO_PATIENTS = Array.from({length: 40}, (_, index) => ({
+  id: `patient-${index + 1}`,
+  status: index % 2 === 0 ? "outreach" : "referred",
+}));
+
 const STATIC_MESSAGES: GPTChatMessage[] = [
   {content: "How do I add a new synced collection?", role: "user"},
   {
     content:
       "Add `syncPlugin` and `isDeletedPlugin` to the model, then pass a `sync` config to `modelRouter`. No live backend is required for this demo.",
+    role: "assistant",
+  },
+  {content: "List the patients", role: "user"},
+  {
+    content: "",
+    role: "tool-call",
+    toolCall: {args: {limit: 50}, toolCallId: "call-users", toolName: "users_list"},
+  },
+  {
+    content: "",
+    role: "tool-result",
+    toolResult: {
+      result: {patients: DEMO_PATIENTS, total: 6931},
+      toolCallId: "call-users",
+      toolName: "users_list",
+    },
+  },
+  {
+    content: "There are 6,931 patient records. Open the tool row above for the first page.",
     role: "assistant",
   },
   {content: "Draw a tiny teal square", role: "user"},
@@ -37,9 +83,12 @@ const CANNED_ASSISTANT_REPLY =
 
 const noop = (): void => {};
 
-const GPTChatFrame: React.FC<{children: React.ReactNode}> = ({children}) => {
+const GPTChatFrame: React.FC<{children: React.ReactNode; height?: number}> = ({
+  children,
+  height = 480,
+}) => {
   return (
-    <Box height={480} overflow="hidden" width="100%">
+    <Box height={height} overflow="hidden" width="100%">
       {children}
     </Box>
   );
@@ -54,11 +103,14 @@ const DEMO_MASCOT: React.ReactElement = (
   </Box>
 );
 
-export const GPTChatDemo: React.FC = (): React.ReactElement => {
+export const GPTChatDemo: React.FC<{frameHeight?: number}> = ({
+  frameHeight = 480,
+}): React.ReactElement => {
   const [messages, setMessages] = useState<GPTChatMessage[]>(STATIC_MESSAGES);
   const [historyId, setHistoryId] = useState<string>("h1");
   const [histories, setHistories] = useState<GPTChatHistory[]>(STATIC_HISTORIES);
   const [attachments, setAttachments] = useState<SelectedFile[]>([]);
+  const [ratings, setRatings] = useState<Record<number, "up" | "down" | null>>({});
 
   const handleUpdateTitle = useCallback((id: string, title: string): void => {
     setHistories((current) => current.map((h) => (h.id === id ? {...h, title} : h)));
@@ -94,22 +146,136 @@ export const GPTChatDemo: React.FC = (): React.ReactElement => {
     setMessages([]);
   }, []);
 
+  const handleRateFeedback = useCallback((index: number, rating: "up" | "down" | null): void => {
+    setRatings((current) => ({...current, [index]: rating}));
+  }, []);
+
+  const visibleMessages = messages.map((message, index) => {
+    const rating = ratings[index];
+    if (!rating) {
+      return message;
+    }
+    return {...message, rating};
+  });
+
   return (
-    <GPTChatFrame>
+    <GPTChatFrame height={frameHeight}>
       <GPTChat
         attachments={attachments}
         currentHistoryId={historyId}
-        currentMessages={messages}
+        currentMessages={visibleMessages}
         histories={histories}
+        mcpTools={DEMO_TOOLS}
         onAttachFiles={handleAttachFiles}
         onCreateHistory={handleCreateHistory}
         onDeleteHistory={handleDeleteHistory}
+        onRateFeedback={handleRateFeedback}
         onRemoveAttachment={handleRemoveAttachment}
         onSelectHistory={handleSelectHistory}
         onSubmit={handleSubmit}
         onUpdateTitle={handleUpdateTitle}
         suggestedPrompts={["Summarize the last answer", "Show a code sample"]}
         testID="demo-gpt-chat"
+      />
+    </GPTChatFrame>
+  );
+};
+
+export const GPTChatTranscript: React.FC = (): React.ReactElement => {
+  return <GPTChatDemo frameHeight={880} />;
+};
+
+const BLOCKS_REPLY = `v: 1
+datasets:
+  signups:
+    columns:
+      - {name: month, type: string}
+      - {name: count, type: number}
+    rows:
+      - [Jan, 120]
+      - [Feb, 180]
+      - [Mar, 90]
+      - [Apr, 210]
+blocks:
+  - type: heading
+    size: lg
+    text: Signups this quarter
+  - type: text
+    markdown: Signups grew **12%** quarter over quarter.
+  - type: columns
+    children:
+      - type: metric
+        label: Total
+        value: "403"
+        delta: "+12%"
+        trend: up
+      - type: metric
+        label: Best month
+        value: Apr
+  - type: callout
+    status: info
+    text: Numbers refresh hourly from the signups dataset.
+  - type: card
+    id: team
+    title: Team
+    children:
+      - type: badge
+        status: success
+        text: On track
+      - type: text
+        markdown: Ada leads the quarter. The card sits on the page, not inside a chat bubble.
+  - type: chart
+    id: signups_chart
+    kind: bar
+    title: Signups
+    data: signups
+    x: month
+    y: count
+  - type: table
+    id: signups_table
+    title: Signups by month
+    data: signups
+  - type: details
+    title: How a signup is counted
+    text: A signup is a new workspace created during the month.
+  - type: actions
+    id: follow
+    elements:
+      - type: button
+        id: reply_btn
+        text: Break it down
+        action: {kind: reply, text: Break signups down by channel}
+`;
+
+const BLOCKS_MESSAGES: GPTChatMessage[] = [
+  {content: "How did signups do this quarter?", role: "user"},
+  {content: BLOCKS_REPLY, id: "blocks-quarter", role: "assistant"},
+];
+
+export const GPTChatBlocks: React.FC = (): React.ReactElement => {
+  const [messages, setMessages] = useState<GPTChatMessage[]>(BLOCKS_MESSAGES);
+
+  const handleSubmit = useCallback((prompt: string): void => {
+    setMessages((current) => [
+      ...current,
+      {content: prompt, role: "user"},
+      {content: CANNED_ASSISTANT_REPLY, role: "assistant"},
+    ]);
+  }, []);
+
+  return (
+    <GPTChatFrame height={960}>
+      <GPTChat
+        currentHistoryId="h1"
+        currentMessages={messages}
+        histories={STATIC_HISTORIES}
+        mcpTools={DEMO_TOOLS}
+        onCreateHistory={noop}
+        onDeleteHistory={noop}
+        onSelectHistory={noop}
+        onSubmit={handleSubmit}
+        testID="demo-gpt-chat-blocks"
+        uiBlocks
       />
     </GPTChatFrame>
   );

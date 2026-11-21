@@ -24,6 +24,12 @@ import {
   snapshotAuditBefore,
 } from "./audit/record";
 import {authenticateMiddleware, omitUserRolesFromWriteBody, type User} from "./auth";
+import {
+  assertNoBulkCollision,
+  type BulkBodyValidator,
+  type ModelRouterBulkOptions,
+  registerBulkRoute,
+} from "./bulk";
 import {registerCollection, replaceCollectionOptions} from "./collectionRegistry";
 import {
   APIError,
@@ -38,6 +44,7 @@ import {
 import {logger} from "./logger";
 import {registerMCPActionModel, registerMCPModel, updateMCPRegistryOptions} from "./mcp/registry";
 import type {MCPConfig} from "./mcp/types";
+import {conflictResponseBody, timestampConcurrencyCheck} from "./modelRouterWrites";
 import {
   createOpenApiMiddleware,
   deleteOpenApiMiddleware,
@@ -58,11 +65,14 @@ import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
 import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
 import {checkSortFields, getAllowedSortFields} from "./sortFields";
 import {
-  type ExecutorConcurrencyCheck,
   executeCreate,
   executeDelete,
   executeUpdate,
   isExecutorConflictError,
+  loadDocOr404,
+  runPostCreate,
+  runPostDelete,
+  runPostUpdate,
 } from "./sync/executors";
 import type {SyncConfig} from "./sync/types";
 import {
@@ -102,7 +112,6 @@ export const addPopulateToQuery = (
 };
 
 // TODOS:
-// Support bulk actions
 // Support more complex query fields
 // Rate limiting
 
@@ -254,6 +263,13 @@ export interface ModelRouterOptions<T> {
   /** Named collection-scoped operations at `/:actionName` (GET or POST). */
   collectionActions?: Record<string, CollectionActionConfig<unknown, unknown, unknown>>;
   /**
+   * Opt in to `POST /bulk`: many create/update/delete operations in one request, each run
+   * through this router's permissions, hooks, validation, audit, and `responseHandler`.
+   * `true` allows all three methods with at most 100 operations per request.
+   * See docs/reference/api.md ("modelRouter bulk writes").
+   */
+  bulk?: boolean | ModelRouterBulkOptions;
+  /**
    * Hook that runs after `transformer.transform` but before the object is created.
    * Can update the body fields based on the request or the user.
    * Return null to return a generic 403 error. Throw an APIError to return a 400 with specific
@@ -362,6 +378,7 @@ export interface ModelRouterOptions<T> {
     create?: Record<string, unknown>;
     update?: Record<string, unknown>;
     delete?: Record<string, unknown>;
+    bulk?: Record<string, unknown>;
   };
   /**
    * Overwrite parts of the model properties for the OpenAPI generator.
@@ -638,6 +655,48 @@ const getBodyValidationMiddleware = <T>(
   return validateModelRequestBody(model, validationOptions);
 };
 
+type BodyValidationMiddleware = (req: Request, res: Response, next: NextFunction) => void;
+
+// Runs a body validation middleware against one body outside the Express chain and returns the
+// cleaned body, throwing what the middleware would have passed to `next` or thrown.
+const runBodyValidator = (
+  middleware: BodyValidationMiddleware,
+  body: Record<string, unknown>,
+  req?: Request
+): Record<string, unknown> => {
+  const stub = (req ? Object.create(req) : {headers: {}}) as Request;
+  stub.body = cloneDeep(body);
+  let nextError: unknown;
+  middleware(stub, {} as Response, (error?: unknown) => {
+    nextError = error;
+  });
+  if (nextError) {
+    throw nextError;
+  }
+  return stub.body as Record<string, unknown>;
+};
+
+/**
+ * Validates one create or update body exactly as `POST /` or `PATCH /:id` validate theirs
+ * (OpenAPI schema, coercion, additional-property removal), returning the cleaned body or
+ * throwing the same 400. A no-op until validation is enabled globally or on the router.
+ */
+export const validateModelRouterBody = <T>({
+  model,
+  options,
+  method,
+  body,
+  req,
+}: {
+  model: ModelLike<T>;
+  options: ModelRouterOptions<T>;
+  method: "create" | "update";
+  body: Record<string, unknown>;
+  req?: Request;
+}): Record<string, unknown> => {
+  return runBodyValidator(getBodyValidationMiddleware(model, options, method), body, req);
+};
+
 // Get query validation middleware if validation is enabled
 const getQueryValidationMiddleware = <T>(
   model: ModelLike<T>,
@@ -810,12 +869,8 @@ const _buildModelRouter = <T>(
   }
 
   assertNoActionCollisions(model, options);
+  assertNoBulkCollision(options);
   registerActionRoutes(router, model, options);
-
-  // User endpoints run after actions; actions win on path conflicts.
-  if (options.endpoints) {
-    options.endpoints(router, options);
-  }
 
   const responseHandler = options.responseHandler ?? defaultResponseHandler;
 
@@ -823,6 +878,33 @@ const _buildModelRouter = <T>(
   const createValidation = getBodyValidationMiddleware(model, options, "create");
   const updateValidation = getBodyValidationMiddleware(model, options, "update");
   const queryValidation = getQueryValidationMiddleware(model, options);
+
+  const validateBulkBody: BulkBodyValidator = ({method, body, req}) =>
+    runBodyValidator(method === "create" ? createValidation : updateValidation, body, req);
+  registerBulkRoute({
+    deps: {
+      authenticateMiddleware,
+      checkPermissions,
+      executeCreate,
+      executeDelete,
+      executeUpdate,
+      isExecutorConflictError,
+      loadDocOr404,
+      runPostCreate,
+      runPostDelete,
+      runPostUpdate,
+    },
+    model,
+    options,
+    responseHandler: responseHandler as NonNullable<ModelRouterOptions<T>["responseHandler"]>,
+    router,
+    validateBody: validateBulkBody,
+  });
+
+  // User endpoints run after actions and bulk; those win on path conflicts.
+  if (options.endpoints) {
+    options.endpoints(router, options);
+  }
 
   router.post(
     "/",
@@ -1102,27 +1184,11 @@ const _buildModelRouter = <T>(
         ? httpUnmodifiedSince[0]
         : httpUnmodifiedSince;
 
-      let concurrencyCheck: ExecutorConcurrencyCheck | undefined;
-      if (timestampValue || httpTimestampValue || bodyUpdatedAt) {
-        const usingPreciseHeader = Boolean(timestampValue);
-        const usingHttpHeader = !usingPreciseHeader && Boolean(httpTimestampValue);
-        const clientTimestamp = timestampValue
-          ? DateTime.fromISO(timestampValue)
-          : httpTimestampValue
-            ? DateTime.fromHTTP(httpTimestampValue)
-            : DateTime.fromISO(bodyUpdatedAt);
-        concurrencyCheck = {
-          // An unparseable value round-trips as an invalid Date; the executor turns it into
-          // the 400 "Invalid conflict-detection timestamp" error after preUpdate has run.
-          ifUnmodifiedSince: clientTimestamp.toJSDate(),
-          invalidTimestampDetail: usingPreciseHeader
-            ? "X-Unmodified-Since-ISO header could not be parsed as an ISO date"
-            : usingHttpHeader
-              ? "If-Unmodified-Since header could not be parsed as an HTTP date"
-              : "_updatedAt body field could not be parsed as an ISO date",
-          type: "timestamp",
-        };
-      }
+      const concurrencyCheck = timestampConcurrencyCheck({
+        bodyUpdatedAt,
+        httpHeader: httpTimestampValue,
+        preciseHeader: timestampValue,
+      });
 
       let doc: Document<unknown, unknown, unknown> & T;
       const previous = snapshotAuditBefore({audit: options.audit, doc: existingDoc});
@@ -1146,11 +1212,7 @@ const _buildModelRouter = <T>(
             req,
             options
           );
-          return res.status(409).json({
-            data: serialized,
-            error: "Conflict",
-            message: "Document was modified since your last read",
-          });
+          return res.status(409).json(conflictResponseBody(serialized));
         }
         throw error;
       }

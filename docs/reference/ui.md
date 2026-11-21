@@ -405,6 +405,22 @@ Steps: [Show release notes with WhatsNewBanner](../how-to/whats-new-banner.md).
 
 ## Component Behaviors
 
+### DraggableList row height
+
+`itemHeight` is the height of every row. The list places the next row one stride below the previous one.
+
+Pass `variableHeight` when rows are not the same height. Each row stays in normal flow and is as tall as its content. `itemHeight` is only the placeholder until that row is measured, and it is the fallback if measurement has not arrived before a drag. Admin arrays of subdocuments set `variableHeight`, so a row that grows (a long user list, a nested group) does not cover the fields under it.
+
+```tsx
+<DraggableList
+  callbackNewDataIds={setIds}
+  dataIDs={ids}
+  itemHeight={76}
+  renderItem={renderItem}
+  variableHeight
+/>
+```
+
 ### Button Layout Behavior
 
 Buttons automatically size to their content unless `fullWidth` is specified:
@@ -514,6 +530,24 @@ Passkey autofill (`"username webauthn"`) is web only; native gets the plain user
   default to `"current-password"`. Both default the email field to `"username"`.
 - `"username webauthn"` asks the browser to offer saved passkeys in the field's autofill;
   `LoginScreen` sets it on the email field when `passkeyAutofill` is on.
+
+### TextField spell check
+
+Prose fields (`type="text"`, multiline `TextArea`, or `Field type="textarea"`) turn browser spell
+check on by default when `autoComplete` is unset or `"on"`. Misspelled words show the usual red
+underline. Picking a suggestion runs `onChange` with the corrected text. A replacement that flips
+the value straight back within 500ms is ignored, so spell check cannot loop a controlled field
+between two spellings (for example `reachthreshold` and `reach threshold`). Autocorrect stays off
+on web.
+
+| Prop | Web default | Native default |
+| --- | --- | --- |
+| `spellCheck` | `true` for prose | unset (platform default) |
+| `autoCorrect` | `false` for prose | `true` for prose |
+
+Pass `spellCheck={false}` to hide underlines on a specific field. Pass `autoCorrect={false}` on
+native when autocorrect is unwanted. Specialized types such as `email` and `password` do not enable
+spell check unless you set `spellCheck` explicitly.
 
 ### FormContainer
 
@@ -639,13 +673,46 @@ cover:
 `variant` still sets both the trigger and the Apply button; `triggerVariant` and
 `applyButtonVariant` override each independently.
 
+### ThumbsUpDownFeedback and FeedbackCommentField
+
+`ThumbsUpDownFeedback` takes an optional comment. Pass `onCommentSubmit` and, once a value is
+selected, a multiline field and a **Send** button render under the thumbs. Send is disabled
+while the trimmed text is empty or a send is running, calls `onCommentSubmit` with the trimmed
+text, then shows "Thanks for the feedback" in place of the field. A rejection keeps the text
+for a retry. Clearing the selection hides the field; changing it remounts the field with empty
+text, so clear `comment` in `onChange` when a new vote should get a new comment.
+
+| Prop | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `onCommentSubmit` | `(comment: string) => void \| Promise<void>` | unset | No comment field without it |
+| `commentPlaceholder` | `string` | `"Tell us more (optional)"` | |
+| `comment` | `string` | unset | A comment already sent; shows the sent state |
+
+Test IDs: `{testID}-comment-input`, `{testID}-comment-send`, `{testID}-comment-sent`.
+
+```tsx
+<ThumbsUpDownFeedback
+  comment={sentComment}
+  onChange={setVote}
+  onCommentSubmit={(comment) => sendFeedback({thumbs, comment})}
+  testID="summary-feedback"
+  value={vote}
+/>
+```
+
+`FeedbackCommentField` is the same field on its own (`{onSubmit, placeholder?, sentComment?,
+testID}`, test IDs `{testID}-input`, `-send`, `-sent`), for rating controls that are not
+`ThumbsUpDownFeedback`, such as GPTChat's rating buttons.
+
 ### GPTChat
 
 Streaming chat surface for `@terreno/ai`. Histories, messages, submit, and optional MCP/tools stay under consumer control.
 
 Pass `mascot` when the app owns a character. Terreno ships none. The node renders only while `currentMessages` is empty, centered in the chat panel above the suggested prompts. The empty hero uses the message viewport height as a minimum so short content stays centered, while taller mascots still scroll. Streaming feedback shares that centered hero instead of creating a second pane. Omit the prop for the default empty chat.
 
-The composer row (attachment picker, tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided.
+The transcript sits in a 760px column. A message with no text, content parts, or blocks renders nothing, so an empty placeholder reply shows no action row. A user message is a light rounded bubble. An assistant message is plain text on the page background, with copy, download, and rating controls in one row underneath. Tool calls are a single expandable line: the call and its result open together, and the body scrolls inside a 240px cap.
+
+The composer row (attachment picker, Tools, input, Send) is vertically centered, so controls stay aligned with the input as it grows. The composer input grows with its text up to 200px, then scrolls. The attachment cell is omitted when `onAttachFiles` is not provided. **Tools** sits beside the attachment control when `mcpTools` has entries, and opens a large modal listing every tool and what it does. Arguments stay hidden until **Show arguments** is checked; then each argument shows its name, type, whether it is required, and its description. The list scrolls, and its height stays inside the window. Pass `inputSchema` (a JSON Schema object) for the arguments. The button is omitted when `mcpTools` is empty or omitted.
 
 The history sidebar (model selector, toolbar, New chat, and the history list) is a 250px-minimum column. Pass `showHistory={false}` to leave it out so the chat panel takes the full width, as on a phone. The host then owns history navigation and the sidebar's controls. `showHistory` defaults to `true`.
 
@@ -653,7 +720,14 @@ Each history row keeps rename and delete in a three-dot overflow menu (`gpt-hist
 
 "Scroll to bottom" appears only when content sits more than 100px below the viewport. It never shows in an empty chat.
 
-Image content parts render copy-image and (web) download actions. The message copy button on an image-only reply copies the image, not text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
+Image replies keep one copy control and, on web, one download control. They sit in the same row as thumbs up and thumbs down, and use the same muted icon button. An image-only reply copies the image. A reply that also has text copies the text. On web the image is written to the clipboard as PNG; on native it uses `expo-clipboard` `setImageAsync` for `data:` URLs.
+
+Ratings and feedback: `onRateFeedback(promptIndex, rating)` shows thumbs under each stored
+assistant message. Pass `onRateComment(promptIndex, comment)` too and a rated message shows a
+`FeedbackCommentField` (`gpt-rating-comment-{index}-input` / `-send` / `-sent`) under those
+thumbs; set `GPTChatMessage.ratingComment` to show the sent state. `onMessageSignal(promptIndex,
+"copied")` fires after **Copy message** succeeds (never on a clipboard failure). `promptIndex` is
+the stored `prompts` row, so hidden ask rows keep it aligned with the history.
 
 The attach control (`FilePickerButton`) opens an anchored dropdown with **Photo Library** and **Document**. On web both open a browser file input from the press itself and return `data:` URLs, so attachments survive a reload; on native they use `expo-image-picker` and `expo-document-picker`.
 

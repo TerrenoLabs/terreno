@@ -20,6 +20,24 @@ import {
 type ApiSdkQueryOptions<T> = Omit<UseApiQueryOptions<T, T>, "providesTags" | "transformResponse">;
 type ApiSdkLazyOptions<T> = Omit<UseLazyApiQueryOptions<T, never>, "providesTags" | "toRequest">;
 
+export interface APIError {
+  code?: string;
+  detail?: string;
+  id?: string;
+  links?: {
+    about?: string;
+    type?: string;
+  };
+  meta?: Record<string, unknown>;
+  source?: {
+    header?: string;
+    parameter?: string;
+    pointer?: string;
+  };
+  status?: number;
+  title?: string;
+}
+
 export type AdminMigrationsRunArgs = "true" | "false" | undefined;
 
 export type AdminMigrationsRunRes =
@@ -3969,6 +3987,9 @@ export type GetAiObservabilityTracesArgs = {
   prompt?: string;
   promptVersion?: number;
   scope?: string;
+  thumbs?: "up" | "down";
+  signal?: "accepted" | "dismissed" | "copied" | "edited" | "regenerated";
+  hasComment?: boolean;
   sort?:
     | "cost"
     | "-cost"
@@ -3998,7 +4019,15 @@ export const getAiObservabilityTracesRequest = (
   arg: GetAiObservabilityTracesArgs
 ): ApiRequestArgs => ({
   method: "GET",
-  params: {prompt: arg.prompt, promptVersion: arg.promptVersion, scope: arg.scope, sort: arg.sort},
+  params: {
+    hasComment: arg.hasComment,
+    prompt: arg.prompt,
+    promptVersion: arg.promptVersion,
+    scope: arg.scope,
+    signal: arg.signal,
+    sort: arg.sort,
+    thumbs: arg.thumbs,
+  },
   url: `/ai/observability/traces`,
 });
 
@@ -7242,8 +7271,9 @@ export const usePatchFeatureFlagsFlagsByIdMutation = (
 export type PatchGptHistoriesByIdRatingArgs = {
   id: string;
   body: {
+    comment?: string;
     promptIndex?: number;
-    rating?: string;
+    rating?: "up" | "down" | null | null;
   };
 };
 
@@ -8225,10 +8255,12 @@ export type PostAiExampleSummarizeArgs = {
 export type PostAiExampleSummarizeRes =
   | {
       output?: string;
+      traceId?: string;
     }
   | {
       data?: {
         output?: string;
+        traceId?: string;
       };
     };
 
@@ -8704,6 +8736,56 @@ export const usePostAiObservabilityTracesAddToDatasetMutation = (
     invalidatesTags: ["observability"],
     ...options,
   });
+
+export type PostAiObservabilityTracesByIdFeedbackArgs = {
+  id: string;
+  body: {
+    comment?: string;
+    flagDataset?: boolean;
+    outcome?: "tp" | "fp" | "tn" | "fn";
+    signal?: "accepted" | "dismissed" | "copied" | "edited" | "regenerated";
+    thumbs?: "up" | "down" | null | null;
+  };
+};
+
+export type PostAiObservabilityTracesByIdFeedbackRes =
+  | {
+      flaggedForDataset?: boolean;
+      reviewItemId?: string;
+      scores?: Record<string, unknown>[];
+      traceId?: string;
+    }
+  | {
+      data?: {
+        flaggedForDataset?: boolean;
+        reviewItemId?: string;
+        scores?: Record<string, unknown>[];
+        traceId?: string;
+      };
+    };
+
+export const postAiObservabilityTracesByIdFeedbackRequest = (
+  arg: PostAiObservabilityTracesByIdFeedbackArgs
+): ApiRequestArgs => ({
+  body: arg.body,
+  method: "POST",
+  url: `/ai/observability/traces/${encodeURIComponent(String(arg.id))}/feedback`,
+});
+
+/** Record the trace owner's feedback on an AI output */
+export const usePostAiObservabilityTracesByIdFeedbackMutation = (
+  options: UseApiMutationOptions<
+    PostAiObservabilityTracesByIdFeedbackArgs,
+    PostAiObservabilityTracesByIdFeedbackRes
+  > = {}
+): UseApiMutationResult<
+  PostAiObservabilityTracesByIdFeedbackArgs,
+  PostAiObservabilityTracesByIdFeedbackRes
+> =>
+  useApiMutation<
+    PostAiObservabilityTracesByIdFeedbackArgs,
+    PostAiObservabilityTracesByIdFeedbackRes
+  >(postAiObservabilityTracesByIdFeedbackRequest, {invalidatesTags: ["observability"], ...options});
 
 export type PostAiObservabilityTracesByIdScoresArgs = string;
 
@@ -10061,6 +10143,63 @@ export const useLazySettingsGcsQuery = (
     ...options,
     providesTags: ["settings"],
     toRequest: (): ApiRequestArgs => settingsGcsRequest(),
+  });
+
+export type TodosBulkArgs = {
+  atomic?: boolean;
+  operations: {
+    body?: {
+      _id?: string;
+      completed?: boolean;
+      ownerId?: string;
+      priority?: "low" | "medium" | "high";
+      tags?: string[];
+      title?: string;
+      updated?: string;
+      created?: string;
+      deleted?: boolean;
+      _syncPrevStream?: string;
+      _syncSeq?: number;
+    };
+    id?: string;
+    method: "create" | "update" | "delete";
+  }[];
+};
+
+export type TodosBulkRes = {
+  data?: {
+    _id: string;
+    completed?: boolean;
+    ownerId: string;
+    priority?: "low" | "medium" | "high";
+    tags?: string[];
+    title: string;
+    updated: string;
+    created: string;
+    deleted?: boolean;
+    _syncPrevStream?: string;
+    _syncSeq?: number;
+  };
+  error?: APIError;
+  id?: string;
+  index: number;
+  method: "create" | "update" | "delete";
+  status: number;
+}[];
+
+export const todosBulkRequest = (arg: TodosBulkArgs): ApiRequestArgs => ({
+  body: arg,
+  method: "POST",
+  url: `/todos/bulk`,
+});
+
+/** Bulk write todos */
+export const useTodosBulkMutation = (
+  options: UseApiMutationOptions<TodosBulkArgs, TodosBulkRes> = {}
+): UseApiMutationResult<TodosBulkArgs, TodosBulkRes> =>
+  useApiMutation<TodosBulkArgs, TodosBulkRes>(todosBulkRequest, {
+    invalidatesTags: ["todos"],
+    ...options,
   });
 
 export type TodosBulkCompleteArgs = {

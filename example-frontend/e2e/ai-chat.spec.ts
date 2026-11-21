@@ -3,7 +3,9 @@ import path from "node:path";
 import type {Page} from "@playwright/test";
 
 import {expect, test} from "./fixtures/test";
-import {TEST_USER} from "./fixtures/testUsers";
+import {AI_CHAT_FEEDBACK_USER, TEST_USER} from "./fixtures/testUsers";
+import {getAdminToken} from "./helpers/adminAuth";
+import {signUpOrSignInBetterAuth} from "./helpers/betterAuthSession";
 import {loginAs} from "./helpers/login";
 import {
   askCallRow,
@@ -453,7 +455,7 @@ test.describe("AI Chat", () => {
     await page.getByTestId("gpt-ask-call_approval-button-approve").click();
 
     await expect(page.getByText("Deleted 2 completed todos: Buy milk, File taxes.")).toBeVisible();
-    const resultCard = page.getByLabel("Result: deleteCompletedTodos");
+    const resultCard = page.getByLabel("Tool: deleteCompletedTodos");
     await expect(resultCard).toBeVisible();
     await resultCard.click();
     await expect(page.getByText(/"deleted": 2/)).toBeVisible();
@@ -824,3 +826,128 @@ const saveChatShot = async (page: Page, name: string): Promise<void> => {
   }
   await page.screenshot({fullPage: true, path: `${dir}/${name}`});
 };
+
+const API_URL = process.env.BACKEND_URL ?? "http://localhost:4000";
+const CHAT_COMMENT = "Too vague for my question";
+
+interface HistoryBody {
+  data?: {prompts?: Array<{traceId?: string; type?: string}>};
+  prompts?: Array<{traceId?: string; type?: string}>;
+}
+
+test.describe("AI chat feedback", () => {
+  test.beforeEach(async ({page, consoleGuard}) => {
+    consoleGuard.allow("Failed to load resource");
+    consoleGuard.allow("[syncdb]");
+    consoleGuard.allow("[sync]");
+    consoleGuard.allow(/WebSocket/i);
+    consoleGuard.allow("Sentry not initialized");
+    await loginAs(page, AI_CHAT_FEEDBACK_USER);
+    await page.goto("/ai");
+    await page.getByTestId("gpt-input").waitFor({state: "visible"});
+  });
+
+  // Deliberately unmocked: the e2e backend has no model key, so /gpt/prompt answers from the
+  // demo agent, saves a real history, and writes a real trace stored as prompts[n].traceId.
+  test("chat thumbs down with a comment lands on the reply's trace", async ({page, request}) => {
+    const promptResponse = page.waitForResponse(
+      (response) => response.url().includes("/gpt/prompt") && response.request().method() === "POST"
+    );
+    await page.getByTestId("gpt-input").fill("Say hello for the feedback test");
+    await page.getByTestId("gpt-submit").click();
+    const streamText = await (await promptResponse).text();
+    const historyId = /"historyId"\s*:\s*"([0-9a-f]{24})"/.exec(streamText)?.[1];
+    expect(historyId, "the stream names the saved history").toBeTruthy();
+
+    // Message 0 is the user row, 1 is the assistant reply.
+    await page.getByTestId("gpt-rate-down-1").waitFor({state: "visible"});
+    await page.getByTestId("gpt-rate-down-1").click();
+    await page.getByTestId("gpt-rating-comment-1-input").fill(CHAT_COMMENT);
+    await page.getByTestId("gpt-rating-comment-1-send").click();
+    await page.getByTestId("gpt-rating-comment-1-sent").waitFor({state: "visible"});
+
+    const headers = {authorization: `Bearer ${await getAdminToken(request)}`};
+    const historyRes = await request.get(`${API_URL}/gpt/histories/${historyId}`, {headers});
+    expect(historyRes.ok(), await historyRes.text()).toBe(true);
+    const historyBody = (await historyRes.json()) as HistoryBody;
+    const prompts = historyBody.data?.prompts ?? historyBody.prompts ?? [];
+    const traceId = prompts.find((prompt) => prompt.type === "assistant")?.traceId;
+    expect(traceId, "the assistant row stores its trace id").toBeTruthy();
+
+    await expect
+      .poll(async () => {
+        const detail = await request.get(`${API_URL}/ai/observability/traces/${traceId}`, {
+          headers,
+        });
+        if (!detail.ok()) {
+          return [];
+        }
+        const scores =
+          ((await detail.json()) as {data?: {scores?: Array<Record<string, unknown>>}}).data
+            ?.scores ?? [];
+        return scores.filter((score) => score.source === "user-feedback");
+      })
+      .toEqual([
+        expect.objectContaining({
+          comment: CHAT_COMMENT,
+          name: "thumbs_up",
+          source: "user-feedback",
+          value: false,
+        }),
+      ]);
+  });
+
+  test.describe("copy signal", () => {
+    test.use({permissions: ["clipboard-read", "clipboard-write"]});
+
+    // A reply streamed in this session carries its trace through the synced history row.
+    test("copying a just-streamed reply sends the copied signal for its trace", async ({page}) => {
+      await page.getByTestId("gpt-input").fill("Say hello for the copy test");
+      await page.getByTestId("gpt-submit").click();
+      await page.getByTestId("gpt-copy-msg-1").waitFor({state: "visible"});
+      const feedback = page.waitForRequest(
+        (sent) => sent.url().includes("/feedback") && sent.method() === "POST"
+      );
+      await page.getByTestId("gpt-copy-msg-1").click();
+      expect((await feedback).postDataJSON()).toEqual({signal: "copied"});
+    });
+
+    // An older history row has no traceId, so copying it must not call the feedback route.
+    test("copying a reply with no trace id sends no feedback request", async ({page, request}) => {
+      const token = await signUpOrSignInBetterAuth(request, {
+        email: AI_CHAT_FEEDBACK_USER.email,
+        name: AI_CHAT_FEEDBACK_USER.name,
+        password: AI_CHAT_FEEDBACK_USER.password,
+      });
+      const created = await request.post(`${API_URL}/gpt/histories`, {
+        data: {
+          prompts: [
+            {text: "An older question", type: "user"},
+            {text: "An older reply without a trace", type: "assistant"},
+          ],
+          title: "Older chat",
+        },
+        headers: {authorization: `Bearer ${token}`},
+      });
+      expect(created.ok(), await created.text()).toBe(true);
+      const createdBody = (await created.json()) as {data?: {_id?: string; id?: string}};
+      const historyId = createdBody.data?._id ?? createdBody.data?.id;
+      expect(historyId, "the created history id").toBeTruthy();
+
+      const feedbackRequests: string[] = [];
+      page.on("request", (sent) => {
+        if (sent.url().includes("/feedback")) {
+          feedbackRequests.push(sent.url());
+        }
+      });
+      await page.reload();
+      await page.getByTestId(`gpt-history-${historyId}-clickable`).click();
+      await page.getByTestId("gpt-copy-msg-1").click();
+      await expect
+        .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+        .toBe("An older reply without a trace");
+      await page.waitForLoadState("networkidle");
+      expect(feedbackRequests).toEqual([]);
+    });
+  });
+});

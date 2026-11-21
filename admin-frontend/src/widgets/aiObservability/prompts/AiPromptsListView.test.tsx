@@ -24,7 +24,7 @@ const idleHandlers = {
   createOpen: false,
   createSystem: "",
   createTemplate: "",
-  folder: "All folders",
+  folder: "",
   onCreate: mock(() => {}),
   onCreateDescriptionChange: mock(() => {}),
   onCreateFolderChange: mock(() => {}),
@@ -36,8 +36,10 @@ const idleHandlers = {
   onOpenCreate: mock(() => {}),
   onOpenPrompt: mock(() => {}),
   onSearchChange: mock(() => {}),
+  onTagChange: mock(() => {}),
   prompts,
   search: "",
+  tag: "",
 };
 
 describe("AiPromptsListView", () => {
@@ -76,7 +78,7 @@ describe("AiPromptsListView", () => {
     const view = renderWithTheme(
       <AiPromptsListView
         {...idleHandlers}
-        folder=""
+        folder="examples"
         prompts={[
           {
             description: "Short summaries",
@@ -123,7 +125,7 @@ describe("AiPromptsListView", () => {
       {folder: "examples", latestVersion: 7, name: "gamma", production: 7, type: "chat"},
     ];
     const view = renderWithTheme(
-      <AiPromptsListView {...idleHandlers} folder="" prompts={library} />
+      <AiPromptsListView {...idleHandlers} folder="examples" prompts={library} />
     );
     const tableProps = (): DataTableProps =>
       view.UNSAFE_root.find(
@@ -156,10 +158,154 @@ describe("AiPromptsListView", () => {
       "ai-prompt-open-alpha",
     ]);
     expect(view.getByText("v12")).toBeTruthy();
+    expect(view.queryByTestId("ai-prompts-folder-examples-clickable")).toBeNull();
 
     act(() => {
       tableProps().onFilterValuesChange?.({type: ["chat"]});
     });
     expect(openOrder()).toEqual(["ai-prompt-open-gamma", "ai-prompt-open-alpha"]);
+  });
+
+  it("nests slash folders and shows the prompt's last segment", async () => {
+    const onFolderChange = mock(() => {});
+    const library: PromptListItem[] = [
+      {
+        folder: "appointmentAI/intake",
+        latestVersion: 1,
+        name: "appointmentAI/intake/_preamble",
+        production: 1,
+        type: "text",
+      },
+      {
+        folder: "appointmentAI/intake/admission-safety-assessment",
+        latestVersion: 1,
+        name: "appointmentAI/intake/admission-safety-assessment/risk",
+        production: 1,
+        type: "text",
+      },
+      {
+        folder: "examples",
+        latestVersion: 1,
+        name: "summarize",
+        production: 1,
+        type: "chat",
+      },
+    ];
+    const view = renderWithTheme(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder=""
+        onFolderChange={onFolderChange}
+        prompts={library}
+      />
+    );
+
+    expect(view.getByTestId("ai-prompts-folder-appointmentAI-clickable")).toBeTruthy();
+    expect(view.getByTestId("ai-prompts-folder-examples-clickable")).toBeTruthy();
+    expect(view.queryByText("_preamble")).toBeNull();
+    expect(view.queryByText("summarize")).toBeNull();
+    expect(view.getByText("2 prompts")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-prompts-folder-appointmentAI-clickable"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onFolderChange.mock.calls[0], ["appointmentAI"]);
+
+    view.rerender(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder="appointmentAI"
+        onFolderChange={onFolderChange}
+        prompts={library}
+      />
+    );
+    expect(view.getByTestId("ai-prompts-folder-up-clickable")).toBeTruthy();
+    expect(view.getByText("All prompts")).toBeTruthy();
+    expect(view.getByTestId("ai-prompts-folder-appointmentAI/intake-clickable")).toBeTruthy();
+    expect(view.queryByTestId("ai-prompts-folder-examples-clickable")).toBeNull();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-prompts-folder-appointmentAI/intake-clickable"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onFolderChange.mock.calls[1], ["appointmentAI/intake"]);
+
+    view.rerender(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder="appointmentAI/intake"
+        onFolderChange={onFolderChange}
+        prompts={library}
+      />
+    );
+    expect(view.getByText("_preamble")).toBeTruthy();
+    expect(view.getByText("appointmentAI / intake")).toBeTruthy();
+    expect(view.queryByText("risk")).toBeNull();
+    expect(view.queryByText("summarize")).toBeNull();
+    expect(
+      view.getByTestId(
+        "ai-prompts-folder-appointmentAI/intake/admission-safety-assessment-clickable"
+      )
+    ).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(view.getByTestId("ai-prompts-folder-up-clickable"));
+      await Promise.resolve();
+    });
+    assert.deepEqual(onFolderChange.mock.calls[2], ["appointmentAI"]);
+  });
+
+  it("searches every folder even when a nested folder is open", () => {
+    const library: PromptListItem[] = [
+      {
+        folder: "appointmentAI/intake",
+        latestVersion: 1,
+        name: "appointmentAI/intake/_preamble",
+        production: 1,
+        type: "text",
+      },
+      {folder: "examples", latestVersion: 1, name: "summarize", production: 1, type: "chat"},
+    ];
+    const view = renderWithTheme(
+      <AiPromptsListView
+        {...idleHandlers}
+        folder="appointmentAI/intake"
+        prompts={library}
+        search="summarize"
+      />
+    );
+
+    expect(view.getByText("summarize")).toBeTruthy();
+    expect(view.getByText("examples")).toBeTruthy();
+    expect(view.queryByTestId("ai-prompts-folder-up-clickable")).toBeNull();
+    expect(view.queryByText("_preamble")).toBeNull();
+  });
+
+  it("filters the table to prompts that have the selected tag", () => {
+    const library: PromptListItem[] = [
+      {
+        folder: "examples",
+        latestVersion: 1,
+        name: "summarize",
+        production: 1,
+        tags: ["gold"],
+        type: "chat",
+      },
+      {
+        folder: "ops",
+        latestVersion: 1,
+        name: "triage",
+        production: "—",
+        tags: ["ops"],
+        type: "text",
+      },
+    ];
+    const view = renderWithTheme(
+      <AiPromptsListView {...idleHandlers} prompts={library} tag="gold" />
+    );
+    expect(view.getByTestId("ai-prompts-tag.label")).toBeTruthy();
+    expect(view.getByText("summarize")).toBeTruthy();
+    expect(view.queryByText("triage")).toBeNull();
   });
 });

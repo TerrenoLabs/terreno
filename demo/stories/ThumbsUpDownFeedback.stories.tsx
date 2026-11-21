@@ -83,3 +83,26 @@ export const ThumbsUpDownFeedbackWithConfirmation = () => {
     </StorybookContainer>
   );
 };
+
+export const ThumbsUpDownFeedbackWithComment = () => {
+  const [value, setValue] = useState<ThumbsUpDownFeedbackValue | undefined>(undefined);
+  const [comment, setComment] = useState<string | undefined>(undefined);
+
+  return (
+    <StorybookContainer>
+      <Box direction="column" gap={2} maxWidth={360}>
+        <Text>Was this summary helpful?</Text>
+        <ThumbsUpDownFeedback
+          comment={comment}
+          onChange={(next) => {
+            setValue(next);
+            setComment(undefined);
+          }}
+          onCommentSubmit={setComment}
+          testID="thumbs-up-down-feedback-comment"
+          value={value}
+        />
+      </Box>
+    </StorybookContainer>
+  );
+};

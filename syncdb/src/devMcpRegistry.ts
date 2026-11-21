@@ -162,8 +162,10 @@ export const registerTerrenoDevCommand = (
   if (!g.__TERRENO_DEV_COMMANDS__) {
     g.__TERRENO_DEV_COMMANDS__ = {};
   }
+  // Expo web SSR evaluates the app entry on every request while this map lives on
+  // globalThis. A second install of the same command keeps the first handler.
   if (g.__TERRENO_DEV_COMMANDS__[name]) {
-    throw new Error(`Dev command already registered: ${name}`);
+    return;
   }
   g.__TERRENO_DEV_COMMANDS__[name] = rest;
 };

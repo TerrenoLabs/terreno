@@ -145,7 +145,7 @@ export interface ObsScoreDocument extends mongoose.Document<mongoose.Types.Objec
   deleted: boolean;
   evaluatorId?: mongoose.Types.ObjectId;
   name: string;
-  source: "code" | "human" | "llm-judge" | "user-feedback";
+  source: "code" | "human" | "llm-judge" | "user-feedback" | "user-signal";
   spanId?: mongoose.Types.ObjectId;
   traceId: mongoose.Types.ObjectId;
   updated: Date;

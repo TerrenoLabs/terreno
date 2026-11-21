@@ -14102,6 +14102,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                         "output": {
                           "type": "string",
                         },
+                        "traceId": {
+                          "description": "Trace id of this run, for POST /ai/observability/traces/{id}/feedback",
+                          "type": "string",
+                        },
                       },
                       "type": "object",
                     },
@@ -16981,6 +16985,41 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             },
           },
           {
+            "in": "query",
+            "name": "thumbs",
+            "required": false,
+            "schema": {
+              "enum": [
+                "up",
+                "down",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "signal",
+            "required": false,
+            "schema": {
+              "enum": [
+                "accepted",
+                "dismissed",
+                "copied",
+                "edited",
+                "regenerated",
+              ],
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
+            "name": "hasComment",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+            },
+          },
+          {
             "description": "Sort column, \`-\` prefix for descending. Defaults to \`-startedAt\`.",
             "in": "query",
             "name": "sort",
@@ -17416,6 +17455,150 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
         },
         "summary": "Get an observability trace",
+        "tags": [
+          "observability",
+        ],
+      },
+    },
+    "/ai/observability/traces/{id}/feedback": {
+      "post": {
+        "description": "Thumbs (with an optional comment), outcome class, a passive signal, or flag-for-dataset. Only the trace's own user may call it.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+            },
+          },
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "comment": {
+                    "description": "Free-text comment attached to the thumbs or outcome score (≤ 2000 chars)",
+                    "type": "string",
+                  },
+                  "flagDataset": {
+                    "description": "Flag the trace as a dataset candidate",
+                    "type": "boolean",
+                  },
+                  "outcome": {
+                    "enum": [
+                      "tp",
+                      "fp",
+                      "tn",
+                      "fn",
+                    ],
+                    "type": "string",
+                  },
+                  "signal": {
+                    "enum": [
+                      "accepted",
+                      "dismissed",
+                      "copied",
+                      "edited",
+                      "regenerated",
+                    ],
+                    "type": "string",
+                  },
+                  "thumbs": {
+                    "enum": [
+                      "up",
+                      "down",
+                      null,
+                    ],
+                    "nullable": true,
+                    "type": "string",
+                  },
+                },
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "properties": {
+                        "flaggedForDataset": {
+                          "type": "boolean",
+                        },
+                        "reviewItemId": {
+                          "type": "string",
+                        },
+                        "scores": {
+                          "items": {
+                            "type": "object",
+                          },
+                          "type": "array",
+                        },
+                        "traceId": {
+                          "type": "string",
+                        },
+                      },
+                      "type": "object",
+                    },
+                  },
+                  "type": "object",
+                },
+              },
+            },
+            "description": "Success",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Record the trace owner's feedback on an AI output",
         "tags": [
           "observability",
         ],
@@ -25755,6 +25938,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                                   "description": "Name of the tool that was invoked",
                                   "type": "string",
                                 },
+                                "traceId": {
+                                  "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                                  "type": "string",
+                                },
                                 "type": {
                                   "description": "Role of this message in the conversation",
                                   "enum": [
@@ -26084,6 +26271,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Name of the tool that was invoked",
                           "type": "string",
                         },
+                        "traceId": {
+                          "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                          "type": "string",
+                        },
                         "type": {
                           "description": "Role of this message in the conversation",
                           "enum": [
@@ -26336,6 +26527,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           },
                           "toolName": {
                             "description": "Name of the tool that was invoked",
+                            "type": "string",
+                          },
+                          "traceId": {
+                            "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
                             "type": "string",
                           },
                           "type": {
@@ -26972,6 +27167,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Name of the tool that was invoked",
                             "type": "string",
                           },
+                          "traceId": {
+                            "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                            "type": "string",
+                          },
                           "type": {
                             "description": "Role of this message in the conversation",
                             "enum": [
@@ -27290,6 +27489,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                           "description": "Name of the tool that was invoked",
                           "type": "string",
                         },
+                        "traceId": {
+                          "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                          "type": "string",
+                        },
                         "type": {
                           "description": "Role of this message in the conversation",
                           "enum": [
@@ -27544,6 +27747,10 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
                             "description": "Name of the tool that was invoked",
                             "type": "string",
                           },
+                          "traceId": {
+                            "description": "Observability trace id of this assistant reply; feedback on the reply is recorded against it",
+                            "type": "string",
+                          },
                           "type": {
                             "description": "Role of this message in the conversation",
                             "enum": [
@@ -27656,10 +27863,20 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "application/json": {
               "schema": {
                 "properties": {
+                  "comment": {
+                    "description": "Optional comment on the rating (≤ 2000 chars), recorded on the reply's trace",
+                    "type": "string",
+                  },
                   "promptIndex": {
                     "type": "number",
                   },
                   "rating": {
+                    "enum": [
+                      "up",
+                      "down",
+                      null,
+                    ],
+                    "nullable": true,
                     "type": "string",
                   },
                 },
@@ -34727,6 +34944,289 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
             "description": "The user is not allowed to perform this action on any document",
           },
         },
+        "tags": [
+          "todos",
+        ],
+      },
+    },
+    "/todos/bulk": {
+      "post": {
+        "description": "Run many create/update/delete operations through this router's permissions, hooks, and responseHandler. With atomic (default true) the batch commits or rolls back together; with atomic: false each item reports its own status.",
+        "operationId": "todos_bulk",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "atomic": {
+                    "default": true,
+                    "description": "Commit every operation in one transaction (requires a replica set)",
+                    "type": "boolean",
+                  },
+                  "operations": {
+                    "items": {
+                      "properties": {
+                        "body": {
+                          "description": "Document fields for create and update",
+                          "properties": {
+                            "_id": {
+                              "description": "The document id (String so offline sync clients can mint ids)",
+                              "type": "string",
+                            },
+                            "_syncPrevStream": {
+                              "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                              "type": "string",
+                            },
+                            "_syncSeq": {
+                              "description": "Monotonic per-stream sequence stamped on every synced write",
+                              "type": "number",
+                            },
+                            "completed": {
+                              "description": "Whether the todo item has been completed",
+                              "type": "boolean",
+                            },
+                            "created": {
+                              "description": "When this document was created",
+                              "format": "date-time",
+                              "type": "string",
+                            },
+                            "deleted": {
+                              "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                              "type": "boolean",
+                            },
+                            "ownerId": {
+                              "description": "The user who owns this todo",
+                              "format": "objectid",
+                              "type": "string",
+                            },
+                            "priority": {
+                              "description": "Priority level of the todo",
+                              "enum": [
+                                "low",
+                                "medium",
+                                "high",
+                              ],
+                              "type": "string",
+                            },
+                            "tags": {
+                              "description": "Free-form tags for categorization",
+                              "items": {
+                                "type": "string",
+                              },
+                              "type": "array",
+                            },
+                            "title": {
+                              "description": "The title of the todo item",
+                              "type": "string",
+                            },
+                            "updated": {
+                              "description": "When this document was last updated",
+                              "format": "date-time",
+                              "type": "string",
+                            },
+                          },
+                          "type": "object",
+                        },
+                        "id": {
+                          "description": "Document id for update and delete",
+                          "type": "string",
+                        },
+                        "method": {
+                          "enum": [
+                            "create",
+                            "update",
+                            "delete",
+                          ],
+                          "type": "string",
+                        },
+                      },
+                      "required": [
+                        "method",
+                      ],
+                      "type": "object",
+                    },
+                    "maxItems": 100,
+                    "minItems": 1,
+                    "type": "array",
+                  },
+                },
+                "required": [
+                  "operations",
+                ],
+                "type": "object",
+              },
+            },
+          },
+          "required": true,
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "data": {
+                      "items": {
+                        "properties": {
+                          "data": {
+                            "properties": {
+                              "_id": {
+                                "description": "The document id (String so offline sync clients can mint ids)",
+                                "type": "string",
+                              },
+                              "_syncPrevStream": {
+                                "description": "The document's previous sync stream, set when a write moved it between scopes; null when the last write did not move it",
+                                "type": "string",
+                              },
+                              "_syncSeq": {
+                                "description": "Monotonic per-stream sequence stamped on every synced write",
+                                "type": "number",
+                              },
+                              "completed": {
+                                "description": "Whether the todo item has been completed",
+                                "type": "boolean",
+                              },
+                              "created": {
+                                "description": "When this document was created",
+                                "format": "date-time",
+                                "type": "string",
+                              },
+                              "deleted": {
+                                "description": "Deleted objects are not returned in any find() or findOne() by default. Add {deleted: true} to find them.",
+                                "type": "boolean",
+                              },
+                              "ownerId": {
+                                "description": "The user who owns this todo",
+                                "format": "objectid",
+                                "type": "string",
+                              },
+                              "priority": {
+                                "description": "Priority level of the todo",
+                                "enum": [
+                                  "low",
+                                  "medium",
+                                  "high",
+                                ],
+                                "type": "string",
+                              },
+                              "tags": {
+                                "description": "Free-form tags for categorization",
+                                "items": {
+                                  "type": "string",
+                                },
+                                "type": "array",
+                              },
+                              "title": {
+                                "description": "The title of the todo item",
+                                "type": "string",
+                              },
+                              "updated": {
+                                "description": "When this document was last updated",
+                                "format": "date-time",
+                                "type": "string",
+                              },
+                            },
+                            "required": [
+                              "ownerId",
+                              "title",
+                              "_id",
+                              "created",
+                              "updated",
+                            ],
+                            "type": "object",
+                          },
+                          "error": {
+                            "$ref": "#/components/schemas/APIError",
+                          },
+                          "id": {
+                            "type": "string",
+                          },
+                          "index": {
+                            "type": "number",
+                          },
+                          "method": {
+                            "enum": [
+                              "create",
+                              "update",
+                              "delete",
+                            ],
+                            "type": "string",
+                          },
+                          "status": {
+                            "type": "number",
+                          },
+                        },
+                        "required": [
+                          "index",
+                          "method",
+                          "status",
+                        ],
+                        "type": "object",
+                      },
+                      "type": "array",
+                    },
+                  },
+                  "required": [
+                    "data",
+                  ],
+                  "type": "object",
+                },
+              },
+            },
+            "description": "One result per operation, in input order",
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Bad request",
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user must be authenticated",
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on this document",
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "Document not found",
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError",
+                },
+              },
+            },
+            "description": "The user is not allowed to perform this action on any document",
+          },
+        },
+        "summary": "Bulk write todos",
         "tags": [
           "todos",
         ],

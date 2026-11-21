@@ -2,9 +2,9 @@
 * @joshgachnang
 
 # Published packages
-/api/ @joshgachnang
+/api/ @joshgachnang @kjkurtz
 /test/ @joshgachnang
-/ui/ @joshgachnang
+/ui/ @joshgachnang @kjkurtz
 /syncdb/ @joshgachnang
 /admin-backend/ @joshgachnang
 /admin-frontend/ @joshgachnang

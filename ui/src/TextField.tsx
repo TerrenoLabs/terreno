@@ -134,6 +134,8 @@ export const TextField: FC<TextFieldProps> = ({
   type = "text",
   showVisibilityToggle = true,
   autoComplete,
+  spellCheck,
+  autoCorrect,
   inputRef,
   multiline,
   rows = 1,
@@ -259,12 +261,10 @@ export const TextField: FC<TextFieldProps> = ({
     console.warn(`${type} is not yet supported`);
   }
 
-  // RN Web browser autocorrect/spellcheck fights controlled `value` and can oscillate
-  // between variants (e.g. "reachthreshold" vs "reach threshold"), firing onChangeText forever.
-  const shouldAutocorrect =
-    Platform.OS !== "web" &&
-    ["text", "textarea"].includes(type) &&
-    (!autoComplete || autoComplete === "on");
+  const isProseField =
+    ["text", "textarea"].includes(type) && (!autoComplete || autoComplete === "on");
+  const shouldSpellCheck = spellCheck ?? isProseField;
+  const shouldAutocorrect = autoCorrect ?? (Platform.OS !== "web" && isProseField);
 
   const valueRef = useRef(value);
   const onChangeRef = useRef(onChange);
@@ -314,6 +314,12 @@ export const TextField: FC<TextFieldProps> = ({
 
   const autofillProps = getAutofillProps({autoComplete, type: type || "text"});
   const keyboardType = keyboardMap[type];
+  const spellCheckProps =
+    Platform.OS === "web"
+      ? {spellCheck: shouldSpellCheck}
+      : spellCheck !== undefined
+        ? {spellCheck}
+        : {};
 
   return (
     <View
@@ -352,7 +358,7 @@ export const TextField: FC<TextFieldProps> = ({
           }}
         >
           <TextInput
-            {...(Platform.OS === "web" ? {spellCheck: false} : {})}
+            {...spellCheckProps}
             {...autofillProps}
             accessibilityHint="Enter text here"
             accessibilityState={{disabled}}

@@ -1,6 +1,6 @@
 import {describe, expect, it} from "bun:test";
 
-import {normalizeRoles, normalizeStatements} from "./useAdminRoles";
+import {normalizeRoles, normalizeStatementDescriptions, normalizeStatements} from "./useAdminRoles";
 
 describe("normalizeRoles", () => {
   it("returns arrays unchanged", () => {
@@ -24,5 +24,19 @@ describe("normalizeStatements", () => {
       users: ["write"],
     });
     expect(normalizeStatements(undefined)).toEqual({});
+  });
+});
+
+describe("normalizeStatementDescriptions", () => {
+  it("reads descriptions from either envelope and defaults to empty", () => {
+    const descriptions = {todo: {read: "View todos"}};
+    expect(normalizeStatementDescriptions({statementDescriptions: descriptions})).toEqual(
+      descriptions
+    );
+    expect(normalizeStatementDescriptions({data: {statementDescriptions: descriptions}})).toEqual(
+      descriptions
+    );
+    expect(normalizeStatementDescriptions(undefined)).toEqual({});
+    expect(normalizeStatementDescriptions({statements: {todo: ["read"]}})).toEqual({});
   });
 });

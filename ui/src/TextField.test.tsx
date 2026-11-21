@@ -904,7 +904,7 @@ describe("TextField", () => {
       }
     });
 
-    it("disables browser autocorrect and spellcheck on web", () => {
+    it("enables spellcheck but keeps autocorrect off on web prose fields", () => {
       const savedOS = PlatformModule.OS;
       try {
         PlatformModule.OS = "web";
@@ -913,8 +913,133 @@ describe("TextField", () => {
         );
         const input = getByDisplayValue("controlled title");
         expect(input.props.autoCorrect).toBe(false);
-        expect(input.props.spellCheck).toBe(false);
+        expect(input.props.spellCheck).toBe(true);
       } finally {
+        PlatformModule.OS = savedOS;
+      }
+    });
+
+    it("turns spellcheck off on web when spellCheck is false", () => {
+      const savedOS = PlatformModule.OS;
+      try {
+        PlatformModule.OS = "web";
+        const {getByDisplayValue} = renderWithTheme(
+          <TextField onChange={mockOnChange} spellCheck={false} type="text" value="no spell" />
+        );
+        expect(getByDisplayValue("no spell").props.spellCheck).toBe(false);
+      } finally {
+        PlatformModule.OS = savedOS;
+      }
+    });
+
+    it("does not enable spellcheck on web for specialized field types by default", () => {
+      const savedOS = PlatformModule.OS;
+      try {
+        PlatformModule.OS = "web";
+        const {getByDisplayValue} = renderWithTheme(
+          <TextField onChange={mockOnChange} type="email" value="user@example.com" />
+        );
+        const input = getByDisplayValue("user@example.com");
+        expect(input.props.spellCheck).toBe(false);
+        expect(input.props.autoCorrect).toBe(false);
+      } finally {
+        PlatformModule.OS = savedOS;
+      }
+    });
+
+    it("applies spellCheck and autoCorrect overrides on native", () => {
+      const savedOS = PlatformModule.OS;
+      try {
+        PlatformModule.OS = "ios";
+        const {getByDisplayValue, rerender} = renderWithTheme(
+          <TextField onChange={mockOnChange} type="text" value="prose" />
+        );
+        const prose = getByDisplayValue("prose");
+        expect(prose.props.spellCheck).toBeUndefined();
+        expect(prose.props.autoCorrect).toBe(true);
+
+        rerender(
+          <TextField
+            autoCorrect={false}
+            onChange={mockOnChange}
+            spellCheck={true}
+            type="text"
+            value="prose"
+          />
+        );
+        const overridden = getByDisplayValue("prose");
+        expect(overridden.props.spellCheck).toBe(true);
+        expect(overridden.props.autoCorrect).toBe(false);
+      } finally {
+        PlatformModule.OS = savedOS;
+      }
+    });
+
+    it("forwards a spellcheck replacement on web when spellcheck is enabled", async () => {
+      const savedOS = PlatformModule.OS;
+      try {
+        PlatformModule.OS = "web";
+        let value = "teh";
+        const onChange = mock((next: string) => {
+          value = next;
+        });
+        const renderField = (): ReactElement => (
+          <TextField onChange={onChange} spellCheck type="text" value={value} />
+        );
+        const view = renderWithTheme(renderField());
+        const input = view.getByDisplayValue(value);
+        await act(async () => {
+          fireEvent(input, "change", {
+            nativeEvent: {inputType: "insertReplacementText", text: "the"},
+          });
+          fireEvent.changeText(input, "the");
+        });
+        expect(onChange).toHaveBeenCalledWith("the");
+      } finally {
+        PlatformModule.OS = savedOS;
+      }
+    });
+
+    it("drops a spellcheck replacement that flips a prose field back and forth", async () => {
+      const savedOS = PlatformModule.OS;
+      const originalNow = performance.now.bind(performance);
+      let fakeNow = 30_000;
+      const withoutSpace = "reachthreshold";
+      const withSpace = "reach threshold";
+
+      try {
+        PlatformModule.OS = "web";
+        performance.now = () => fakeNow;
+
+        let value = withoutSpace;
+        const onChange = mock((next: string) => {
+          value = next;
+        });
+        const renderField = (): ReactElement => (
+          <TextField onChange={onChange} type="text" value={value} />
+        );
+        const view = renderWithTheme(renderField());
+
+        const replace = async (text: string): Promise<void> => {
+          const input = view.getByDisplayValue(value);
+          await act(async () => {
+            fireEvent(input, "change", {
+              nativeEvent: {inputType: "insertReplacementText", text},
+            });
+            fireEvent.changeText(input, text);
+          });
+          view.rerender(renderField());
+          fakeNow += 10;
+        };
+
+        await replace(withSpace);
+        await replace(withoutSpace);
+        await replace(withSpace);
+
+        expect(onChange.mock.calls.map((call) => call[0])).toEqual([withSpace]);
+        expect(value).toBe(withSpace);
+      } finally {
+        performance.now = originalNow;
         PlatformModule.OS = savedOS;
       }
     });

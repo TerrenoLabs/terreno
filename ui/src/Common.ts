@@ -1183,6 +1183,18 @@ export interface TextFieldProps extends BaseFieldProps, HelperTextProps, ErrorTe
     | "one-time-code"
     | "username"
     | "username webauthn";
+  /**
+   * On web, enables browser spell check (red underlines and replacement suggestions). Prose
+   * fields (`type` `text` or multiline) default to on. Autocorrect stays off on web, and a
+   * replacement that flips the value straight back within 500ms is ignored, so a controlled
+   * value cannot loop. Pass `false` to turn spell check off.
+   */
+  spellCheck?: boolean;
+  /**
+   * Native autocorrect for prose fields. On web this stays off by default (use spell check
+   * instead). On iOS/Android prose fields default to on unless overridden.
+   */
+  autoCorrect?: boolean;
   returnKeyType?: "done" | "go" | "next" | "search" | "send";
 
   grow?: boolean;
@@ -2094,7 +2106,29 @@ export interface BadgeProps extends WithTestID {
 
 export type ThumbsUpDownFeedbackValue = "positive" | "negative";
 
+export interface FeedbackCommentFieldProps extends WithTestID {
+  /** Called with the trimmed comment when Send is pressed. A rejection keeps the text for a retry. */
+  onSubmit: (comment: string) => void | Promise<void>;
+  /**
+   * Placeholder for the comment input.
+   * @default "Tell us more (optional)"
+   */
+  placeholder?: string;
+  /** A comment already sent for this rating. When set, the sent state shows instead of the input. */
+  sentComment?: string;
+}
+
 export interface ThumbsUpDownFeedbackProps extends WithTestID {
+  /**
+   * A comment already sent with the current selection. When set, the sent state shows instead of
+   * the comment input.
+   */
+  comment?: string;
+  /**
+   * Placeholder for the comment input shown after a selection.
+   * @default "Tell us more (optional)"
+   */
+  commentPlaceholder?: string;
   /**
    * If true, both options are non-interactive and rendered in a muted color.
    * @default false
@@ -2109,6 +2143,11 @@ export interface ThumbsUpDownFeedbackProps extends WithTestID {
    * Called with the newly selected value, or undefined when the current value is deselected.
    */
   onChange: (value?: ThumbsUpDownFeedbackValue) => void | Promise<void>;
+  /**
+   * Called with the trimmed comment. When set, a comment input and Send button appear under the
+   * thumbs once a value is selected. When omitted, no comment input renders.
+   */
+  onCommentSubmit?: (comment: string) => void | Promise<void>;
   /**
    * Accessibility label for the positive (thumbs up) option.
    * @default "Thumbs up"

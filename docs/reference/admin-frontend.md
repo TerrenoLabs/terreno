@@ -388,7 +388,9 @@ merges it into the parent object, and Save sends the whole object for that field
 the object starts from each subfield's default; enums, refs, dates, and Mixed subfields without a
 default are left out. Nested objects inside an array of subdocuments render the same way; their
 test IDs add the array key and item index (`admin-field-servers.0.media.port`), and new array
-items follow the same default rules.
+items follow the same default rules. An array of subdocuments (feature-flag rules and
+variants, for example) is a drag-reorderable list. Each row is as tall as its fields,
+including user pickers and nested groups, so the next field starts below that row.
 
 System fields (`_id`, `__v`, `created`, `updated`, `deleted`) are automatically skipped.
 
@@ -435,7 +437,15 @@ Role cards and the **Available permissions** list split permissions into two gro
    `list`, `read`, `update`, `delete`, `write`, and `writeOwned`.
 
 A resource with both kinds of action appears in both groups. Each group shows one row per
-resource, with that resource's actions as badges. Badge color shows the kind of access:
+resource, with that resource's actions as badges. When `GET /rbac/statements` includes
+`statementDescriptions`, the label for an action renders beside its badge and under that
+action's checkbox in the role editor.
+
+Pass `showActionBadges={false}` to hide those badges on role cards and the available
+permissions list. Each permission then stacks on its own line: the description when
+one exists, otherwise the action name as plain text.
+
+Badge color shows the kind of access:
 
 - Green: read-only actions (`read`, `list`, `access`, `view*`)
 - Red: destructive actions (`delete`, `destroy`, `remove`)
@@ -455,6 +465,31 @@ Standard admin model permissions then use one access-level selector:
 
 Other application and screen permissions remain individual toggles. Saving writes the same
 permission JSON used by `rbacRouter`, so no separate configuration format is required.
+
+#### Hiding actions with `isActionVisible`
+
+Pass `isActionVisible` when the catalog includes statement actions operators should not
+assign from this screen. Return `false` to hide an action from role cards, the **Available
+permissions** list, the admin-page toggle, and per-resource editor toggles. Actions already
+saved on a role stay in `permissions` when you save; only visible toggles change.
+
+The predicate receives `{action, resource}` so the same verb can stay hidden on one resource
+and visible on another (for example a model CRUD grant versus a named admin check).
+
+The standard **Access level** selector appears only when `read`, `write`, and `writeOwned` are
+all still visible for that resource. Hiding one of them removes the selector for that resource
+without stripping hidden grants from the saved role.
+
+```tsx
+<AdminRolesList
+  isActionVisible={({action, resource}) => {
+    if (resource !== "scheduleItem") {
+      return true;
+    }
+    return !["create", "list", "read", "update", "delete"].includes(action);
+  }}
+/>
+```
 
 ### AdminFieldRenderer
 
@@ -793,8 +828,9 @@ Dataset detail hides **Add item** without `aiDataset:update` and **Run experimen
 `aiDataset:update`. Judge schema checks use the production prompt version, or the latest version
 when production is unset. Widgets do not couple to host app state.
 
-`ai-prompts` lists prompts with a folder `SegmentedControl` (All plus each folder, with counts),
-search, type, Production and Newest version columns, 7-day calls, last used, and a header **New
+`ai-prompts` lists prompts with a folder row per nested slash level (open the row to go inside; a long name stays on one line)
+and a **Tag** select (All tags, then each tag on the loaded list),
+search across name, folder, and tag in every folder (folder rows hide while searching or filtering by tag), type, Production and Newest version columns, 7-day calls, last used, and a header **New
 prompt** when `aiPrompt:create` is allowed. The create modal
 includes an optional **Description** (saved on the prompt record and shown on the hub Versions screen).
 `ai-prompt-editor?name=` is a prompt hub with **Versions**, **Traces**, and
@@ -903,8 +939,8 @@ time. When any dataset has human answers, a **People's answers** column summariz
 `judgments`: **N answers out of date** when questions were reworded since they were answered,
 **All answered** when every question set answered every item, otherwise **N of M answered**. The header **New dataset** creates a dataset; **Import** on each row accepts `.json` or `.csv` via
 `FilePickerButton` (local URI read) or paste, posting `{rows}` for JSON or `{format:'csv',content}`
-for CSV. `ai-dataset-detail?id=` shows counts, schema binding, tabs **All / Human / Auto / Needs
-review** (a `SegmentedControl`). Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
+for CSV. `ai-dataset-detail?id=` shows counts, schema binding, a golden-label note, tabs **All / Human / Auto / Needs
+review** (a `SegmentedControl`; `&tab=needsReview` opens the Needs review tab, and it says so when nothing needs review). On an item in the queue, **Save and next** (`ai-dataset-item`) saves and replaces the route with the next unproofread item in list order; the last item's button reads **Save and finish review**. Human is proofread items. Auto is unreviewed trace or synthetic items, so a proofread
 trace is not listed in both tabs. The screen includes an items table (input, expected, provenance,
 trace link), **Add item**, and **Run experiment**. The items table uses `ObservabilityTable`: rows grow with their content
 and cells wrap to three lines before truncating, so long inputs and expected outputs no longer

@@ -176,6 +176,28 @@ describe("AppRolesList", () => {
     expect(hasTestId(renderer, "admin-role-permission-todo-read")).toBe(true);
   });
 
+  it("shows descriptions and hides action badges when showActionBadges is false", async () => {
+    server.statements = {
+      statementDescriptions: {clinicalIntake: {signoff: "Sign off an intake"}},
+      statements: STATEMENTS,
+    };
+    const shown = await render(<AppRolesList rpc={rpc} />);
+    expect(textOf(shown)).toContain("Sign off an intake");
+    const signoffBadge = nodesWithTestId(shown, "admin-permissions-clinicalIntake-signoff").find(
+      (node) => typeof node.props.value === "string"
+    );
+    expect(signoffBadge?.props.value).toBe("signoff");
+
+    const hidden = await render(<AppRolesList rpc={rpc} showActionBadges={false} />);
+    expect(textOf(hidden)).toContain("Sign off an intake");
+    expect(textOf(hidden)).toContain("access");
+    expect(
+      nodesWithTestId(hidden, "admin-permissions-admin-access").some(
+        (node) => typeof node.props.value === "string"
+      )
+    ).toBe(false);
+  });
+
   it("accepts roles wrapped in a data envelope and handles an empty list", async () => {
     server.roles = {data: []};
     server.statements = {data: {statements: STATEMENTS}};

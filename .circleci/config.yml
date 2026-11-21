@@ -1,4 +1,4 @@
-# Setup config — path-filtering + dynamic continuation.
+# Setup config — path filtering + dynamic continuation.
 # Real CI/CD jobs live in continue-config.yml.
 # Requires project setting: Enable dynamic config / setup workflows.
 version: 2.1
@@ -35,7 +35,37 @@ parameters:
 
 orbs:
   continuation: circleci/continuation@1.0.0
-  path-filtering: circleci/path-filtering@3.0.0
+
+jobs:
+  # Replaces circleci/path-filtering's filter job, which ran one grep per
+  # (mapping line, changed file) pair and timed out on docs-cut commits that
+  # change ~1,700 files. scripts/ci/map-changed-files.sh greps once per line.
+  path-filter:
+    parameters:
+      mapping:
+        type: string
+        description: "<path regex> <pipeline parameter> <value>, one per line. Regexes are anchored (^…$)."
+      base-revision:
+        type: string
+        default: master
+      config-path:
+        type: string
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - checkout:
+          method: blobless
+      - run:
+          name: Map changed files to pipeline parameters
+          environment:
+            MAPPING: << parameters.mapping >>
+            BASE_REVISION: << parameters.base-revision >>
+            OUTPUT_PATH: /tmp/pipeline-parameters.json
+          command: bash scripts/ci/map-changed-files.sh
+      - continuation/continue:
+          configuration_path: << parameters.config-path >>
+          parameters: /tmp/pipeline-parameters.json
 
 workflows:
   setup:
@@ -53,16 +83,15 @@ workflows:
         - not:
             equal: ["none", << pipeline.parameters.manual-publish-package >>]
     jobs:
-      - path-filtering/filter:
+      - path-filter:
           name: check-updated-files
           filters:
             tags:
               only: /.*/
           base-revision: master
-          same-base-run: true
           config-path: .circleci/continue-config.yml
           # <path regex> <pipeline parameter> <value>
-          # Regexes are anchored (^…$) by the orb.
+          # Regexes are anchored (^…$) by scripts/ci/map-changed-files.sh.
           mapping: |
             \.circleci/config\.yml run-circleci-config true
             \.circleci/continue-config\.yml run-circleci-config true

@@ -35,6 +35,7 @@ export const rbacRouter = ({
         asyncHandler(async (_req, res) => {
           return res.json({
             data: {
+              statementDescriptions: access.statementDescriptions,
               statements: access.statements,
             },
           });

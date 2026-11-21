@@ -8,7 +8,12 @@ import React from "react";
 import {renderWithTheme} from "../../ui/src/test-utils";
 import {AdminRolesField} from "./AdminRolesField";
 import {AdminRolesList} from "./AdminRolesList";
-import {normalizeRoles, normalizeStatements, type RolesQueryResult} from "./useAdminRoles";
+import {
+  normalizeRoles,
+  normalizeStatementDescriptions,
+  normalizeStatements,
+  type RolesQueryResult,
+} from "./useAdminRoles";
 
 const mockUseListRolesQuery = mock(
   (_arg?: undefined, _options?: {skip?: boolean}): RolesQueryResult => ({
@@ -21,7 +26,10 @@ interface MockMutationResult {
   unwrap: () => Promise<unknown>;
 }
 interface MockStatementsResult {
-  data?: {statements?: Record<string, string[]>};
+  data?: {
+    statementDescriptions?: Record<string, Record<string, string>>;
+    statements?: Record<string, string[]>;
+  };
   error: unknown;
   isLoading: boolean;
 }
@@ -44,6 +52,7 @@ const mockUseListStatementsQuery = mock(
 
 mock.module("./useAdminRoles", () => ({
   normalizeRoles,
+  normalizeStatementDescriptions,
   normalizeStatements,
   useAdminRoles: () => ({
     useCreateRoleMutation: () => [mockCreateRole, {isLoading: false}],
@@ -227,6 +236,52 @@ describe("AdminRolesList", () => {
       badges.map((badge) => badge.props.value),
       ["list", "read", "update", "delete"]
     );
+  });
+
+  it("shows permission descriptions beside action badges", () => {
+    mockUseListStatementsQuery.mockReturnValue({
+      data: {
+        statementDescriptions: {todo: {read: "View todos"}},
+        statements: {todo: ["read", "update"]},
+      },
+      error: null,
+      isLoading: false,
+    });
+    mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
+    const {getByText, UNSAFE_root} = renderWithTheme(<AdminRolesList apiBase="/admin" />);
+
+    const readBadge = UNSAFE_root.findAll(
+      (node) =>
+        node.props.testID === "admin-permissions-todo-read" && typeof node.props.value === "string"
+    );
+    assert.equal(readBadge[0]?.props.value, "read");
+    expect(getByText("View todos")).toBeTruthy();
+  });
+
+  it("hides action badges when showActionBadges is false", () => {
+    mockUseListStatementsQuery.mockReturnValue({
+      data: {
+        statementDescriptions: {todo: {read: "View todos"}},
+        statements: {signoff: ["approve"], todo: ["read", "update"]},
+      },
+      error: null,
+      isLoading: false,
+    });
+    mockUseListRolesQuery.mockReturnValue({data: [], error: null, isLoading: false});
+    const {getByText, UNSAFE_root} = renderWithTheme(
+      <AdminRolesList apiBase="/admin" showActionBadges={false} />
+    );
+
+    const badges = UNSAFE_root.findAll(
+      (node) =>
+        typeof node.props.testID === "string" &&
+        node.props.testID.startsWith("admin-permissions-") &&
+        typeof node.props.status === "string"
+    );
+    assert.equal(badges.length, 0);
+    expect(getByText("View todos")).toBeTruthy();
+    expect(getByText("update")).toBeTruthy();
+    expect(getByText("approve")).toBeTruthy();
   });
 
   it("enables editing for non-sealed roles and disables sealed roles", () => {
@@ -522,6 +577,68 @@ describe("AdminRolesList", () => {
       modal.props.onDismiss();
     });
     expect(queryByText("Role already exists")).toBeNull();
+  });
+
+  it("hides filtered actions and writes them back unchanged", async () => {
+    mockUseListRolesQuery.mockReturnValue({
+      data: [
+        {
+          displayName: "Todo User",
+          name: "todoUser",
+          permissions: {
+            admin: ["access", "runScripts"],
+            adminTodo: ["read", "writeOwned"],
+            todo: ["read", "update"],
+          },
+        },
+      ],
+      error: null,
+      isLoading: false,
+      refetch: mockRefetch,
+    });
+    const {getByTestId, queryByTestId} = renderWithTheme(
+      <AdminRolesList
+        apiBase="/admin"
+        isActionVisible={({action, resource}) => {
+          if (resource === "adminTodo") {
+            return false;
+          }
+          if (resource === "todo" && action === "read") {
+            return false;
+          }
+          return true;
+        }}
+      />
+    );
+
+    expect(queryByTestId("admin-roles-item-todoUser-permission-adminTodo-read")).toBeNull();
+    expect(queryByTestId("admin-permissions-adminTodo-write")).toBeNull();
+    expect(queryByTestId("admin-roles-item-todoUser-permission-todo-read")).toBeNull();
+    expect(getByTestId("admin-roles-item-todoUser-permission-todo-update")).toBeTruthy();
+    expect(getByTestId("admin-permissions-admin-access")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("admin-roles-edit-todoUser"));
+    });
+    expect(queryByTestId("admin-role-access-adminTodo")).toBeNull();
+    expect(queryByTestId("admin-role-permission-todo-read-clickable")).toBeNull();
+    expect(getByTestId("admin-role-page-access")).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.press(getByTestId("admin-role-permission-todo-update-clickable"));
+    });
+    await act(async () => {
+      fireEvent.press(getByTestId("admin-role-save-button"));
+    });
+
+    const updateInput = mockUpdateRole.mock.calls[0]?.[0] as {
+      changes?: {permissions?: Record<string, string[]>};
+    };
+    assert.deepEqual(updateInput.changes?.permissions, {
+      admin: ["access", "runScripts"],
+      adminTodo: ["read", "writeOwned"],
+      todo: ["read"],
+    });
   });
 });
 

@@ -12,6 +12,7 @@ export {setTerrenoTestEnv, type TerrenoTestEnvOptions} from "./env/setTerrenoTes
 export {type AuthAsUserOptions, type AuthUserCredentials, authAsUser} from "./http/authAsUser";
 export {type AuthWithTokenOptions, authWithToken} from "./http/authWithToken";
 export {type GetBaseServerOptions, getBaseServer} from "./http/getBaseServer";
+export {createLoopbackServer, testRequest} from "./http/testRequest";
 export {
   createLogSilencer,
   registerLogSilencing,

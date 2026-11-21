@@ -6,7 +6,7 @@ import {createIsPermitted, createRequireAccess} from "./middleware";
 import {createPermissionResolver} from "./resolve";
 import {createRoleManager} from "./roleManager";
 import {createRbacRoleModel, organizationOperatorRole} from "./roleModel";
-import {mergeStatements, type Statements} from "./statements";
+import {mergeStatementDescriptions, mergeStatements, type Statements} from "./statements";
 import type {
   AccessCheckArgs,
   AccessOptions,
@@ -39,6 +39,7 @@ export const createAccess = <S extends Statements>(options: AccessOptions<S>): T
   }
 
   const mergedStatements = mergeStatements(options.statements) as S;
+  const statementDescriptions = mergeStatementDescriptions(options.statementDescriptions);
   const rbacRoleModel = createRbacRoleModel(options.connection);
   const extraRoles = [...(options.defaultRoles ?? [])];
   if (options.organizations && !extraRoles.some((role) => role.name === "operator")) {
@@ -211,6 +212,7 @@ export const createAccess = <S extends Statements>(options: AccessOptions<S>): T
     permission: createIsPermitted({can}),
     queryFilter,
     roles: roleManager,
+    statementDescriptions,
     statements: mergedStatements,
     userModel: options.userModel,
   };

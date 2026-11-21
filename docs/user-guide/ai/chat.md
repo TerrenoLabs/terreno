@@ -11,6 +11,7 @@ questions:
   - How do I rate an answer?
 screens: [example-frontend/app/(tabs)/ai.tsx]
 added: user-guide-backfill
+updated: ai-user-feedback
 ---
 
 # Chat with the AI assistant
@@ -28,8 +29,10 @@ so you can come back to it later.
 4. To return to an earlier conversation, tap it under **Chats**.
 
 To rename a chat, edit its title in the list and save it. To delete one, use its delete
-button in the list. To rate an answer, tap **Thumbs up** or **Thumbs down** under it, and
-tap **Copy message** to copy its text. When the attach button shows next to the message
+button in the list. To rate an answer, tap **Thumbs up** or **Thumbs down** under it. A box
+then appears under the rating: type what was good or wrong and tap **Send**; **Thanks for the
+feedback** confirms it. If you reopen the chat later, the box shows again; sending a new comment
+replaces your earlier one. Tap **Copy message** to copy an answer's text. When the attach button shows next to the message
 box, use it to add files to your message.
 
 ## Intended use

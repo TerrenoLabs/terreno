@@ -9,6 +9,7 @@ import {
   AI_TRACE_ACTIONS,
   expandRolePermissions,
   mergeMissingResourcePermissions,
+  mergeStatementDescriptions,
   mergeStatements,
   OBSERVABILITY_RBAC_RESOURCES,
   READ_ACTIONS,
@@ -130,6 +131,28 @@ describe("rbac statements", () => {
     expect(terrenoStatementDescriptions.aiPrompt?.promote).toContain("production");
     expect(terrenoStatementDescriptions.aiReview?.score).toContain("review");
     expect(Object.keys(terrenoStatementDescriptions.aiTrace ?? {})).toEqual(["list", "read"]);
+  });
+
+  it("describes every terreno statement action", () => {
+    for (const [resource, actions] of Object.entries(terrenoStatements)) {
+      for (const action of actions) {
+        const description = terrenoStatementDescriptions[resource]?.[action];
+        assert.isString(description, `${resource}.${action}`);
+        assert.isAbove((description ?? "").trim().length, 0, `${resource}.${action}`);
+      }
+    }
+  });
+
+  it("merges app descriptions over framework labels and ignores blanks", () => {
+    const merged = mergeStatementDescriptions({
+      patient: {read: "  View a patient chart  "},
+      user: {manageSecurity: "Custom security label", updateIdentity: "   "},
+    });
+
+    assert.equal(merged.patient?.read, "View a patient chart");
+    assert.equal(merged.user?.manageSecurity, "Custom security label");
+    assert.include(merged.user?.updateIdentity ?? "", "email");
+    assert.equal(merged.admin?.access, "Open the admin panel");
   });
 
   it("mergeMissingResourcePermissions adds actions without removing custom grants", () => {

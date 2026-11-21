@@ -2,7 +2,7 @@ import {spawnSync} from "node:child_process";
 import {existsSync, mkdirSync, readFileSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 
-import {builderEnv, runBuilder, tailLines} from "../agent";
+import {builderEnv, runBuilder, tailLines, UNATTENDED_NOTE} from "../agent";
 import {CHECKOUT_ROOT, NAIVE_PROMPT, renderBootstrapPrompt} from "../bootstrapPrompt";
 import {collectEnvFileValues, redact} from "../redact";
 import type {StageCheck, StageContext, StageDefinition, StageOutcome} from "../types";
@@ -101,7 +101,9 @@ const baselineCommit = (context: StageContext): StageCheck => {
   }
   const ignorePath = join(cwd, ".gitignore");
   const ignored = existsSync(ignorePath) ? readFileSync(ignorePath, "utf8") : "";
-  const missing = ["node_modules", ".env*", ".vercel"].filter((entry) => !ignored.includes(entry));
+  const missing = ["node_modules", ".env*", ".vercel", ".mongo"].filter(
+    (entry) => !ignored.includes(entry)
+  );
   if (missing.length > 0) {
     writeFileSync(
       ignorePath,
@@ -138,7 +140,7 @@ const run = async (context: StageContext): Promise<StageOutcome> => {
     context.failures.length > 0
       ? `\n\n## Fix these failures\n\n${context.failures.map((failure) => `- ${failure}`).join("\n")}`
       : "";
-  const prompt = `${NAIVE_PROMPT}\n\n${bootstrapPrompt}${failureSection}\n`;
+  const prompt = `${NAIVE_PROMPT}\n\n${bootstrapPrompt}${failureSection}\n\n${UNATTENDED_NOTE}\n`;
   const env = builderEnv("scaffold", context.env);
   const builder = await runBuilder({cwd: context.appDir, env, prompt});
   const secretValues = collectEnvFileValues(context.appDir);

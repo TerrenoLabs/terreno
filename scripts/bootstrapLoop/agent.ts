@@ -2,6 +2,20 @@ import {spawn} from "node:child_process";
 
 const DEFAULT_BUILDER_CMD = "claude -p --output-format json --permission-mode bypassPermissions";
 
+/**
+ * Appended to every builder prompt. No human reads the session, so a question or an offer
+ * ("say if you want me to...") ends the stage with the work undone.
+ */
+export const UNATTENDED_NOTE = [
+  "## Unattended run",
+  "",
+  "No human is present and nothing you write will be read before this stage is checked.",
+  "Never ask a question or offer to do something later: choose the sensible default and finish",
+  "the work this prompt describes.",
+  "Keep everything you start inside the current directory. Put the MongoDB data directory at",
+  "`./.mongo` (never `/tmp`), and stop every server and database you started before you finish.",
+].join("\n");
+
 export interface BuilderRunOptions {
   prompt: string;
   cwd: string;

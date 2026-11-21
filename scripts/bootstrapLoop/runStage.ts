@@ -2,6 +2,7 @@ import {mkdirSync} from "node:fs";
 import {join} from "node:path";
 import {DateTime} from "luxon";
 
+import {stopRunProcesses} from "./processes";
 import {redact} from "./redact";
 import {nextAttempt, writeStageResult} from "./stageResult";
 import {findStage, stageIds} from "./stages";
@@ -41,6 +42,8 @@ export const runStage = async ({
       ],
       log: "",
     }));
+  // A builder can leave its dev server or database running; they would hold ports for the next stage.
+  stopRunProcesses({runDir});
   const ended = DateTime.now();
   const checks = outcome.checks.map((check) => ({...check, ev: redact(check.ev, process.env)}));
   const result: StageResult = {

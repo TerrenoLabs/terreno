@@ -1,7 +1,7 @@
 import {existsSync, mkdirSync, readFileSync} from "node:fs";
 import {join} from "node:path";
 
-import {builderEnv, runBuilder, tailLines} from "../agent";
+import {builderEnv, runBuilder, tailLines, UNATTENDED_NOTE} from "../agent";
 import {CHECKOUT_ROOT, NAIVE_PROMPT} from "../bootstrapPrompt";
 import {collectEnvFileValues, redact} from "../redact";
 import type {StageCheck, StageContext, StageDefinition, StageOutcome} from "../types";
@@ -30,7 +30,7 @@ const renderStagePrompt = (stageId: string, failures: string[]): string => {
     failures.length > 0
       ? `\n\n## Fix these failures\n\n${failures.map((failure) => `- ${failure}`).join("\n")}`
       : "";
-  return `${NAIVE_PROMPT}\n\n${readFileSync(path, "utf8")}${failureSection}\n`;
+  return `${NAIVE_PROMPT}\n\n${readFileSync(path, "utf8")}${failureSection}\n\n${UNATTENDED_NOTE}\n`;
 };
 
 /** A later stage: the builder follows the stage prompt, then deterministic checks decide. */

@@ -1804,10 +1804,6 @@ jobs:
 
   maestro-e2e:
     executor: node22_browsers_mongo_rs_heavy
-    parameters:
-      include-demo:
-        type: boolean
-        default: false
     steps:
       - checkout
       - install_bun_and_deps
@@ -1830,16 +1826,6 @@ jobs:
               "java=sudo apt-get update && sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless xvfb xauth x11-utils && if ! command -v google-chrome > /dev/null 2>&1; then curl -fsSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt-get install -y /tmp/google-chrome.deb; fi && google-chrome --version" \
               "compile=bun run compile" \
               "frontend=cd example-frontend && bun expo export --platform web"
-      - when:
-          condition: << parameters.include-demo >>
-          steps:
-            - run:
-                name: Generate UI types and export demo
-                no_output_timeout: 15m
-                command: |
-                  set -euo pipefail
-                  cd ui && bun run types
-                  cd ../demo && bun run export
       - run:
           name: Seed example-backend
           working_directory: ~/project/example-backend
@@ -1900,23 +1886,6 @@ jobs:
             done
             echo "static web failed to become ready"
             exit 1
-      - when:
-          condition: << parameters.include-demo >>
-          steps:
-            - run:
-                name: Serve demo static build
-                background: true
-                command: bunx serve demo/dist -l 8085
-            - run:
-                name: Wait for demo
-                command: |
-                  set -euo pipefail
-                  for i in $(seq 1 30); do
-                    curl -s http://localhost:8085/demo > /dev/null && exit 0
-                    sleep 2
-                  done
-                  echo "Demo failed to start"
-                  exit 1
       - run:
           name: Install Maestro
           command: |
@@ -1985,16 +1954,117 @@ jobs:
             set -euo pipefail
             # shellcheck disable=SC1090
             source "$BASH_ENV"
-            if [ "<< parameters.include-demo >>" = "true" ]; then
-              maestro test .maestro/flows/
-            else
-              maestro test \
-                .maestro/flows/login.yaml \
-                .maestro/flows/create-todo.yaml
-            fi
+            maestro test \
+              .maestro/flows/login.yaml \
+              .maestro/flows/create-todo.yaml \
+              .maestro/flows/todo-browser.yaml
       - store_artifacts:
           path: /home/circleci/.maestro/tests
           destination: maestro-screenshots
+
+  maestro-demo:
+    executor: node22_browsers
+    resource_class: large
+    environment:
+      CI: "true"
+      EXPO_NO_TELEMETRY: "1"
+      NODE_OPTIONS: "--max-old-space-size=3072"
+      TERRENO_METRO_FROM_SOURCE: "1"
+    steps:
+      - checkout
+      - install_bun_and_deps
+      - run:
+          name: Install Java and Chrome
+          no_output_timeout: 15m
+          command: |
+            set -euo pipefail
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless xvfb xauth x11-utils
+            if ! command -v google-chrome > /dev/null 2>&1; then
+              curl -fsSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+              sudo apt-get install -y /tmp/google-chrome.deb
+            fi
+            google-chrome --version
+      - run:
+          name: Export demo web
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            bun run --filter '@terreno/blocks' compile
+            bun run --cwd demo generate-types
+            cd demo
+            bun run export
+      - run:
+          name: Serve demo static build
+          background: true
+          command: bunx serve demo/dist -l 8085
+      - run:
+          name: Wait for demo
+          command: |
+            set -euo pipefail
+            for i in $(seq 1 30); do
+              curl -s http://localhost:8085/demo > /dev/null && exit 0
+              sleep 2
+            done
+            echo "Demo failed to start"
+            exit 1
+      - run:
+          name: Install Maestro
+          command: |
+            set -euo pipefail
+            curl -fsSL "https://get.maestro.mobile.dev" | bash
+            echo 'export PATH="$HOME/.maestro/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: Wrap Chrome for CI
+          command: |
+            set -euo pipefail
+            CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
+            if [ -z "$CHROME_BIN" ]; then
+              echo "google-chrome is not on PATH after install"
+              exit 1
+            fi
+            if [ ! -e "${CHROME_BIN}.real" ]; then
+              sudo mv "$CHROME_BIN" "${CHROME_BIN}.real"
+              printf '#!/bin/bash\nexec "%s.real" "$@" --no-sandbox --disable-dev-shm-usage\n' "$CHROME_BIN" | sudo tee "$CHROME_BIN" > /dev/null
+              sudo chmod 0755 "$CHROME_BIN"
+            fi
+            "$CHROME_BIN" --version
+      - run:
+          name: Start Xvfb fallback
+          background: true
+          command: |
+            set -euo pipefail
+            echo 'export DISPLAY=:99' >> "$BASH_ENV"
+            if xdpyinfo -display :99 > /dev/null 2>&1; then
+              echo "Xvfb already on :99"
+              exec sleep infinity
+            fi
+            exec Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+      - run:
+          name: Wait for Xvfb
+          command: |
+            set -euo pipefail
+            echo 'export DISPLAY=:99' >> "$BASH_ENV"
+            for i in $(seq 1 30); do
+              if xdpyinfo -display :99 > /dev/null 2>&1; then
+                echo "Xvfb ready after ${i}s"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Xvfb did not start"
+            exit 1
+      - run:
+          name: Run Maestro demo tests
+          no_output_timeout: 20m
+          command: |
+            set -euo pipefail
+            # shellcheck disable=SC1090
+            source "$BASH_ENV"
+            maestro test .maestro/flows/demo/demo-home.yaml .maestro/flows/demo/demo-button.yaml
+      - store_artifacts:
+          path: /home/circleci/.maestro/tests
+          destination: maestro-demo-screenshots
 
   e2e-prepare:
     executor: node22
@@ -3008,8 +3078,12 @@ workflows:
   maestro:
     when: << pipeline.parameters.run-maestro >>
     jobs:
-      - maestro-e2e:
-          include-demo: << pipeline.parameters.run-maestro-demo >>
+      - maestro-e2e
+
+  maestro-demo:
+    when: << pipeline.parameters.run-maestro-demo >>
+    jobs:
+      - maestro-demo
 
   # Path-filter `run-circleci-config` is set for `.circleci/**`. On config-only
   # PRs, dual-run the documented representative slice (not every ported job).

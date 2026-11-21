@@ -353,7 +353,8 @@ the same commands through the parameterized `packages-ci` job, gated by
 | Admin SPA Backend Integration E2E | `admin-spa-integration` |
 | _(e2e compile+export once)_ | `e2e-prepare` |
 | Architectural PR review | `architectural-pr-review` (non-blocking; skip forks / missing secrets) |
-| Maestro E2E Tests | `maestro-e2e` (`include-demo` when ui/demo Maestro flows change) |
+| Maestro E2E Tests | `maestro-e2e` (app flows: login, create-todo, todo-browser) |
+| Maestro demo smokes | `maestro-demo` (only when ui/demo Maestro flows change; exports demo and serves it on 8085) |
 | New file coverage | `new-file-coverage` |
 | Coverage gate scripts | `coverage-scripts` |
 | Netlify production | `deploy-demo`, `deploy-frontend`, `deploy-docs` |
@@ -523,7 +524,8 @@ compile+export jobs (`maestro-e2e`, `admin-spa-integration`, `e2e-load`) stay
 on `large`. Chaos e2e treats a hidden Offline banner after `goOnline` as
 reconnect — a `client.stop()`/`start()` handshake hung 30s on the static
 export. `maestro-e2e` follows the same static-export rule: it exports
-example-frontend and serves the static `dist`. If the browsers image has no
+example-frontend and serves the static `dist`. The demo flows run in their own
+`maestro-demo` job, so they do not wait behind the app export or the backend. If the browsers image has no
 Xvfb on `:99`, a `background: true` fallback starts one and keeps it alive
 for later steps.
 

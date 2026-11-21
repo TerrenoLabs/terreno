@@ -976,7 +976,8 @@ jobs:
           package: jobs
 
   bootstrap-loop-ci:
-    executor: node22
+    # The job runs knip, which needs the newer Node that node22_knip pins.
+    executor: node22_knip
     steps:
       - checkout
       - install_bun_and_deps

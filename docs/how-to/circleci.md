@@ -126,7 +126,12 @@ for the backend. Smoke does the same split across jobs: `smoke-compile` and one
 `smoke-export-*` job per web app run together, then `smoke` runs the package scripts.
 `smoke-compile` archives package `dist` trees, including `admin-spa/src/dist` (the
 `AdminSpaServeApp` plugin). It leaves `admin-spa/dist` out so the web export from
-`smoke-export-admin-spa` is the bundle the admin-spa smoke serves.
+`smoke-export-admin-spa` is the bundle the admin-spa smoke serves. The demo export
+compiles `@terreno/blocks` and generates `demo/ui-types-documentation.json` first, and the
+example-frontend export compiles `@terreno/test`, because those two need dist output that only
+a full compile produced before. The example-backend Docker build compiles the same packages
+through `scripts/ci/docker-compile-and-export.sh`, including `@terreno/test`, which `api` and
+`admin-backend` type-check against.
 A GCP preview builds the example-backend image once and deploys the backend and tasks
 services together. Each shard first checks the [affected gate](#e2e-affected-gate)
 and halts when no changed file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,

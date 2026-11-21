@@ -106,13 +106,13 @@ export const mergeStatements = <S extends Statements>(appStatements: S): Stateme
   };
 };
 
-const adminModelDescriptions = (noun: string): Record<string, string> => ({
+export const adminModelDescriptions = (noun: string): Record<string, string> => ({
   read: `View ${noun} in the admin panel`,
   write: `Create and update any ${noun} in the admin panel`,
   writeOwned: `Create and update ${noun} you own in the admin panel`,
 });
 
-const modelCrudDescriptions = (noun: string): Record<string, string> => ({
+export const modelCrudDescriptions = (noun: string): Record<string, string> => ({
   create: `Create ${noun}`,
   delete: `Delete ${noun}`,
   list: `List ${noun}`,

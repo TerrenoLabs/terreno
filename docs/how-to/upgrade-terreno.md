@@ -94,3 +94,17 @@ If you already committed, `git revert` the upgrade commit or reset the branch to
 ## 8. Automate it
 
 To have an agent open the upgrade pull request on a schedule, see [Automate Terreno upgrades](automate-terreno-upgrades.md).
+
+## 9. GPTChat selectors and labels (`@terreno/ui`)
+
+`GPTChat` changed its transcript and Tools controls. Update app code and e2e suites that select them:
+
+| Before | After |
+| --- | --- |
+| `gpt-copy-image` (image copy control) | `gpt-copy-msg-<index>`. It copies the image for an image-only reply and the text when a reply has both. |
+| Tool row labeled `Result: <name>` | `Tool: <name>` |
+| **Tools** button always shown | Shown only when `mcpTools` has entries |
+
+A message with no text, content parts, or blocks renders nothing, including its action row. Arguments in the **Tools** modal stay hidden until **Show arguments** is checked, and reset when the modal closes.
+
+Migration: replace the selectors and label strings in your tests and any accessibility tooling. Pass `mcpTools` only when the app has tools to show.

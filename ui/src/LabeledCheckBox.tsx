@@ -28,8 +28,9 @@ interface LabeledCheckBoxProps {
 }
 
 /**
- * A checkbox with its label as one pressable `role="checkbox"` control. Internal to the auth
- * screens and cards (trust this device, sign out other devices, I saved these codes).
+ * A checkbox with its label as one pressable `role="checkbox"` control. Used by the auth
+ * screens and the GPT chat tools list. Space toggles it, because a checkbox `Pressable` does
+ * not receive Space as a press on web.
  */
 export const LabeledCheckBox: FC<LabeledCheckBoxProps> = ({
   label,

@@ -1,7 +1,9 @@
 import {mcpAdminStatements} from "@terreno/admin-backend";
 import {
   ADMIN_MODEL_ACCESS,
+  adminModelDescriptions,
   createAccess,
+  modelCrudDescriptions,
   OwnerScope,
   persistRbacAuditToAuditEvent,
   terrenoStatements,
@@ -35,60 +37,22 @@ const appStatementDescriptions = {
     list: "List the audit log in the admin panel",
     read: "View an audit log entry in the admin panel",
   },
-  adminMcpOAuthClient: {
-    read: "View MCP OAuth clients in the admin panel",
-    write: "Create and update any MCP OAuth client in the admin panel",
-    writeOwned: "Create and update MCP OAuth clients you own in the admin panel",
-  },
-  adminMcpOAuthConnection: {
-    read: "View MCP OAuth connections in the admin panel",
-    write: "Create and update any MCP OAuth connection in the admin panel",
-    writeOwned: "Create and update MCP OAuth connections you own in the admin panel",
-  },
-  adminMcpRequestLog: {
-    read: "View MCP request logs in the admin panel",
-    write: "Create and update any MCP request log in the admin panel",
-    writeOwned: "Create and update MCP request logs you own in the admin panel",
-  },
-  adminMcpServiceToken: {
-    read: "View MCP service tokens in the admin panel",
-    write: "Create and update any MCP service token in the admin panel",
-    writeOwned: "Create and update MCP service tokens you own in the admin panel",
-  },
-  adminMcpTool: {
-    read: "View MCP tools in the admin panel",
-    write: "Create and update any MCP tool in the admin panel",
-    writeOwned: "Create and update MCP tools you own in the admin panel",
-  },
-  adminProject: {
-    read: "View projects in the admin panel",
-    write: "Create and update any project in the admin panel",
-    writeOwned: "Create and update projects you own in the admin panel",
-  },
+  adminMcpOAuthClient: adminModelDescriptions("MCP OAuth clients"),
+  adminMcpOAuthConnection: adminModelDescriptions("MCP OAuth connections"),
+  adminMcpRequestLog: adminModelDescriptions("MCP request logs"),
+  adminMcpServiceToken: adminModelDescriptions("MCP service tokens"),
+  adminMcpTool: adminModelDescriptions("MCP tools"),
+  adminProject: adminModelDescriptions("projects"),
   adminScreen: {
     showcase: "Open the UI showcase screen",
     syncLab: "Open the sync lab screen",
   },
-  adminTodo: {
-    read: "View todos in the admin panel",
-    write: "Create and update any todo in the admin panel",
-    writeOwned: "Create and update todos you own in the admin panel",
-  },
-  adminUser: {
-    read: "View users in the admin panel",
-    write: "Create and update any user in the admin panel",
-    writeOwned: "Create and update users you own in the admin panel",
-  },
+  adminTodo: adminModelDescriptions("todos"),
+  adminUser: adminModelDescriptions("users"),
   clinicalIntake: {
     signoff: "Sign off an AI intake summary before it is filed",
   },
-  todo: {
-    create: "Create a todo",
-    delete: "Delete a todo",
-    list: "List todos",
-    read: "View a todo",
-    update: "Update a todo",
-  },
+  todo: modelCrudDescriptions("todos"),
 } as const;
 
 export const access = createAccess({

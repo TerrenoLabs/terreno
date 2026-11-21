@@ -13,9 +13,11 @@ import {
   findNodeHandle,
   Platform,
   Image as RNImage,
+  ScrollView,
   type ScrollViewInstance,
   type TextInputInstance,
   type TextInstance,
+  useWindowDimensions,
   View,
   type ViewInstance,
 } from "react-native";
@@ -37,6 +39,7 @@ import {FormContainer} from "./FormContainer";
 import {Heading} from "./Heading";
 import {Icon} from "./Icon";
 import {IconButton} from "./IconButton";
+import {LabeledCheckBox} from "./LabeledCheckBox";
 import {MarkdownView} from "./MarkdownView";
 import {Modal} from "./Modal";
 import {SelectField} from "./SelectField";
@@ -138,6 +141,11 @@ export interface MCPServerStatus {
 export interface MCPToolDetail {
   name: string;
   description?: string;
+  /**
+   * JSON Schema for the arguments the assistant passes. The tools list reads `properties`,
+   * `required`, and each property's `type` and `description`.
+   */
+  inputSchema?: Record<string, unknown>;
 }
 
 export interface GPTChatProps {
@@ -237,75 +245,123 @@ const ExpandableContent = ({
   return <>{children}</>;
 };
 
-const ToolCallCard = ({toolCall}: {toolCall: ToolCallInfo}): React.ReactElement => {
-  const [isExpanded, setIsExpanded] = useState(false);
+/** Cap on an expanded tool call so a large result scrolls instead of stretching the transcript. */
+const TOOL_BODY_MAX_HEIGHT = 240;
 
-  return (
-    <Box border="default" padding={2} rounding="md">
-      <Box
-        accessibilityHint="Toggle tool call details"
-        accessibilityLabel={`Tool: ${toolCall.toolName}`}
-        alignItems="center"
-        direction="row"
-        gap={1}
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
-        <Icon iconName="wrench" size="xs" />
-        <Text bold size="sm">
-          Tool: {toolCall.toolName}
-        </Text>
-        <Icon iconName={isExpanded ? "chevron-up" : "chevron-down"} size="xs" />
-      </Box>
-      <ExpandableContent isExpanded={isExpanded}>
-        <Box marginTop={1} padding={1}>
-          <Text color="secondaryDark" size="sm">
-            {JSON.stringify(toolCall.args, null, 2)}
-          </Text>
-        </Box>
-      </ExpandableContent>
-    </Box>
-  );
+const formatToolPayload = (value: unknown): string => {
+  if (typeof value === "string") {
+    return value;
+  }
+  try {
+    return JSON.stringify(value, null, 2);
+  } catch {
+    return String(value);
+  }
 };
 
-const ToolResultText = ({result}: {result: unknown}): React.ReactElement => {
-  if (typeof result === "string") {
-    return (
-      <Text color="secondaryDark" size="sm">
-        {result}
-      </Text>
-    );
+interface ToolArgument {
+  description?: string;
+  name: string;
+  required: boolean;
+  type: string;
+}
+
+const argumentsFromSchema = (schema: Record<string, unknown> | undefined): ToolArgument[] => {
+  if (!schema) {
+    return [];
   }
+  const properties = schema.properties;
+  if (!properties || typeof properties !== "object") {
+    return [];
+  }
+  const requiredNames = Array.isArray(schema.required)
+    ? schema.required.filter((name): name is string => typeof name === "string")
+    : [];
+  const required = new Set(requiredNames);
+  return Object.entries(properties as Record<string, unknown>).map(([name, value]) => {
+    const property = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+    const type = typeof property.type === "string" ? property.type : "value";
+    const description = typeof property.description === "string" ? property.description : undefined;
+    return {description, name, required: required.has(name), type};
+  });
+};
+
+const ToolPayloadText = ({value}: {value: unknown}): React.ReactElement => {
   return (
     <Text color="secondaryDark" size="sm">
-      {JSON.stringify(result, null, 2)}
+      {formatToolPayload(value)}
     </Text>
   );
 };
 
-const ToolResultCard = ({toolResult}: {toolResult: ToolResultInfo}): React.ReactElement => {
+/**
+ * One disclosure for a tool invocation. The call and its result share the row, and the body
+ * scrolls inside a fixed height so a large payload does not stretch the transcript.
+ */
+const ToolTurnRow = ({
+  toolCall,
+  toolResult,
+}: {
+  toolCall?: ToolCallInfo;
+  toolResult?: ToolResultInfo;
+}): React.ReactElement => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const name = toolCall?.toolName || toolResult?.toolName || "tool";
+  const toolId = toolCall?.toolCallId || toolResult?.toolCallId || name;
+  const isRunning = Boolean(toolCall) && !toolResult;
+
+  const handleToggle = useCallback((): void => {
+    setIsExpanded((current) => !current);
+  }, []);
 
   return (
-    <Box border="default" padding={2} rounding="md">
+    <Box testID={`gpt-tool-${toolId}`} width="100%">
       <Box
-        accessibilityHint="Toggle tool result details"
-        accessibilityLabel={`Result: ${toolResult.toolName}`}
+        accessibilityHint="Show or hide what this tool was given and what it returned"
+        accessibilityLabel={`Tool: ${name}`}
         alignItems="center"
         direction="row"
-        gap={1}
-        onClick={() => setIsExpanded(!isExpanded)}
+        gap={2}
+        onClick={handleToggle}
+        paddingY={1}
       >
-        <Icon iconName="check" size="xs" />
-        <Text bold size="sm">
-          Result: {toolResult.toolName}
+        <Icon iconName={isExpanded ? "chevron-down" : "chevron-right"} size="xs" />
+        <Text color="secondaryDark" size="sm">
+          {isRunning ? `Running ${name}` : name}
         </Text>
-        <Icon iconName={isExpanded ? "chevron-up" : "chevron-down"} size="xs" />
       </Box>
-      <ExpandableContent isExpanded={isExpanded}>
-        <Box marginTop={1} padding={1}>
-          <ToolResultText result={toolResult.result} />
+      {isExpanded ? (
+        <Box color="neutralLight" marginBottom={1} rounding="md">
+          <ScrollView
+            nestedScrollEnabled
+            style={{maxHeight: TOOL_BODY_MAX_HEIGHT}}
+            testID={`gpt-tool-body-${toolId}`}
+          >
+            <Box gap={2} padding={2}>
+              {toolCall ? (
+                <Box gap={1}>
+                  <Text bold color="secondaryDark" size="sm">
+                    Input
+                  </Text>
+                  <ToolPayloadText value={toolCall.args} />
+                </Box>
+              ) : null}
+              {toolResult ? (
+                <Box gap={1}>
+                  <Text bold color="secondaryDark" size="sm">
+                    Result
+                  </Text>
+                  <ToolPayloadText value={toolResult.result} />
+                </Box>
+              ) : (
+                <Text color="secondaryDark" size="sm">
+                  Waiting for a result.
+                </Text>
+              )}
+            </Box>
+          </ScrollView>
         </Box>
-      </ExpandableContent>
+      ) : null}
     </Box>
   );
 };
@@ -370,55 +426,18 @@ const copyImageToClipboard = async (part: ImageContentPart): Promise<void> => {
   }
 };
 
-const ImageActions = ({part}: {part: ImageContentPart}): React.ReactElement => {
-  const handleCopy = useCallback(async (): Promise<void> => {
-    try {
-      await copyImageToClipboard(part);
-    } catch (error) {
-      console.warn("Failed to copy image", error);
-    }
-  }, [part]);
-
-  const handleDownload = useCallback((): void => {
-    handleDownloadFile(part.url, getImageFilename(part));
-  }, [part]);
-
-  return (
-    <Box direction="row" gap={1} testID="gpt-image-actions">
-      <IconButton
-        accessibilityLabel="Copy image"
-        iconName="copy"
-        onClick={handleCopy}
-        testID="gpt-copy-image"
-        variant="ghost"
-      />
-      {Platform.OS === "web" ? (
-        <IconButton
-          accessibilityLabel="Download image"
-          iconName="download"
-          onClick={handleDownload}
-          testID="gpt-download-image"
-          variant="ghost"
-        />
-      ) : null}
-    </Box>
-  );
-};
-
 const MessageContentParts = ({parts}: {parts: MessageContentPart[]}): React.ReactElement => {
   return (
     <Box gap={2}>
       {parts.map((part, index) => {
         if (part.type === "image") {
           return (
-            <Box gap={1} key={`content-${index}`}>
-              <RNImage
-                resizeMode="contain"
-                source={{uri: part.url}}
-                style={{borderRadius: 8, height: 400, maxWidth: 800, minWidth: 400, width: "100%"}}
-              />
-              <ImageActions part={part} />
-            </Box>
+            <RNImage
+              key={`content-${index}`}
+              resizeMode="contain"
+              source={{uri: part.url}}
+              style={{borderRadius: 12, height: 320, maxWidth: "100%", width: "100%"}}
+            />
           );
         }
         if (part.type === "file") {
@@ -897,7 +916,7 @@ const MessageText = ({
   if (role === "assistant") {
     return <MarkdownView>{content}</MarkdownView>;
   }
-  return <Text color={role === "user" ? "inverted" : "primary"}>{content}</Text>;
+  return <Text color={role === "user" ? "primary" : "secondaryDark"}>{content}</Text>;
 };
 
 const RatingButtons = ({
@@ -932,6 +951,10 @@ const RatingButtons = ({
   );
 };
 
+const firstImagePart = (message: GPTChatMessage): ImageContentPart | undefined => {
+  return message.contentParts?.find((part): part is ImageContentPart => part.type === "image");
+};
+
 const AssistantActions = ({
   handleCopyMessage,
   index,
@@ -945,20 +968,43 @@ const AssistantActions = ({
   onRateComment?: (promptIndex: number, comment: string) => void | Promise<void>;
   onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
 }): React.ReactElement | null => {
-  if (message.role !== "assistant") {
+  const image = firstImagePart(message);
+  const hasText = message.content.trim().length > 0;
+  const showCopy = hasText || Boolean(image);
+
+  const handleDownload = useCallback((): void => {
+    if (!image) {
+      return;
+    }
+    handleDownloadFile(image.url, getImageFilename(image));
+  }, [image]);
+
+  if (message.role !== "assistant" || (!showCopy && !onRateFeedback)) {
     return null;
   }
   const showComment = Boolean(onRateFeedback && onRateComment && message.rating);
   return (
-    <Box gap={2} marginTop={1}>
-      <Box alignItems="end" direction="row" gap={1} justifyContent="end">
+    <Box gap={2} marginTop={2} testID={`gpt-message-actions-${index}`}>
+      <Box alignItems="center" direction="row" gap={1}>
+        {showCopy ? (
+          <IconButton
+            accessibilityLabel={image && !hasText ? "Copy image" : "Copy message"}
+            iconName="copy"
+            onClick={() => handleCopyMessage(message, index)}
+            testID={`gpt-copy-msg-${index}`}
+            variant="muted"
+          />
+        ) : null}
+        {image && Platform.OS === "web" ? (
+          <IconButton
+            accessibilityLabel="Download image"
+            iconName="download"
+            onClick={handleDownload}
+            testID={`gpt-download-image-${index}`}
+            variant="muted"
+          />
+        ) : null}
         <RatingButtons index={index} onRateFeedback={onRateFeedback} rating={message.rating} />
-        <IconButton
-          accessibilityLabel="Copy message"
-          iconName="copy"
-          onClick={() => handleCopyMessage(message, index)}
-          testID={`gpt-copy-msg-${index}`}
-        />
       </Box>
       {showComment && onRateComment ? (
         // Keyed by rating so a changed vote starts a fresh comment.
@@ -1153,14 +1199,34 @@ const MessageList = ({
 }): React.ReactElement => {
   const askToolCallIds = new Set<string>();
   const toolResults = new Map<string, unknown>();
+  const toolCallIds = new Set<string>();
   for (const message of currentMessages) {
     if (message.role === "tool-call" && message.ask) {
       askToolCallIds.add(message.ask.toolCallId);
+    }
+    if (message.role === "tool-call" && message.toolCall && !message.ask) {
+      toolCallIds.add(message.toolCall.toolCallId);
     }
     if (message.role === "tool-result" && message.toolResult) {
       toolResults.set(message.toolResult.toolCallId, message.toolResult.result);
     }
   }
+  const pairedToolResults = new Map<string, ToolResultInfo>();
+  const pairedResultIndexes = new Set<number>();
+  currentMessages.forEach((message, index) => {
+    const toolResult = message.toolResult;
+    if (message.role !== "tool-result" || !toolResult) {
+      return;
+    }
+    if (!toolCallIds.has(toolResult.toolCallId) || askToolCallIds.has(toolResult.toolCallId)) {
+      return;
+    }
+    if (pairedToolResults.has(toolResult.toolCallId)) {
+      return;
+    }
+    pairedToolResults.set(toolResult.toolCallId, toolResult);
+    pairedResultIndexes.add(index);
+  });
 
   // The live reply stays partial after an ask is appended, so a draft document does not
   // validate as a finished message while the turn is still streaming.
@@ -1215,39 +1281,44 @@ const MessageList = ({
         }
         if (message.role === "tool-call" && message.toolCall) {
           return (
-            <Box alignItems="start" key={`msg-${index}`} maxWidth="80%">
-              <ToolCallCard toolCall={message.toolCall} />
-            </Box>
+            <ToolTurnRow
+              key={`msg-${index}`}
+              toolCall={message.toolCall}
+              toolResult={pairedToolResults.get(message.toolCall.toolCallId)}
+            />
           );
         }
         if (message.role === "tool-result" && message.toolResult) {
-          return (
-            <Box alignItems="start" key={`msg-${index}`} maxWidth="80%">
-              <ToolResultCard toolResult={message.toolResult} />
-            </Box>
-          );
+          if (pairedResultIndexes.has(sourceIndex)) {
+            return null;
+          }
+          return <ToolTurnRow key={`msg-${index}`} toolResult={message.toolResult} />;
         }
 
-        const hasImages = message.contentParts?.some((p) => p.type === "image");
         const messageId = messageKey;
-        return (
-          <Box alignItems={message.role === "user" ? "end" : "start"} key={messageKey}>
-            <Box
-              color={message.role === "user" ? "primary" : "neutralLight"}
-              maxWidth={hasImages ? "90%" : "80%"}
-              padding={3}
-              rounding="lg"
-            >
-              <ContentPartsPreview
-                hasContent={Boolean(message.content)}
-                parts={message.contentParts}
-              />
+        const isUser = message.role === "user";
+        const isLive = liveAssistantIndex >= 0 && sourceIndex === liveAssistantIndex;
+        const hasBody =
+          Boolean(message.content.trim()) ||
+          Boolean(message.contentParts?.length) ||
+          Boolean(message.blockNote) ||
+          (uiBlocks && isLive && message.role === "assistant");
+        if (!hasBody) {
+          return null;
+        }
+        const body = (
+          <>
+            <ContentPartsPreview
+              hasContent={Boolean(message.content)}
+              parts={message.contentParts}
+            />
+            {message.content || (uiBlocks && isLive && message.role === "assistant") ? (
               <MessageText
                 allowHtml={allowHtml}
                 content={message.content}
                 hostActions={hostActions}
                 imageHosts={imageHosts}
-                isPartial={liveAssistantIndex >= 0 && sourceIndex === liveAssistantIndex}
+                isPartial={isLive}
                 messageId={messageId}
                 onBlockEvent={onBlockEvent}
                 overrides={blockOverrides[messageId]}
@@ -1257,19 +1328,33 @@ const MessageList = ({
                 role={message.role}
                 uiBlocks={uiBlocks}
               />
-              {message.blockNote ? (
-                <Text color="secondaryLight" size="sm" testID={`gpt-block-note-${messageId}`}>
-                  {message.blockNote}
-                </Text>
-              ) : null}
-              <AssistantActions
-                handleCopyMessage={handleCopyMessage}
-                index={sourceIndex}
-                message={message}
-                onRateComment={sourceIndex >= 0 ? onRateComment : undefined}
-                onRateFeedback={sourceIndex >= 0 ? onRateFeedback : undefined}
-              />
+            ) : null}
+            {message.blockNote ? (
+              <Text color="secondaryLight" size="sm" testID={`gpt-block-note-${messageId}`}>
+                {message.blockNote}
+              </Text>
+            ) : null}
+            <AssistantActions
+              handleCopyMessage={handleCopyMessage}
+              index={sourceIndex}
+              message={message}
+              onRateComment={sourceIndex >= 0 ? onRateComment : undefined}
+              onRateFeedback={sourceIndex >= 0 ? onRateFeedback : undefined}
+            />
+          </>
+        );
+        if (isUser) {
+          return (
+            <Box alignItems="end" key={messageKey} width="100%">
+              <Box color="neutralLight" maxWidth="80%" paddingX={3} paddingY={2} rounding="xl">
+                {body}
+              </Box>
             </Box>
+          );
+        }
+        return (
+          <Box key={messageKey} width="100%">
+            {body}
           </Box>
         );
       })}
@@ -1344,6 +1429,18 @@ const AttachButton = ({
   );
 };
 
+const TOOLS_LIST_INTRO =
+  "The assistant can call these tools while it answers. You don't run them yourself.";
+
+/** Tallest the tool list grows on a large screen. */
+const TOOLS_LIST_MAX_HEIGHT = 640;
+
+/**
+ * Estimated height of the Modal's title, close control, padding, and margins, measured in the
+ * demo. The list cap is the window height minus this, so raise it if the Modal chrome grows.
+ */
+const TOOLS_MODAL_CHROME = 220;
+
 const ToolsModal = ({
   isVisible,
   mcpTools,
@@ -1353,31 +1450,81 @@ const ToolsModal = ({
   mcpTools: MCPToolDetail[];
   onDismiss: () => void;
 }): React.ReactElement => {
+  const [showArguments, setShowArguments] = useState(false);
+  const {height: windowHeight} = useWindowDimensions();
+  const listMaxHeight = Math.min(
+    TOOLS_LIST_MAX_HEIGHT,
+    Math.max(160, windowHeight - TOOLS_MODAL_CHROME)
+  );
+
+  const handleToggleArguments = useCallback((checked: boolean): void => {
+    setShowArguments(checked);
+  }, []);
+
+  const handleDismiss = useCallback((): void => {
+    setShowArguments(false);
+    onDismiss();
+  }, [onDismiss]);
+
   return (
-    <Modal onDismiss={onDismiss} size="md" title="Available Tools" visible={isVisible}>
-      <Box gap={2} padding={3}>
-        {mcpTools.length === 0 ? (
+    <Modal onDismiss={handleDismiss} size="lg" title="Tools" visible={isVisible}>
+      <ScrollView style={{maxHeight: listMaxHeight}} testID="gpt-tools-scroll">
+        <Box gap={3} padding={3} testID="gpt-tools-list">
           <Text color="secondaryDark" size="sm">
-            No tools available.
+            {TOOLS_LIST_INTRO}
           </Text>
-        ) : (
-          mcpTools.map((tool) => (
-            <Box border="default" gap={1} key={tool.name} padding={3} rounding="md">
-              <Box alignItems="center" direction="row" gap={2}>
-                <Icon iconName="wrench" size="xs" />
-                <Text bold size="sm">
-                  {tool.name}
-                </Text>
-              </Box>
-              {tool.description && (
-                <Text color="secondaryDark" size="sm">
-                  {tool.description}
-                </Text>
-              )}
-            </Box>
-          ))
-        )}
-      </Box>
+          {mcpTools.length > 0 ? (
+            <LabeledCheckBox
+              checked={showArguments}
+              label="Show arguments"
+              onChange={handleToggleArguments}
+              testID="gpt-tools-arguments-toggle"
+            />
+          ) : null}
+          {mcpTools.length === 0 ? (
+            <Text color="secondaryDark" size="sm">
+              No tools are available in this chat.
+            </Text>
+          ) : (
+            mcpTools.map((tool) => {
+              const toolArguments = argumentsFromSchema(tool.inputSchema);
+              return (
+                <Box gap={1} key={tool.name} testID={`gpt-tool-detail-${tool.name}`}>
+                  <Text bold>{tool.name}</Text>
+                  <Text color="secondaryDark" size="sm">
+                    {tool.description ?? "No description provided."}
+                  </Text>
+                  {showArguments ? (
+                    <>
+                      <Text bold color="secondaryDark" size="sm">
+                        Arguments
+                      </Text>
+                      {toolArguments.length === 0 ? (
+                        <Text color="secondaryDark" size="sm">
+                          None. The assistant calls it with an empty input.
+                        </Text>
+                      ) : (
+                        toolArguments.map((toolArgument) => (
+                          <Box gap={1} key={toolArgument.name}>
+                            <Text size="sm">
+                              {`${toolArgument.name} (${toolArgument.type}) · ${toolArgument.required ? "required" : "optional"}`}
+                            </Text>
+                            {toolArgument.description ? (
+                              <Text color="secondaryDark" size="sm">
+                                {toolArgument.description}
+                              </Text>
+                            ) : null}
+                          </Box>
+                        ))
+                      )}
+                    </>
+                  ) : null}
+                </Box>
+              );
+            })
+          )}
+        </Box>
+      </ScrollView>
     </Modal>
   );
 };
@@ -1826,104 +1973,115 @@ export const GPTChat = ({
       )}
 
       {/* Chat Panel */}
-      <Box direction="column" flex="grow" padding={4}>
-        {/* Messages */}
-        <Box flex="grow" marginBottom={3} onLayout={handleViewportLayout} testID="gpt-viewport">
-          <Box flex="grow" gap={3} onScroll={handleScroll} scroll={true} scrollRef={scrollViewRef}>
-            <Box flex="grow" gap={3} onLayout={handleContentLayout} testID="gpt-messages">
-              {isEmptyChat ? (
-                <EmptyChatHero
-                  handleSuggestedPrompt={handleSuggestedPrompt}
-                  isStreaming={isStreaming}
-                  mascot={mascot}
-                  suggestedPrompts={suggestedPrompts}
-                  viewportHeight={viewportHeight}
-                />
-              ) : (
-                <>
-                  <MessageList
-                    allowHtml={allowHtml}
-                    appendedByMessage={appendedByMessage}
-                    askErrors={askErrors}
-                    blockOverrides={blockOverrides}
-                    currentMessages={currentMessages}
-                    handleCopyMessage={handleCopyMessage}
-                    hostActions={hostActions}
-                    imageHosts={imageHosts}
+      <Box alignItems="center" direction="column" flex="grow" padding={4}>
+        <Box direction="column" flex="grow" maxWidth={760} width="100%">
+          {/* Messages */}
+          <Box flex="grow" marginBottom={3} onLayout={handleViewportLayout} testID="gpt-viewport">
+            <Box
+              flex="grow"
+              gap={5}
+              onScroll={handleScroll}
+              scroll={true}
+              scrollRef={scrollViewRef}
+            >
+              <Box flex="grow" gap={5} onLayout={handleContentLayout} testID="gpt-messages">
+                {isEmptyChat ? (
+                  <EmptyChatHero
+                    handleSuggestedPrompt={handleSuggestedPrompt}
                     isStreaming={isStreaming}
-                    onAskSubmit={onAskSubmit}
-                    onBlockEvent={handleBlockEvent}
-                    onRateComment={onRateComment}
-                    onRateFeedback={onRateFeedback}
-                    pendingElements={pendingElements}
-                    resolveAskFiles={resolveAskFiles}
-                    resolveDataset={resolveDataset}
-                    resolveImage={resolveImage}
-                    uiBlocks={uiBlocks}
+                    mascot={mascot}
+                    suggestedPrompts={suggestedPrompts}
+                    viewportHeight={viewportHeight}
                   />
-                  <StreamingIndicator
-                    isStreaming={
-                      isStreaming &&
-                      !(
-                        uiBlocks &&
-                        currentMessages[currentMessages.length - 1]?.role === "assistant"
-                      )
-                    }
-                  />
-                </>
-              )}
+                ) : (
+                  <>
+                    <MessageList
+                      allowHtml={allowHtml}
+                      appendedByMessage={appendedByMessage}
+                      askErrors={askErrors}
+                      blockOverrides={blockOverrides}
+                      currentMessages={currentMessages}
+                      handleCopyMessage={handleCopyMessage}
+                      hostActions={hostActions}
+                      imageHosts={imageHosts}
+                      isStreaming={isStreaming}
+                      onAskSubmit={onAskSubmit}
+                      onBlockEvent={handleBlockEvent}
+                      onRateComment={onRateComment}
+                      onRateFeedback={onRateFeedback}
+                      pendingElements={pendingElements}
+                      resolveAskFiles={resolveAskFiles}
+                      resolveDataset={resolveDataset}
+                      resolveImage={resolveImage}
+                      uiBlocks={uiBlocks}
+                    />
+                    <StreamingIndicator
+                      isStreaming={
+                        isStreaming &&
+                        !(
+                          uiBlocks &&
+                          currentMessages[currentMessages.length - 1]?.role === "assistant"
+                        )
+                      }
+                    />
+                  </>
+                )}
+              </Box>
             </Box>
           </Box>
-        </Box>
 
-        <ScrollToBottomButton
-          isScrolledUp={isScrolledUp && !isEmptyChat}
-          scrollToBottom={scrollToBottom}
-        />
-        <AttachmentSection attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
+          <ScrollToBottomButton
+            isScrolledUp={isScrolledUp && !isEmptyChat}
+            scrollToBottom={scrollToBottom}
+          />
+          <AttachmentSection attachments={attachments} onRemoveAttachment={onRemoveAttachment} />
 
-        {/* Input */}
-        <Box direction="row" gap={2} testID="gpt-composer">
-          {onAttachFiles ? (
-            <Box justifyContent="center" testID="gpt-composer-attach">
-              <AttachButton
-                handleFilesSelected={handleFilesSelected}
-                isStreaming={isStreaming}
-                onAttachFiles={onAttachFiles}
+          {/* Input */}
+          <Box direction="row" gap={2} testID="gpt-composer">
+            {onAttachFiles ? (
+              <Box justifyContent="center" testID="gpt-composer-attach">
+                <AttachButton
+                  handleFilesSelected={handleFilesSelected}
+                  isStreaming={isStreaming}
+                  onAttachFiles={onAttachFiles}
+                />
+              </Box>
+            ) : null}
+            {mcpTools && mcpTools.length > 0 ? (
+              <Box justifyContent="center" testID="gpt-composer-tools">
+                <Button
+                  accessibilityLabel="Show available tools"
+                  iconName="wrench"
+                  onClick={() => setIsToolsModalVisible(true)}
+                  size="sm"
+                  testID="gpt-tools-button"
+                  text="Tools"
+                  variant="outline"
+                />
+              </Box>
+            ) : null}
+            <Box flex="grow" justifyContent="center">
+              <TextArea
+                blurOnSubmit={false}
+                disabled={isStreaming}
+                grow
+                inputRef={handleInputRef}
+                maxHeight={COMPOSER_MAX_HEIGHT}
+                onChange={setInputValue}
+                placeholder="Type a message..."
+                testID="gpt-input"
+                value={inputValue}
               />
             </Box>
-          ) : null}
-          {mcpTools && mcpTools.length > 0 && (
-            <Box justifyContent="center" testID="gpt-composer-tools">
-              <IconButton
-                accessibilityLabel="Show available tools"
-                iconName="hammer"
-                onClick={() => setIsToolsModalVisible(true)}
-                testID="gpt-tools-button"
+            <Box justifyContent="center" testID="gpt-composer-send">
+              <Button
+                disabled={!inputValue.trim() || isStreaming}
+                iconName="paper-plane"
+                onClick={handleSubmit}
+                testID="gpt-submit"
+                text="Send"
               />
             </Box>
-          )}
-          <Box flex="grow" justifyContent="center">
-            <TextArea
-              blurOnSubmit={false}
-              disabled={isStreaming}
-              grow
-              inputRef={handleInputRef}
-              maxHeight={COMPOSER_MAX_HEIGHT}
-              onChange={setInputValue}
-              placeholder="Type a message..."
-              testID="gpt-input"
-              value={inputValue}
-            />
-          </Box>
-          <Box justifyContent="center" testID="gpt-composer-send">
-            <Button
-              disabled={!inputValue.trim() || isStreaming}
-              iconName="paper-plane"
-              onClick={handleSubmit}
-              testID="gpt-submit"
-              text="Send"
-            />
           </Box>
         </Box>
       </Box>

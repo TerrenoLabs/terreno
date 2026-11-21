@@ -365,7 +365,12 @@ const AiScreen: React.FC = () => {
   const isSyncDbReady = useSyncDbReady();
   const {tools: mcpToolsRaw} = useMCPTools({authProvider});
   const mcpTools: MCPToolDetail[] = useMemo(
-    () => mcpToolsRaw.map((t) => ({description: t.description, name: t.name})),
+    () =>
+      mcpToolsRaw.map((tool) => ({
+        description: tool.description,
+        inputSchema: tool.inputSchema,
+        name: tool.name,
+      })),
     [mcpToolsRaw]
   );
 

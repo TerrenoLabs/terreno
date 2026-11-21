@@ -23,7 +23,25 @@ import {
   useAdminRoles,
 } from "./useAdminRoles";
 
+/** One statement action the roles screen can show or hide. */
+export interface RoleActionVisibilityArgs {
+  action: string;
+  resource: string;
+}
+
+/**
+ * Return false to hide an action from the list and the editor.
+ * Hidden actions already stored on a role are written back unchanged.
+ */
+export type RoleActionVisibility = (permission: RoleActionVisibilityArgs) => boolean;
+
 export interface AdminRolesListProps extends AdminScreenProps {
+  /**
+   * Hides statement actions without removing them from a saved role.
+   * The same verb can be a model grant on one resource and a named check on
+   * another, so the predicate receives both. Omit to show every action.
+   */
+  isActionVisible?: RoleActionVisibility;
   /**
    * Show the colored action badges (read, update, delete, and the rest) on role cards
    * and the available-permissions list. When false, a described permission shows its
@@ -107,6 +125,43 @@ const PERMISSION_GROUPS: readonly {key: PermissionGroupKey; label: string}[] = [
   {key: "model", label: "Model permissions"},
 ];
 
+const isStatementActionVisible = ({
+  action,
+  isActionVisible,
+  resource,
+}: {
+  action: string;
+  isActionVisible?: RoleActionVisibility;
+  resource: string;
+}): boolean => {
+  if (!isActionVisible) {
+    return true;
+  }
+  return isActionVisible({action, resource});
+};
+
+const shownPermissions = ({
+  isActionVisible,
+  permissions,
+}: {
+  isActionVisible?: RoleActionVisibility;
+  permissions: Record<string, readonly string[]>;
+}): Record<string, readonly string[]> => {
+  if (!isActionVisible) {
+    return permissions;
+  }
+  const result: Record<string, readonly string[]> = {};
+  for (const [resource, actions] of Object.entries(permissions)) {
+    const visible = actions.filter((action) =>
+      isStatementActionVisible({action, isActionVisible, resource})
+    );
+    if (visible.length > 0) {
+      result[resource] = visible;
+    }
+  }
+  return result;
+};
+
 const groupPermissions = (
   permissions: Record<string, readonly string[]>
 ): Record<PermissionGroupKey, [string, string[]][]> => {
@@ -126,7 +181,7 @@ const groupPermissions = (
   return grouped;
 };
 
-const descriptionFor = (
+export const descriptionFor = (
   descriptions: StatementDescriptions,
   resource: string,
   action: string
@@ -138,7 +193,7 @@ const descriptionFor = (
   return description;
 };
 
-const PermissionActionLabel: React.FC<{
+export const PermissionActionLabel: React.FC<{
   action: string;
   description?: string;
   showActionBadges: boolean;
@@ -265,6 +320,7 @@ const clonePermissions = (permissions?: Record<string, string[]>): Record<string
 export const AdminRolesList: React.FC<AdminRolesListProps> = ({
   apiBase,
   baseUrl,
+  isActionVisible,
   showActionBadges = true,
 }) => {
   const {apiBase: resolvedApiBase} = resolveAdminBases({apiBase, baseUrl});
@@ -467,7 +523,10 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
                 {role.description ? <Text size="sm">{role.description}</Text> : null}
                 <PermissionRows
                   descriptions={statementDescriptions}
-                  permissions={role.permissions ?? {}}
+                  permissions={shownPermissions({
+                    isActionVisible,
+                    permissions: role.permissions ?? {},
+                  })}
                   showActionBadges={showActionBadges}
                   testIDPrefix={`admin-roles-item-${role.name}-permission`}
                 />
@@ -482,7 +541,7 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
             {!areStatementsLoading && !statementsError ? (
               <PermissionRows
                 descriptions={statementDescriptions}
-                permissions={statements}
+                permissions={shownPermissions({isActionVisible, permissions: statements})}
                 showActionBadges={showActionBadges}
                 testIDPrefix="admin-permissions"
               />
@@ -532,7 +591,12 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
             />
             <Box gap={2} testID="admin-role-permissions">
               <Heading size="sm">Permissions</Heading>
-              {hasAdminPageStatement ? (
+              {hasAdminPageStatement &&
+              isStatementActionVisible({
+                action: ADMIN_PAGE_ACTION,
+                isActionVisible,
+                resource: ADMIN_PAGE_RESOURCE,
+              }) ? (
                 <Box gap={2} testID="admin-role-page-access">
                   <Heading size="sm">Admin page</Heading>
                   <Text>
@@ -558,7 +622,12 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
                 </Box>
               ) : null}
               {resources.map((resource) => {
-                const actions = statements[resource];
+                const actions = (statements[resource] ?? []).filter((action) =>
+                  isStatementActionVisible({action, isActionVisible, resource})
+                );
+                if (actions.length === 0) {
+                  return null;
+                }
                 const hasStandardAccess = STANDARD_ACCESS_ACTIONS.every((action) =>
                   actions.includes(action)
                 );

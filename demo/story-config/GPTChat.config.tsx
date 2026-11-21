@@ -1,10 +1,12 @@
 import type {DemoConfiguration} from "@config";
 import {
+  GPTChatBlocks,
   GPTChatDemo,
   GPTChatEmpty,
   GPTChatMascot,
   GPTChatNoHistory,
   GPTChatStreaming,
+  GPTChatTranscript,
 } from "@stories/GPTChat.stories";
 import {GPTChat} from "@terreno/ui";
 
@@ -38,6 +40,16 @@ export const GPTChatConfiguration: DemoConfiguration = {
   demo: () => <GPTChatDemo />,
   demoOptions: {size: "lg"},
   stories: {
+    Transcript: {
+      description:
+        "User bubbles, plain assistant text, one row per tool, and image actions beside ratings.",
+      render: () => <GPTChatTranscript />,
+    },
+    Blocks: {
+      description:
+        "Assistant reply rendered as blocks: metrics, card, chart, table, and actions on the page.",
+      render: () => <GPTChatBlocks />,
+    },
     Empty: {
       description: "No messages, with suggested prompts.",
       render: () => <GPTChatEmpty />,

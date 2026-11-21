@@ -1,4 +1,12 @@
-import {useAdminRpc, useAdminRpcMutation, useAdminRpcQuery} from "@terreno/admin-frontend";
+import {
+  descriptionFor,
+  normalizeStatementDescriptions,
+  PermissionActionLabel,
+  type StatementDescriptions,
+  useAdminRpc,
+  useAdminRpcMutation,
+  useAdminRpcQuery,
+} from "@terreno/admin-frontend";
 import {Badge, Box, Button, CheckBox, Heading, Modal, Spinner, Text, TextField} from "@terreno/ui";
 import React, {useCallback, useMemo, useState} from "react";
 
@@ -25,9 +33,13 @@ interface AppRolesListProps {
   showAllPermissions?: boolean;
 }
 
-interface StatementDescriptions {
-  [resource: string]: Record<string, string>;
-}
+type StatementsResponse =
+  | {
+      data?: {statementDescriptions?: StatementDescriptions; statements?: RbacStatements};
+      statementDescriptions?: StatementDescriptions;
+      statements?: RbacStatements;
+    }
+  | undefined;
 
 interface RbacRoleRow {
   description?: string;
@@ -41,14 +53,6 @@ interface RbacRoleRow {
 type RbacStatements = Record<string, readonly string[]>;
 
 type RolesResponse = RbacRoleRow[] | {data?: RbacRoleRow[]} | undefined;
-
-type StatementsResponse =
-  | {
-      data?: {statementDescriptions?: StatementDescriptions; statements?: RbacStatements};
-      statementDescriptions?: StatementDescriptions;
-      statements?: RbacStatements;
-    }
-  | undefined;
 
 interface RoleFormState {
   description: string;
@@ -91,26 +95,6 @@ const normalizeRoles = (data: RolesResponse): RbacRoleRow[] => {
 
 const normalizeStatements = (data: StatementsResponse): RbacStatements => {
   return data?.statements ?? data?.data?.statements ?? {};
-};
-
-const normalizeStatementDescriptions = (data: StatementsResponse): StatementDescriptions => {
-  const raw = data?.statementDescriptions ?? data?.data?.statementDescriptions;
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    return {};
-  }
-  return raw;
-};
-
-const descriptionFor = (
-  descriptions: StatementDescriptions,
-  resource: string,
-  action: string
-): string | undefined => {
-  const description = descriptions[resource]?.[action]?.trim();
-  if (!description) {
-    return undefined;
-  }
-  return description;
 };
 
 /** Keeps only resources with at least one permission check, sorted by resource name. */
@@ -175,27 +159,15 @@ const PermissionCheckRows: React.FC<{
             </Text>
           </Box>
           <Box direction={showActionBadges ? "row" : "column"} gap={1} wrap>
-            {actions.map((action) => {
-              const description = descriptionFor(descriptions, resource, action);
-              const testID = `${testIDPrefix}-${resource}-${action}`;
-              if (!showActionBadges) {
-                return (
-                  <Text color="secondaryDark" key={action} size="sm" testID={testID}>
-                    {description ?? action}
-                  </Text>
-                );
-              }
-              return (
-                <Box alignItems="center" direction="row" gap={1} key={action}>
-                  <Badge status="info" testID={testID} value={action} />
-                  {description ? (
-                    <Text color="secondaryDark" size="sm" testID={`${testID}-description`}>
-                      {description}
-                    </Text>
-                  ) : null}
-                </Box>
-              );
-            })}
+            {actions.map((action) => (
+              <PermissionActionLabel
+                action={action}
+                description={descriptionFor(descriptions, resource, action)}
+                key={action}
+                showActionBadges={showActionBadges}
+                testID={`${testIDPrefix}-${resource}-${action}`}
+              />
+            ))}
           </Box>
         </Box>
       ))}

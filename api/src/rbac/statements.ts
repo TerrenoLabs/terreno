@@ -84,7 +84,9 @@ export type Statements = Record<string, readonly string[]>;
 export type PermissionSet = {[resource: string]: readonly string[]};
 
 /** Optional human labels for permissions, keyed by resource then action. */
-export type StatementDescriptions = Record<string, Record<string, string>>;
+export interface StatementDescriptions {
+  [resource: string]: Record<string, string>;
+}
 
 export const READ_ACTIONS = ["read", "list", "view"] as const;
 

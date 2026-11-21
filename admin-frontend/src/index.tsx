@@ -28,6 +28,7 @@ export {
   type AdminRolesListProps,
   descriptionFor,
   PermissionActionLabel,
+  type PermissionActionLabelProps,
   type RoleActionVisibility,
   type RoleActionVisibilityArgs,
 } from "./AdminRolesList";

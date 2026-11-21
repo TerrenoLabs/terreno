@@ -193,12 +193,19 @@ export const descriptionFor = (
   return description;
 };
 
-export const PermissionActionLabel: React.FC<{
+export interface PermissionActionLabelProps {
   action: string;
   description?: string;
   showActionBadges: boolean;
   testID: string;
-}> = ({action, description, showActionBadges, testID}) => {
+}
+
+export const PermissionActionLabel: React.FC<PermissionActionLabelProps> = ({
+  action,
+  description,
+  showActionBadges,
+  testID,
+}) => {
   if (!showActionBadges) {
     return (
       <Text color="secondaryDark" size="sm" testID={testID}>

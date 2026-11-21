@@ -1,5 +1,7 @@
 import {describe, it} from "bun:test";
 import {spawnSync} from "node:child_process";
+import {existsSync} from "node:fs";
+import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {assert} from "chai";
 
@@ -25,5 +27,15 @@ describe("run-logged-parallel", () => {
     assert.equal(result.status, 0);
     assert.include(result.stdout, "one");
     assert.include(result.stdout, "two");
+  });
+
+  it("rejects a malformed argument before starting any command", () => {
+    const marker = join(tmpdir(), `run-logged-parallel-${process.pid}-${Date.now()}`);
+    const result = spawnSync("sh", [script, `first=touch ${marker}`, "not-a-spec"], {
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 2);
+    assert.include(result.stderr, "expected name=command");
+    assert.isFalse(existsSync(marker));
   });
 });

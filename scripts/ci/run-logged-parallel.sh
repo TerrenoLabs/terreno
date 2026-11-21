@@ -9,15 +9,19 @@ if [ "$#" -lt 1 ]; then
   exit 2
 fi
 
+for spec in "$@"; do
+  name=${spec%%=*}
+  if [ -z "$name" ] || [ "$name" = "$spec" ]; then
+    echo "expected name=command, got: $spec" >&2
+    exit 2
+  fi
+done
+
 dir=$(mktemp -d)
 i=0
 for spec in "$@"; do
   name=${spec%%=*}
   cmd=${spec#*=}
-  if [ -z "$name" ] || [ "$name" = "$spec" ]; then
-    echo "expected name=command, got: $spec" >&2
-    exit 2
-  fi
   echo "$name" > "$dir/$i.name"
   # shellcheck disable=SC2094
   sh -c "$cmd" > "$dir/$i.log" 2>&1 &

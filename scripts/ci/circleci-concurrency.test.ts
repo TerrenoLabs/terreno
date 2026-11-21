@@ -30,19 +30,9 @@ const E2E_SHARDS: Record<string, string[]> = {
     "harness-approvals",
     "harness-intake",
   ],
-  app: [
-    "todos",
-    "todo-windows",
-    "todo-browser",
-    "profile",
-    "realtime",
-    "ai-chat",
-    "ai-feedback",
-    "pdf",
-    "notifications",
-    "socket-flags",
-    "mcp-tokens",
-  ],
+  "app-ai": ["ai-chat", "ai-feedback", "mcp-tokens"],
+  "app-shell": ["profile", "realtime", "pdf", "notifications", "socket-flags"],
+  "app-todos": ["todos", "todo-windows", "todo-browser"],
   auth: [
     "login",
     "login-form",
@@ -118,13 +108,25 @@ describe("CircleCI concurrency", () => {
     assert.doesNotMatch(continueConfig, /\n {6}- changelog-fragments\n/);
   });
 
-  it("groups Playwright into five shards that cover every PR spec", () => {
+  it("groups Playwright into shards that cover every PR spec", () => {
     const e2eJob = jobCommandBlock(continueConfig, "e2e");
     assert.ok(e2eJob);
     assert.match(e2eJob, /parameters:\n {6}shard:/);
     assert.match(
       continueConfig,
-      /shard:\n {16}- auth\n {16}- app\n {16}- admin-core\n {16}- admin-table\n {16}- syncdb\n/
+      new RegExp(
+        [
+          "shard:",
+          " {16}- auth",
+          " {16}- app-todos",
+          " {16}- app-shell",
+          " {16}- app-ai",
+          " {16}- admin-core",
+          " {16}- admin-table",
+          " {16}- syncdb",
+          "",
+        ].join("\\n")
+      )
     );
 
     const listed = new Set<string>();

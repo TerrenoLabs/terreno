@@ -7,32 +7,12 @@ WORKDIR /app
 COPY . .
 
 RUN bun install --frozen-lockfile --ignore-scripts
-RUN bun run --filter "@terreno/api" compile
-RUN bun run --filter "@terreno/api-health" compile
-RUN bun run --filter "@terreno/blocks" compile
-# @terreno/ai type-checks its optional JobsRunner against @terreno/jobs, so jobs compiles first.
-RUN bun run --filter "@terreno/jobs" compile
-RUN bun run --filter "@terreno/ai" compile
-RUN bun run --filter "@terreno/admin-backend" compile
-RUN bun run --filter "@terreno/announcements" compile
-RUN bun run --filter "@terreno/comms" compile
-RUN bun run --filter "@terreno/feature-flags" compile
-RUN bun run --filter "@terreno/ui" compile
-RUN bun run --filter "@terreno/syncdb" compile
-RUN bun run --filter "@terreno/admin-frontend" compile
-RUN bun run --filter "@terreno/admin-spa" compile
-
-# Pre-build the admin SPA web export so the backend can serve it at /console
-# (gated at runtime by ADMIN_SPA_ENABLED). Expo's exporter (Metro) requires a real
-# Node runtime - bun's node shim cannot run it - so borrow node from the official image.
+# Expo's exporter (Metro) requires a real Node runtime — bun's node shim cannot
+# run it — so borrow node from the official image.
 COPY --from=node:22-bookworm-slim /usr/local/bin/node /usr/local/bin/node
-WORKDIR /app/admin-spa
-# Workspace install hoists dependencies to /app/node_modules (see root bunfig.toml).
-RUN node ../node_modules/expo/bin/cli export --platform web --output-dir dist
-WORKDIR /app
-
-WORKDIR /app/example-backend
-RUN bun build --compile src/index.ts --outfile dist/backend
+# Compile each package once and export the admin SPA from source at the same time.
+# The runtime image serves that export at /console when ADMIN_SPA_ENABLED is set.
+RUN sh scripts/ci/docker-compile-and-export.sh
 
 # Runtime stage
 FROM debian:bookworm-slim

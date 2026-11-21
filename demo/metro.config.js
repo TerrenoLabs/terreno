@@ -1,6 +1,7 @@
 const {getDefaultConfig} = require("expo/metro-config");
 const path = require("path");
 const fs = require("fs");
+const {applyCiMetroWorkerCap, resolveMetroFromSource} = require("../scripts/ci/metroFromSource");
 
 // Find the project and workspace directories
 const projectRoot = __dirname;
@@ -63,6 +64,11 @@ const reactPackages = ["react", "react-dom", "react-native", "react-native-web"]
 const jspdfNativeStub = path.resolve(__dirname, "jspdf-native-stub.js");
 
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const fromSource = resolveMetroFromSource({moduleName, monorepoRoot});
+  if (fromSource) {
+    return {type: "sourceFile", filePath: fromSource};
+  }
+
   // Bundle @terreno/ui from source so demo picks up UI changes without a separate compile step.
   if (moduleName === "@terreno/ui") {
     return {
@@ -132,8 +138,6 @@ config.server.rewriteRequestUrl = (url) => {
 
 // CI containers report the host's CPU count, so Metro would start far more transform workers than
 // the executor has cores and cold exports run out of memory. Cap the pool at the executor's size.
-if (process.env.CI) {
-  config.maxWorkers = 4;
-}
+applyCiMetroWorkerCap(config);
 
 module.exports = config;

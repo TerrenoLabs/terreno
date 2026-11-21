@@ -26,7 +26,7 @@ export const appStatements = {
 } as const;
 
 /** Optional labels for permissions this app adds on top of the framework vocabulary. */
-export const appStatementDescriptions = {
+const appStatementDescriptions = {
   adminAuditEvent: {
     list: "List audit events in the admin panel",
     read: "View an audit event in the admin panel",

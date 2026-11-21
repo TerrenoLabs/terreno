@@ -16986,6 +16986,14 @@ exports[`OpenAPI spec generation matches snapshot 1`] = `
           },
           {
             "in": "query",
+            "name": "tag",
+            "required": false,
+            "schema": {
+              "type": "string",
+            },
+          },
+          {
+            "in": "query",
             "name": "thumbs",
             "required": false,
             "schema": {

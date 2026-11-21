@@ -2,6 +2,7 @@ import {type ChildProcess, spawn} from "node:child_process";
 import {mkdirSync, writeFileSync} from "node:fs";
 import {join} from "node:path";
 
+import {startReplicaSetMongo} from "./database";
 import {probeR1, probeR2, probeR8, probeR12} from "./probes/access";
 import {probeR3, probeR4, probeR7, probeR13} from "./probes/app";
 import type {Probe, ProbeContext, ProbeDeps, RowEvidence} from "./probes/probeKit";
@@ -76,6 +77,7 @@ const waitFor = async (url: string, attempts = 60): Promise<void> => {
 
 /** Starts the app's backend (4000) and web export server (8082) as child processes. */
 const startAppProcesses = async (appDir: string, env: NodeJS.ProcessEnv): Promise<RunningApp> => {
+  const mongo = await startReplicaSetMongo({appDir, env});
   const children: ChildProcess[] = [];
   const launch = (cwd: string, args: string[], extra: NodeJS.ProcessEnv): void => {
     children.push(spawn("bun", args, {cwd, env: {...env, ...extra}, stdio: "ignore"}));
@@ -85,15 +87,22 @@ const startAppProcesses = async (appDir: string, env: NodeJS.ProcessEnv): Promis
     EXPO_PUBLIC_API_URL: "http://localhost:4000",
     PORT: "8082",
   });
-  await waitFor("http://localhost:4000/health");
-  await waitFor("http://localhost:8082");
+  const stop = async (): Promise<void> => {
+    for (const child of children) {
+      child.kill();
+    }
+    await mongo.stop();
+  };
+  try {
+    await waitFor("http://localhost:4000/health");
+    await waitFor("http://localhost:8082");
+  } catch (error) {
+    await stop();
+    throw error;
+  }
   return {
     baseUrl: "http://localhost:4000",
-    stop: async () => {
-      for (const child of children) {
-        child.kill();
-      }
-    },
+    stop,
     webUrl: "http://localhost:8082",
   };
 };

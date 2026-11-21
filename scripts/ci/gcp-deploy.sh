@@ -320,6 +320,8 @@ case "$action" in
       # deploys finish, or as soon as a copy fails.
       tasks_config="$(mktemp -d)"
       backend_config="$(mktemp -d)"
+      # Also covers a cancelled or killed step; the EXIT trap does not run in the deploy subshells.
+      trap "rm -rf '$tasks_config' '$backend_config'" EXIT
       copy_status=0
       copy_gcloud_config "$tasks_config" || copy_status=$?
       if [ "$copy_status" -eq 0 ]; then
@@ -327,6 +329,7 @@ case "$action" in
       fi
       if [ "$copy_status" -ne 0 ]; then
         rm -rf "$tasks_config" "$backend_config"
+        trap - EXIT
         return "$copy_status"
       fi
       PREVIEW_IMAGES_READY=1 CLOUDSDK_CONFIG="$tasks_config" deploy_tasks "pr-${PR_NUMBER}" &
@@ -338,6 +341,7 @@ case "$action" in
       backend_status=0
       wait "$backend_pid" || backend_status=$?
       rm -rf "$tasks_config" "$backend_config"
+      trap - EXIT
       if [ "$tasks_status" -ne 0 ]; then
         return "$tasks_status"
       fi

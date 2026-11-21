@@ -40,7 +40,7 @@ const exportTarget = ({exportsField, key}) => {
   if (key.startsWith("./") && pattern) {
     const star = defaultTarget(pattern);
     if (typeof star === "string") {
-      return star.replace("*", key.slice(2));
+      return star.replaceAll("*", key.slice(2));
     }
   }
   return null;

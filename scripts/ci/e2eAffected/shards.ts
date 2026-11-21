@@ -83,6 +83,7 @@ export const E2E_SHARDS: ShardDefinition[] = [
       `${APP}/(tabs)/profile.tsx`,
       `${APP}/(tabs)/documents.tsx`,
       `${APP}/notifications.tsx`,
+      `${APP}/settings/**`,
     ],
     specs: ["profile", "realtime", "pdf", "notifications", "socket-flags"],
   },

@@ -105,3 +105,16 @@ describe("AiTraceDetailView scores", () => {
     expect(queryByTestId("ai-trace-score-comment-toggle-0")).toBeNull();
   });
 });
+
+describe("AiTraceDetailView tags", () => {
+  it("shows the trace tags in the header", () => {
+    const detail = {...buildDetail([]), tags: ["model:glm-5.3", "key:shade-general"]};
+    const {getByText} = renderDetail(detail);
+    expect(getByText("tags model:glm-5.3, key:shade-general")).toBeTruthy();
+  });
+
+  it("omits the tags line when there are none", () => {
+    const {queryByTestId} = renderDetail({...buildDetail([]), tags: []});
+    expect(queryByTestId("ai-trace-tags")).toBeNull();
+  });
+});

@@ -26,6 +26,7 @@ export interface TraceListItem {
   spanCount: number;
   startedAt: string;
   status: "error" | "ok";
+  tags?: string[];
   usage?: TraceUsage;
   userId?: string;
 }
@@ -95,6 +96,7 @@ export interface TraceListFilters {
   /** A passive signal the user sent, e.g. `dismissed`. */
   signal?: TraceFeedbackSignal;
   status: "" | "error" | "ok";
+  tag: string;
   /** End-user thumbs direction. */
   thumbs?: "down" | "up";
   to: string;
@@ -138,6 +140,7 @@ export const TRACE_FILTER_FIELDS = {
   signal: "signal",
   startedAt: "startedAt",
   status: "status",
+  tag: "tag",
   thumbs: "thumbs",
   userId: "userId",
 } as const;
@@ -147,6 +150,7 @@ export const emptyTraceFilters = (): TraceListFilters => ({
   prompts: [],
   sessionId: "",
   status: "",
+  tag: "",
   to: "",
   userId: "",
 });
@@ -212,6 +216,9 @@ export const traceFiltersToFilterValues = (filters: TraceListFilters): Record<st
   if (filters.sessionId) {
     values[fields.sessionId] = filters.sessionId;
   }
+  if (filters.tag) {
+    values[fields.tag] = filters.tag;
+  }
   return values;
 };
 
@@ -232,6 +239,7 @@ export const filterValuesToTraceFilters = (
     prompts: stringList(values[fields.prompt]),
     sessionId: trimmedString(values[fields.sessionId]),
     status: statuses.length === 1 ? (statuses[0] ?? "") : "",
+    tag: trimmedString(values[fields.tag]),
     to: trimmedString(values[`${fields.startedAt}_lte`]),
     userId: trimmedString(values[fields.userId]),
   };

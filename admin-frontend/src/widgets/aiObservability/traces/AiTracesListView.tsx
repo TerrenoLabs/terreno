@@ -61,6 +61,7 @@ const ADDITIONAL_FILTERS: DataTableColumnFilter[] = [
   {field: TRACE_FILTER_FIELDS.sensitive, kind: "boolean", label: "Sensitive"},
   {field: TRACE_FILTER_FIELDS.userId, kind: "text", label: "User"},
   {field: TRACE_FILTER_FIELDS.sessionId, kind: "text", label: "Session"},
+  {field: TRACE_FILTER_FIELDS.tag, kind: "text", label: "Tag"},
   {
     field: TRACE_FILTER_FIELDS.thumbs,
     kind: "choice",
@@ -179,6 +180,7 @@ const buildColumns = (promptOptions: string[]): DataTableColumn[] => {
       title: "Scores",
       width: 140,
     },
+    {columnType: "traceText", title: "Tags", width: 260},
   ];
 };
 
@@ -457,6 +459,7 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
       {value: formatTraceLatency(trace)},
       {value: formatTraceCost(trace.usage)},
       {value: trace.scoreCount.toLocaleString("en-US")},
+      {value: (trace.tags ?? []).join(", ")},
     ]);
   }, [traces]);
 

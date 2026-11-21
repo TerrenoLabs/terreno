@@ -114,6 +114,7 @@ describe("traceTypes helpers", () => {
       prompts: [],
       sessionId: "",
       status: "",
+      tag: "",
       to: "",
       userId: "",
     });
@@ -136,6 +137,7 @@ describe("traceTypes helpers", () => {
       sensitive: true,
       sessionId: "sess-1",
       status: "error" as const,
+      tag: "model:glm-5.3",
       to: "2026-09-02T23:59:59.999Z",
       userId: "user-1",
     };
@@ -148,6 +150,7 @@ describe("traceTypes helpers", () => {
       startedAt_gte: "2026-09-01T00:00:00.000Z",
       startedAt_lte: "2026-09-02T23:59:59.999Z",
       status: ["error"],
+      tag: "model:glm-5.3",
       userId: "user-1",
     });
     assert.deepEqual(filterValuesToTraceFilters(values, filters), filters);
@@ -168,6 +171,7 @@ describe("traceTypes helpers", () => {
       prompts: ["summarize"],
       sessionId: "",
       status: "",
+      tag: "",
       to: "",
       userId: "",
     });

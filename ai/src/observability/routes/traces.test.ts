@@ -123,6 +123,21 @@ describe("observability trace routes", () => {
     ).toEqual([[inScope.id, "ws-1"]]);
   });
 
+  it("filters the trace list by tag", async () => {
+    const startedAt = DateTime.utc().toISO() ?? "";
+    const base = {name: "tagged", prompts: [], sensitive: false, spans: [], startedAt};
+    const tagged = await store.exportTrace({...base, id: "a", status: "ok"});
+    await store.exportTrace({...base, id: "b", status: "ok"});
+    await registerObsTrace().updateOne({_id: tagged.id}, {tags: ["model:glm-5.3", "key:shade"]});
+
+    const agent = await authAsUser(app, "admin");
+    const listed = await agent.get("/ai/observability/traces?tag=key:shade");
+    expect(listed.status).toBe(200);
+    expect(listed.body.data.map((row: {id: string; tags: string[]}) => [row.id, row.tags])).toEqual(
+      [[tagged.id, ["model:glm-5.3", "key:shade"]]]
+    );
+  });
+
   it("sorts the trace list across pages and rejects unknown sort keys", async () => {
     const base = DateTime.utc().minus({hours: 1});
     const exportAt = async (

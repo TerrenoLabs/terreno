@@ -44,6 +44,8 @@ export interface TraceListQuery {
   /** One of `TRACE_LIST_SORT_KEYS`, optionally prefixed with `-` for descending. */
   sort?: string;
   status?: "error" | "ok";
+  /** Traces carrying this tag, e.g. `model:glm-5.3`. */
+  tag?: string;
   /** Traces with a live end-user `thumbs_up` score in that direction. */
   thumbs?: "down" | "up";
   /** Traces with a live `user-signal` score of this name. */
@@ -495,6 +497,10 @@ export class LocalTraceStore {
     const scope = optionalString(query.scope, "scope");
     if (scope) {
       filter.scope = scope;
+    }
+    const tag = optionalString(query.tag, "tag");
+    if (tag) {
+      filter.tags = tag;
     }
     const sort = parseTraceListSort(query.sort);
     const prompts = promptNames(query.prompt);

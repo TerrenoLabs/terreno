@@ -39,6 +39,7 @@ const trace = (overrides: Partial<TraceListItem>): TraceListItem => ({
   spanCount: 4,
   startedAt: "2026-09-01T12:00:00.000Z",
   status: "ok",
+  tags: ["model:glm-5.3", "key:shade-general"],
   usage: {costUsd: 12.3456, inputTokens: 12_000, outputTokens: 345},
   ...overrides,
 });
@@ -211,10 +212,13 @@ describe("AiTracesListView table", () => {
     assert.equal(columnByTitle(columns, "Trace").filter?.field, "prompt");
     assert.equal(columnByTitle(columns, "Started").filter?.kind, "dateRange");
     assert.equal(columnByTitle(columns, "Scores").filter?.field, "hasScore");
+    assert.equal(columnByTitle(columns, "Tags").columnType, "traceText");
+    const tagCells = (table.props.data as Array<Array<{value: unknown}>>).map((row) => row.at(-1));
+    assert.deepEqual(tagCells, [{value: "model:glm-5.3, key:shade-general"}]);
     assert.deepEqual(
       (table.props.additionalFilters as Array<{field: string}>).map((filter) => filter.field),
       // T10 (ai-user-feedback) adds the end-user feedback filters.
-      ["sensitive", "userId", "sessionId", "thumbs", "signal", "hasComment"]
+      ["sensitive", "userId", "sessionId", "tag", "thumbs", "signal", "hasComment"]
     );
 
     // 32px cell padding plus about 9px per character keeps these values on one line.
@@ -332,6 +336,7 @@ describe("AiTracesScreenWidget table query", () => {
       startedAt_gte: "2026-09-01T00:00:00.000Z",
       startedAt_lte: "2026-09-02T23:59:59.999Z",
       status: ["error"],
+      tag: "model:glm-5.3",
       userId: "user-1",
     });
     const filtered = lastListQuery(server);
@@ -344,6 +349,7 @@ describe("AiTracesScreenWidget table query", () => {
       sensitive: "true",
       sessionId: "sess-1",
       status: "error",
+      tag: "model:glm-5.3",
       to: "2026-09-02T23:59:59.999Z",
       userId: "user-1",
     });
@@ -355,6 +361,7 @@ describe("AiTracesScreenWidget table query", () => {
       startedAt_gte: "2026-09-01T00:00:00.000Z",
       startedAt_lte: "2026-09-02T23:59:59.999Z",
       status: ["error"],
+      tag: "model:glm-5.3",
       userId: "user-1",
     });
 

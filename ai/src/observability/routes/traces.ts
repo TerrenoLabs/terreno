@@ -126,6 +126,7 @@ export const addObservabilityTraceRoutes = (
         .withQueryParameter("prompt", {type: "string"}, {required: false})
         .withQueryParameter("promptVersion", {type: "number"}, {required: false})
         .withQueryParameter("scope", {type: "string"}, {required: false})
+        .withQueryParameter("tag", {type: "string"}, {required: false})
         .withQueryParameter("thumbs", {enum: ["up", "down"], type: "string"}, {required: false})
         .withQueryParameter(
           "signal",
@@ -165,6 +166,7 @@ export const addObservabilityTraceRoutes = (
         sort: parseSort(req.query.sort),
         status:
           req.query.status === "ok" || req.query.status === "error" ? req.query.status : undefined,
+        tag: typeof req.query.tag === "string" ? req.query.tag : undefined,
         thumbs: parseThumbs(req.query.thumbs),
         to: typeof req.query.to === "string" ? req.query.to : undefined,
         userId: typeof req.query.userId === "string" ? req.query.userId : undefined,

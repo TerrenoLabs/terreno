@@ -121,6 +121,11 @@ export const AiTraceDetailView: React.FC<AiTraceDetailViewProps> = ({detail, onB
               detail.sessionId ? ` · session ${detail.sessionId}` : ""
             }`}
           </Text>
+          {detail.tags && detail.tags.length > 0 ? (
+            <Text color="secondaryDark" size="sm" testID="ai-trace-tags">
+              {`tags ${detail.tags.join(", ")}`}
+            </Text>
+          ) : undefined}
           {detail.errorSummary ? <Text color="error">{detail.errorSummary}</Text> : undefined}
         </Box>
         <Button onClick={onBack} text="Back to traces" variant="secondary" />

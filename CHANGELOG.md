@@ -20,6 +20,12 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [58.1.1] - 2026-11-21
+
+### Added
+
+- AI observability traces now show their tags in the admin trace list and detail views, and the traces list can be filtered by tag with a new `tag` query parameter.
+
 ## [58.1.0] - 2026-11-21
 
 Upgrade note: [`mcp-server/src/docs/upgrades/58.1.0.md`](mcp-server/src/docs/upgrades/58.1.0.md).

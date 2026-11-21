@@ -220,6 +220,55 @@ executors:
       TERRENO_TEST_SHARDS: "1"
 
 commands:
+  maestro_web_setup:
+    description: Install Maestro, wrap Chrome for CI, and start Xvfb on :99 when the image has none
+    steps:
+      - run:
+          name: Install Maestro
+          command: |
+            set -euo pipefail
+            curl -fsSL "https://get.maestro.mobile.dev" | bash
+            echo 'export PATH="$HOME/.maestro/bin:$PATH"' >> "$BASH_ENV"
+      - run:
+          name: Wrap Chrome for CI
+          command: |
+            set -euo pipefail
+            CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
+            if [ -z "$CHROME_BIN" ]; then
+              echo "google-chrome is not on PATH after install"
+              exit 1
+            fi
+            if [ ! -e "${CHROME_BIN}.real" ]; then
+              sudo mv "$CHROME_BIN" "${CHROME_BIN}.real"
+              printf '#!/bin/bash\nexec "%s.real" "$@" --no-sandbox --disable-dev-shm-usage\n' "$CHROME_BIN" | sudo tee "$CHROME_BIN" > /dev/null
+              sudo chmod 0755 "$CHROME_BIN"
+            fi
+            "$CHROME_BIN" --version
+      - run:
+          name: Start Xvfb fallback
+          background: true
+          command: |
+            set -euo pipefail
+            echo 'export DISPLAY=:99' >> "$BASH_ENV"
+            if xdpyinfo -display :99 > /dev/null 2>&1; then
+              echo "Xvfb already on :99"
+              exec sleep infinity
+            fi
+            exec Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
+      - run:
+          name: Wait for Xvfb
+          command: |
+            set -euo pipefail
+            echo 'export DISPLAY=:99' >> "$BASH_ENV"
+            for i in $(seq 1 30); do
+              if xdpyinfo -display :99 > /dev/null 2>&1; then
+                echo "Xvfb ready after ${i}s"
+                exit 0
+              fi
+              sleep 1
+            done
+            echo "Xvfb did not start"
+            exit 1
   install_terraform:
     description: Install the Terraform version used by production
     steps:
@@ -1823,7 +1872,7 @@ jobs:
             # Java, compile, and the web exports do not share files. The exports
             # read src (TERRENO_METRO_FROM_SOURCE); compile writes dist for the backend.
             sh scripts/ci/run-logged-parallel.sh \
-              "java=sudo apt-get update && sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless xvfb xauth x11-utils && if ! command -v google-chrome > /dev/null 2>&1; then curl -fsSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb && sudo apt-get install -y /tmp/google-chrome.deb; fi && google-chrome --version" \
+              "java=sh scripts/ci/install-maestro-java-chrome.sh" \
               "compile=bun run compile" \
               "frontend=cd example-frontend && bun expo export --platform web"
       - run:
@@ -1886,27 +1935,7 @@ jobs:
             done
             echo "static web failed to become ready"
             exit 1
-      - run:
-          name: Install Maestro
-          command: |
-            set -euo pipefail
-            curl -fsSL "https://get.maestro.mobile.dev" | bash
-            echo 'export PATH="$HOME/.maestro/bin:$PATH"' >> "$BASH_ENV"
-      - run:
-          name: Wrap Chrome for CI
-          command: |
-            set -euo pipefail
-            CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
-            if [ -z "$CHROME_BIN" ]; then
-              echo "google-chrome is not on PATH after install"
-              exit 1
-            fi
-            if [ ! -e "${CHROME_BIN}.real" ]; then
-              sudo mv "$CHROME_BIN" "${CHROME_BIN}.real"
-              printf '#!/bin/bash\nexec "%s.real" "$@" --no-sandbox --disable-dev-shm-usage\n' "$CHROME_BIN" | sudo tee "$CHROME_BIN" > /dev/null
-              sudo chmod 0755 "$CHROME_BIN"
-            fi
-            "$CHROME_BIN" --version
+      - maestro_web_setup
       - run:
           name: Verify login API
           command: |
@@ -1922,31 +1951,6 @@ jobs:
               echo "Login API failed"
               exit 1
             fi
-      - run:
-          name: Start Xvfb fallback
-          background: true
-          command: |
-            set -euo pipefail
-            echo 'export DISPLAY=:99' >> "$BASH_ENV"
-            if xdpyinfo -display :99 > /dev/null 2>&1; then
-              echo "Xvfb already on :99"
-              exec sleep infinity
-            fi
-            exec Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
-      - run:
-          name: Wait for Xvfb
-          command: |
-            set -euo pipefail
-            echo 'export DISPLAY=:99' >> "$BASH_ENV"
-            for i in $(seq 1 30); do
-              if xdpyinfo -display :99 > /dev/null 2>&1; then
-                echo "Xvfb ready after ${i}s"
-                exit 0
-              fi
-              sleep 1
-            done
-            echo "Xvfb did not start"
-            exit 1
       - run:
           name: Run Maestro E2E tests
           no_output_timeout: 20m
@@ -1976,15 +1980,7 @@ jobs:
       - run:
           name: Install Java and Chrome
           no_output_timeout: 15m
-          command: |
-            set -euo pipefail
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends openjdk-17-jre-headless xvfb xauth x11-utils
-            if ! command -v google-chrome > /dev/null 2>&1; then
-              curl -fsSL -o /tmp/google-chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
-              sudo apt-get install -y /tmp/google-chrome.deb
-            fi
-            google-chrome --version
+          command: sh scripts/ci/install-maestro-java-chrome.sh
       - run:
           name: Export demo web
           no_output_timeout: 20m
@@ -2008,52 +2004,7 @@ jobs:
             done
             echo "Demo failed to start"
             exit 1
-      - run:
-          name: Install Maestro
-          command: |
-            set -euo pipefail
-            curl -fsSL "https://get.maestro.mobile.dev" | bash
-            echo 'export PATH="$HOME/.maestro/bin:$PATH"' >> "$BASH_ENV"
-      - run:
-          name: Wrap Chrome for CI
-          command: |
-            set -euo pipefail
-            CHROME_BIN="$(command -v google-chrome || command -v google-chrome-stable || true)"
-            if [ -z "$CHROME_BIN" ]; then
-              echo "google-chrome is not on PATH after install"
-              exit 1
-            fi
-            if [ ! -e "${CHROME_BIN}.real" ]; then
-              sudo mv "$CHROME_BIN" "${CHROME_BIN}.real"
-              printf '#!/bin/bash\nexec "%s.real" "$@" --no-sandbox --disable-dev-shm-usage\n' "$CHROME_BIN" | sudo tee "$CHROME_BIN" > /dev/null
-              sudo chmod 0755 "$CHROME_BIN"
-            fi
-            "$CHROME_BIN" --version
-      - run:
-          name: Start Xvfb fallback
-          background: true
-          command: |
-            set -euo pipefail
-            echo 'export DISPLAY=:99' >> "$BASH_ENV"
-            if xdpyinfo -display :99 > /dev/null 2>&1; then
-              echo "Xvfb already on :99"
-              exec sleep infinity
-            fi
-            exec Xvfb :99 -screen 0 1920x1080x24 -nolisten tcp
-      - run:
-          name: Wait for Xvfb
-          command: |
-            set -euo pipefail
-            echo 'export DISPLAY=:99' >> "$BASH_ENV"
-            for i in $(seq 1 30); do
-              if xdpyinfo -display :99 > /dev/null 2>&1; then
-                echo "Xvfb ready after ${i}s"
-                exit 0
-              fi
-              sleep 1
-            done
-            echo "Xvfb did not start"
-            exit 1
+      - maestro_web_setup
       - run:
           name: Run Maestro demo tests
           no_output_timeout: 20m
@@ -2061,7 +2012,7 @@ jobs:
             set -euo pipefail
             # shellcheck disable=SC1090
             source "$BASH_ENV"
-            maestro test .maestro/flows/demo/demo-home.yaml .maestro/flows/demo/demo-button.yaml
+            maestro test .maestro/flows/demo/
       - store_artifacts:
           path: /home/circleci/.maestro/tests
           destination: maestro-demo-screenshots

@@ -542,6 +542,8 @@ The application should include:
 - Cursor rules for AI assistance
 - MCP integration for development assistance
 
+**The starter is not the finished app.** If the request that led here describes what the app is for (for example a todo app), build that core feature before you finish: a Mongoose model with \`syncPlugin\`, a \`modelRouter\` route registered in the server, the collection added to the frontend \`SYNC_COLLECTIONS\`, and a screen on the Home tab that lists, creates, completes and deletes its records. Do not stop at the empty starter, and do not end by asking whether to build it.
+
 **IMPORTANT: After the CLI writes the app, also run the \`terreno_bootstrap_ai_rules\` tool** with the same appName and appDisplayName to set up AI coding assistant rules for Cursor, Claude Code, GitHub Copilot, and AGENTS.md readers. This will create:
 - \`.rulesync/rules/00-root.md\`, the root rule source for every editor
 - AGENTS.md and CLAUDE.md files for \`backend/\` and \`frontend/\`

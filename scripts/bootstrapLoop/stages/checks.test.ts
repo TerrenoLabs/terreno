@@ -3,7 +3,7 @@ import {mkdirSync, mkdtempSync, rmSync, writeFileSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {dirname, join} from "node:path";
 
-import {stageChecks} from "./checks";
+import {stageChecks, todoFeatureChecks} from "./checks";
 
 let appDir = "";
 
@@ -85,5 +85,14 @@ describe("stageChecks", () => {
     expect(themeCheck()).toBe("FAIL");
     write("frontend/constants/theme.ts", "export const theme = 2;\n");
     expect(themeCheck()).toBe("PASS");
+  });
+
+  it("fails the scaffold todo checks on the empty starter and passes once a Todo exists", () => {
+    write("backend/src/models/user.ts", 'mongoose.model("User", schema);');
+    write("frontend/app/(tabs)/index.tsx", "export const Home = 1;");
+    expect(todoFeatureChecks(appDir).map((check) => check.status)).toEqual(["FAIL", "FAIL"]);
+    write("backend/src/models/todo.ts", 'mongoose.model("Todo", schema);');
+    write("frontend/app/(tabs)/index.tsx", "export const TodoList = 1;");
+    expect(todoFeatureChecks(appDir).map((check) => check.status)).toEqual(["PASS", "PASS"]);
   });
 });

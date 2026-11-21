@@ -402,6 +402,17 @@ describe("bootstrap", () => {
       );
     });
 
+    test("should tell the assistant to build the requested feature, not stop at the starter", () => {
+      const text = handleBootstrapPromptRequest("terreno_bootstrap", {
+        appDisplayName: "Prompt App",
+        appName: "prompt-app",
+      }).messages[0].content.text;
+
+      expect(text).toContain("The starter is not the finished app");
+      expect(text).toContain("SYNC_COLLECTIONS");
+      expect(text).toContain("do not end by asking");
+    });
+
     test("should return unknown message for unknown prompt", () => {
       const result = handleBootstrapPromptRequest("unknown_prompt", {});
       expect(result.messages[0].content.text).toContain("Unknown bootstrap prompt");

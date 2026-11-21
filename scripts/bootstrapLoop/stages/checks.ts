@@ -155,6 +155,12 @@ const typechecks = (appDir: string): StageCheck[] => [
   typecheck(appDir, "frontend"),
 ];
 
+/** The scaffold stage must already deliver the app the user asked for, not the empty starter. */
+export const todoFeatureChecks = (appDir: string): StageCheck[] => [
+  grepCheck("todo-model", appDir, ["backend/src/models"], /["']Todo["']/),
+  grepCheck("todo-screen", appDir, ["frontend/app"], /todo/i),
+];
+
 const BACKEND = ["backend/src"];
 const APP = ["backend/src", "frontend"];
 

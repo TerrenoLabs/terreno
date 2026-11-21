@@ -25,6 +25,10 @@ if (process.env.BOOTSTRAP_LOOP_FAKE_ENV_FILE) {
 }
 
 const writeFixture = (withTypeError: boolean): void => {
+  mkdirSync("backend/src/models", {recursive: true});
+  writeFileSync("backend/src/models/todo.ts", 'export const todoModelName = "Todo";\n');
+  mkdirSync("frontend/app", {recursive: true});
+  writeFileSync("frontend/app/index.tsx", "export const todoScreen = 1;\n");
   for (const dir of ["backend", "frontend"]) {
     mkdirSync(join(dir, "src"), {recursive: true});
     writeFileSync(

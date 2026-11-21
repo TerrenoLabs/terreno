@@ -6,6 +6,7 @@ import {builderEnv, runBuilder, tailLines, UNATTENDED_NOTE} from "../agent";
 import {CHECKOUT_ROOT, NAIVE_PROMPT, renderBootstrapPrompt} from "../bootstrapPrompt";
 import {collectEnvFileValues, redact} from "../redact";
 import type {StageCheck, StageContext, StageDefinition, StageOutcome} from "../types";
+import {todoFeatureChecks} from "./checks";
 
 const TAIL_LINES = 200;
 const DEP_SECTIONS = ["dependencies", "devDependencies", "peerDependencies"] as const;
@@ -157,7 +158,12 @@ const run = async (context: StageContext): Promise<StageOutcome> => {
   if (builder.exitCode !== 0) {
     return {checks, log};
   }
-  checks.push(pinCheck(context), installCheck(context), typecheckCheck(context));
+  checks.push(
+    pinCheck(context),
+    installCheck(context),
+    typecheckCheck(context),
+    ...todoFeatureChecks(context.appDir)
+  );
   if (checks.every((check) => check.status === "PASS")) {
     checks.push(baselineCommit(context));
   }

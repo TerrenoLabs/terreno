@@ -1312,11 +1312,11 @@ jobs:
 
   example-backend-docker:
     executor: node22
+    resource_class: large
     steps:
       - skip_if_not_pull_request
       - checkout
-      - setup_remote_docker:
-          resource_class: large
+      - setup_remote_docker
       - run:
           name: Build example-backend Docker image
           command: |

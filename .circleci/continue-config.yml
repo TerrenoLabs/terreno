@@ -1402,7 +1402,10 @@ jobs:
             - smoke-dists.tgz
 
   # One Expo web export per container. TERRENO_METRO_FROM_SOURCE bundles
-  # @terreno/* from src, so this job does not wait on smoke-compile.
+  # @terreno/* from src, so this job does not wait on smoke-compile. Demo and
+  # example-frontend still need narrow prerequisites that only the full compile
+  # used to provide: generated UI types (typedoc needs blocks dist) and the
+  # @terreno/test dist that the example-frontend smoke driver imports.
   smoke-export:
     executor: node22
     resource_class: large
@@ -1430,10 +1433,13 @@ jobs:
                 bun run build:web
                 ;;
               demo)
+                bun run --filter '@terreno/blocks' compile
+                bun run --cwd demo generate-types
                 cd demo
                 bun run export
                 ;;
               example-frontend)
+                bun run --filter '@terreno/test' compile
                 cd example-frontend
                 bun run export:smoke
                 ;;

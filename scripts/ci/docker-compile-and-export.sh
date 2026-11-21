@@ -8,6 +8,7 @@ cd /app
 
 filters=""
 for pkg in \
+  @terreno/test \
   @terreno/api \
   @terreno/api-health \
   @terreno/blocks \

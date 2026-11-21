@@ -36,14 +36,41 @@ const exportTarget = ({exportsField, key}) => {
   if (exportsField[key]) {
     return defaultTarget(exportsField[key]);
   }
-  const pattern = exportsField["./*"];
-  if (key.startsWith("./") && pattern) {
-    const star = defaultTarget(pattern);
-    if (typeof star === "string") {
-      return star.replaceAll("*", key.slice(2));
+  const match = longestPatternMatch({exportsField, key});
+  if (!match) {
+    return null;
+  }
+  const target = defaultTarget(exportsField[match.pattern]);
+  if (typeof target !== "string") {
+    return null;
+  }
+  return target.replaceAll("*", match.substitution);
+};
+
+/** Subpath patterns like `./dist/*` beat `./*`, so the most specific prefix wins. */
+const longestPatternMatch = ({exportsField, key}) => {
+  let best = null;
+  for (const pattern of Object.keys(exportsField)) {
+    const star = pattern.indexOf("*");
+    if (star < 0) {
+      continue;
+    }
+    const prefix = pattern.slice(0, star);
+    const suffix = pattern.slice(star + 1);
+    const isMatch =
+      key.startsWith(prefix) && key.endsWith(suffix) && key.length >= prefix.length + suffix.length;
+    if (!isMatch) {
+      continue;
+    }
+    if (best === null || prefix.length > best.prefixLength) {
+      best = {
+        pattern,
+        prefixLength: prefix.length,
+        substitution: key.slice(prefix.length, key.length - suffix.length),
+      };
     }
   }
-  return null;
+  return best;
 };
 
 const sourceFileForDistTarget = ({packageRoot, target}) => {

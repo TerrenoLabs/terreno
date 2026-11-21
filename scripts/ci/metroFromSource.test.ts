@@ -46,4 +46,21 @@ describe("resolveMetroFromSource", () => {
       }
     }
   });
+
+  it("maps deep dist subpaths through the most specific export pattern", () => {
+    const previous = process.env.TERRENO_METRO_FROM_SOURCE;
+    process.env.TERRENO_METRO_FROM_SOURCE = "1";
+    try {
+      assert.equal(
+        resolveMetroFromSource({moduleName: "@terreno/ui/dist/DateUtilities", monorepoRoot}),
+        join(monorepoRoot, "ui/src/DateUtilities.tsx")
+      );
+    } finally {
+      if (previous === undefined) {
+        delete process.env.TERRENO_METRO_FROM_SOURCE;
+      } else {
+        process.env.TERRENO_METRO_FROM_SOURCE = previous;
+      }
+    }
+  });
 });

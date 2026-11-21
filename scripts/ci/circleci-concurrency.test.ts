@@ -88,6 +88,14 @@ describe("CircleCI concurrency", () => {
     assert.deepEqual(duplicates, []);
   });
 
+  it("archives the admin-spa serve plugin with smoke dists", () => {
+    const compile = jobCommandBlock(continueConfig, "smoke-compile");
+    const smoke = jobCommandBlock(continueConfig, "smoke");
+    assert.match(compile, /-not -path '\.\/admin-spa\/dist'/);
+    assert.doesNotMatch(compile, /-not -path '\.\/admin-spa\/\*'/);
+    assert.match(smoke, /test -f admin-spa\/src\/dist\/index\.js/);
+  });
+
   it("installs bun packages without a CircleCI dependency cache", () => {
     const start = continueConfig.indexOf("  install_bun_and_deps:\n");
     assert.ok(start >= 0);

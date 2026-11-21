@@ -1386,11 +1386,14 @@ jobs:
           name: Archive package dists
           command: |
             set -euo pipefail
+            # Keep admin-spa/src/dist (compiled AdminSpaServeApp). Drop only the
+            # web export at admin-spa/dist; smoke-export-admin-spa writes that.
             find . -type d -name dist \
               -not -path './node_modules/*' \
               -not -path './website/*' \
               -not -path './demo/*' \
-              -not -path './admin-spa/*' \
+              -not -path './admin-spa/dist' \
+              -not -path './admin-spa/dist/*' \
               -not -path './example-frontend/*' \
               -print0 | tar -czf smoke-dists.tgz --null -T -
       - persist_to_workspace:
@@ -1462,6 +1465,7 @@ jobs:
           command: |
             set -euo pipefail
             tar -xzf smoke-dists.tgz
+            test -f admin-spa/src/dist/index.js
             test -d admin-spa/dist
             test -d demo/dist
             test -d example-frontend/dist-smoke

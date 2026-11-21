@@ -124,6 +124,9 @@ Playwright runs seven shards after `e2e-prepare` (`auth`, `app-todos`, `app-shel
 bundles `@terreno/*` from source (`TERRENO_METRO_FROM_SOURCE`), and compile writes `dist`
 for the backend. Smoke does the same split across jobs: `smoke-compile` and one
 `smoke-export-*` job per web app run together, then `smoke` runs the package scripts.
+`smoke-compile` archives package `dist` trees, including `admin-spa/src/dist` (the
+`AdminSpaServeApp` plugin). It leaves `admin-spa/dist` out so the web export from
+`smoke-export-admin-spa` is the bundle the admin-spa smoke serves.
 A GCP preview builds the example-backend image once and deploys the backend and tasks
 services together. Each shard first checks the [affected gate](#e2e-affected-gate)
 and halts when no changed file can reach it. The cross-site bearer specs run beside them in `e2e-cross-site`,

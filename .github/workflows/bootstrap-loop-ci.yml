@@ -15,7 +15,7 @@ jobs:
   test:
     name: Test the bootstrap loop harness
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6.0.3
 
@@ -26,6 +26,10 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
+
+      # The local-prompt tests read mcp-server/dist and the checkout CLI build.
+      - name: Compile packages
+        run: bun run compile
 
       - name: Test
         run: bun run test:bootstrap-loop

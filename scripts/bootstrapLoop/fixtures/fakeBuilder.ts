@@ -119,6 +119,13 @@ if (mode === "local") {
     ],
     {stderr: "inherit", stdout: "inherit"}
   );
+  if (run.exitCode === 0) {
+    // The real template ships no todo feature; stand in for the builder adding one.
+    mkdirSync("backend/src/models", {recursive: true});
+    writeFileSync("backend/src/models/todoModel.ts", 'export const todoModelName = "Todo";\n');
+    mkdirSync("frontend/app", {recursive: true});
+    writeFileSync("frontend/app/todos.tsx", "export const todoScreen = 1;\n");
+  }
   process.exit(run.exitCode);
 }
 console.error(`unknown mode ${mode}`);

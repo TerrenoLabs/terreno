@@ -981,6 +981,9 @@ jobs:
       - checkout
       - install_bun_and_deps
       - run:
+          name: Compile packages (the local-prompt tests read their dist)
+          command: bun run compile
+      - run:
           name: Test the bootstrap loop harness (fakes only, no network)
           environment:
             CI: "true"

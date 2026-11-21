@@ -22,7 +22,8 @@ const table = (diff: RunDiff): string[] => {
   if (rows.length === 0) {
     return ["No regressions.", ""];
   }
-  const escapeCell = (cell: string): string => cell.replace(/\|/g, "\\|").replace(/\n/g, " ");
+  const escapeCell = (cell: string): string =>
+    cell.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, " ");
   return [
     `| Kind | Subject | Detail | ${FIXED_COLUMN} |`,
     "| --- | --- | --- | --- |",

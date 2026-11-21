@@ -51,6 +51,7 @@ const CI_ONLY_HINTS: Record<string, string> = {
     "docker build -f example-backend/Dockerfile ., run it with ADMIN_SPA_ENABLED=true, then scripts/admin-spa-image-smoke.sh <base-url>",
   "run-admin-spa-integration":
     "cd admin-spa && bun run test:integration (needs Mongo + example-backend)",
+  "run-bootstrap-loop": "bun run compile, then bun run test:bootstrap-loop",
   "run-circleci-config": "config-only change; CircleCI validates the continuation config",
   "run-docs-site": "cd website && bun run build (Docusaurus; catches broken doc links)",
   "run-e2e":

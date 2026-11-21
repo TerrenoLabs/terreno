@@ -314,12 +314,21 @@ case "$action" in
       cp -a "$source_config"/. "$dest/"
     }
     deploy_backend_preview() {
-      local tasks_config backend_config tasks_pid backend_pid tasks_status backend_status
+      local tasks_config backend_config tasks_pid backend_pid tasks_status backend_status copy_status
       build_preview_images
+      # The copies hold the deployer's gcloud credentials, so they are removed as soon as the
+      # deploys finish, or as soon as a copy fails.
       tasks_config="$(mktemp -d)"
       backend_config="$(mktemp -d)"
-      copy_gcloud_config "$tasks_config"
-      copy_gcloud_config "$backend_config"
+      copy_status=0
+      copy_gcloud_config "$tasks_config" || copy_status=$?
+      if [ "$copy_status" -eq 0 ]; then
+        copy_gcloud_config "$backend_config" || copy_status=$?
+      fi
+      if [ "$copy_status" -ne 0 ]; then
+        rm -rf "$tasks_config" "$backend_config"
+        return "$copy_status"
+      fi
       PREVIEW_IMAGES_READY=1 CLOUDSDK_CONFIG="$tasks_config" deploy_tasks "pr-${PR_NUMBER}" &
       tasks_pid=$!
       PREVIEW_IMAGES_READY=1 CLOUDSDK_CONFIG="$backend_config" deploy_backend "pr-${PR_NUMBER}" &
@@ -328,6 +337,7 @@ case "$action" in
       wait "$tasks_pid" || tasks_status=$?
       backend_status=0
       wait "$backend_pid" || backend_status=$?
+      rm -rf "$tasks_config" "$backend_config"
       if [ "$tasks_status" -ne 0 ]; then
         return "$tasks_status"
       fi

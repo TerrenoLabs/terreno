@@ -6,6 +6,10 @@
 set -eu
 cd /app
 
+# `bun run --filter` starts each package after the workspace packages it depends on, so
+# order here does not matter (for example @terreno/jobs finishes before @terreno/ai). Every
+# @terreno/* package that a listed package imports must be in the list, because
+# TERRENO_SKIP_WORKSPACE_DEPS=1 stops each compile from building its own deps.
 filters=""
 for pkg in \
   @terreno/test \

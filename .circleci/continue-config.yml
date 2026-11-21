@@ -1439,7 +1439,7 @@ jobs:
                 bun run export
                 ;;
               example-frontend)
-                bun run --filter '@terreno/test' compile
+                bun run --filter '@terreno/blocks' --filter '@terreno/ui' --filter '@terreno/test' compile
                 cd example-frontend
                 bun run export:smoke
                 ;;

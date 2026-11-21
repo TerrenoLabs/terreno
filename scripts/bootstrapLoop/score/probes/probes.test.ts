@@ -218,14 +218,17 @@ describe("R6 consent, R7 features, R8 roles, R12 seed", () => {
 });
 
 describe("R3, R4, R10", () => {
-  it("R3 fails when the theme equals the scaffold's", async () => {
-    const theme = "export const theme = 1;";
-    const run = (_command: string, args: string[]): RunResult =>
-      args[0] === "show" ? {status: 0, stdout: theme} : {status: 0, stdout: "abc"};
-    writeFileSync(join(appDir, "frontend", "constants", "theme.ts"), theme);
-    expect((await probeR3(context({deps: {run}, screenshots: ["a.png"]}))).status).toBe("FAIL");
-    writeFileSync(join(appDir, "frontend", "constants", "theme.ts"), "export const theme = 2;");
-    expect((await probeR3(context({deps: {run}, screenshots: ["a.png"]}))).status).toBe("PASS");
+  it("R3 fails while the template palette is kept and passes once it is replaced", async () => {
+    writeFileSync(
+      join(appDir, "frontend", "constants", "theme.ts"),
+      'primary500: "#0086B3", secondary500: "#2B6072", accent500: "#D69C0E"'
+    );
+    expect((await probeR3(context({screenshots: ["a.png"]}))).status).toBe("FAIL");
+    writeFileSync(
+      join(appDir, "frontend", "constants", "theme.ts"),
+      'primary500: "#4F46E5", secondary500: "#7C3AED", accent500: "#F97316"'
+    );
+    expect((await probeR3(context({screenshots: ["a.png"]}))).status).toBe("PASS");
   });
 
   it("R4 fails when mobile scrolls horizontally", async () => {

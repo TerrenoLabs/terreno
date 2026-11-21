@@ -162,6 +162,7 @@ export const collectEvidence = async (options: CollectEvidenceOptions): Promise<
       deps: {...defaultDeps, ...options.deps},
       env: env as Record<string, string | undefined>,
       screenshots,
+      sessionCache: new Map(),
       webUrl: app.webUrl,
     };
     const rows: RowEvidence[] = [];

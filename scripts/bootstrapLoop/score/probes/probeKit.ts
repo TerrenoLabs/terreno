@@ -42,6 +42,8 @@ export interface ProbeContext {
   env: Record<string, string | undefined>;
   baseUrl?: string;
   webUrl?: string;
+  /** Sessions already signed in this run; auth is rate limited, so sign-ins are reused. */
+  sessionCache?: Map<string, Session | undefined>;
   /** Screenshot paths already captured by collectEvidence. */
   screenshots?: string[];
   deps?: ProbeDeps;
@@ -148,6 +150,21 @@ const jsonHeaders = {"content-type": "application/json"};
 
 /** Signs in through Better Auth; returns auth headers, or undefined when the login fails. */
 export const signIn = async (
+  context: ProbeContext,
+  base: string,
+  email: string,
+  password: string
+): Promise<Session | undefined> => {
+  const cacheKey = `${base}|${email}|${password}`;
+  if (context.sessionCache?.has(cacheKey)) {
+    return context.sessionCache.get(cacheKey);
+  }
+  const session = await requestSignIn(context, base, email, password);
+  context.sessionCache?.set(cacheKey, session);
+  return session;
+};
+
+const requestSignIn = async (
   context: ProbeContext,
   base: string,
   email: string,

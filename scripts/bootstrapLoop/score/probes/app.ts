@@ -1,15 +1,9 @@
 import {DateTime} from "luxon";
 
-import {
-  api,
-  defaultRun,
-  envOr,
-  Findings,
-  findInSource,
-  type Probe,
-  readIfPresent,
-  signIn,
-} from "./probeKit";
+import {api, envOr, Findings, findInSource, type Probe, readIfPresent, signIn} from "./probeKit";
+
+/** The template's primary500, secondary500 and accent500 (create-terreno-app generate.ts). */
+const TEMPLATE_ANCHORS = ["#0086B3", "#2B6072", "#D69C0E"];
 
 const VIEWPORTS = [
   {height: 800, label: "desktop", width: 1280},
@@ -19,27 +13,19 @@ const VIEWPORTS = [
 /** R3: the theme differs from the scaffold's; the scorer judges the screenshots. */
 export const probeR3: Probe = async (context) => {
   const findings = new Findings("R3");
-  const run = context.deps?.run ?? defaultRun;
   const current = readIfPresent(context.appDir, "frontend/constants/theme.ts");
   if (current === undefined) {
     findings.bad("frontend/constants/theme.ts missing");
     return findings.result();
   }
-  const root = run("git", ["rev-list", "--max-parents=0", "HEAD"], context.appDir);
-  const baseline = run(
-    "git",
-    ["show", `${root.stdout.trim()}:frontend/constants/theme.ts`],
-    context.appDir
+  // The scaffold commit is taken after a single-prompt build, so it cannot be the reference:
+  // compare with the template's own primary, secondary and accent anchor colors instead.
+  const kept = TEMPLATE_ANCHORS.filter((anchor) => current.toUpperCase().includes(anchor));
+  findings.check(
+    kept.length <= 1,
+    `theme.ts replaces the template palette (${kept.length} of ${TEMPLATE_ANCHORS.length} template anchors kept)`,
+    `theme.ts keeps the template palette (${kept.join(", ")})`
   );
-  if (root.status !== 0 || baseline.status !== 0) {
-    findings.missing("scaffold baseline commit");
-  } else {
-    findings.check(
-      baseline.stdout !== current,
-      "theme.ts differs from the scaffold",
-      "theme.ts is unchanged from the scaffold"
-    );
-  }
   const shots = context.screenshots ?? [];
   findings.check(
     shots.length > 0,

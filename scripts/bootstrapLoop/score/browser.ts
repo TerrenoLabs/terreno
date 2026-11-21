@@ -41,6 +41,47 @@ interface Page {
   waitForURL: (predicate: (url: URL) => boolean, options: {timeout: number}) => Promise<void>;
 }
 
+interface BrowserContext {
+  close: () => Promise<void>;
+  newPage: () => Promise<Page>;
+  storageState: () => Promise<unknown>;
+}
+
+interface Browser {
+  close: () => Promise<void>;
+  newContext: (options: {
+    storageState?: unknown;
+    viewport: {height: number; width: number};
+  }) => Promise<BrowserContext>;
+}
+
+/**
+ * Sign-in is rate limited (the app's auth limit is 20 per window and must stay on), so each
+ * user signs in through the UI once and every later page reuses that storage state.
+ */
+const signedInStates = new Map<string, unknown>();
+
+const openPage = async (
+  browser: Browser,
+  options: {height: number; width: number; origin: string; login?: Credentials}
+): Promise<Page> => {
+  const viewport = {height: options.height, width: options.width};
+  if (!options.login) {
+    return (await browser.newContext({viewport})).newPage();
+  }
+  const key = `${options.origin}|${options.login.email}`;
+  let state = signedInStates.get(key);
+  if (!state) {
+    const first = await browser.newContext({viewport});
+    const page = await first.newPage();
+    await signInThroughUi(page, options.origin, options.login);
+    state = await first.storageState();
+    signedInStates.set(key, state);
+    await first.close();
+  }
+  return (await browser.newContext({storageState: state, viewport})).newPage();
+};
+
 export const memberLogin = (env: Record<string, string | undefined>): Credentials => ({
   email: envOr(env, "BOOTSTRAP_LOOP_SEED_EMAIL", "test@example.com"),
   password: envOr(env, "BOOTSTRAP_LOOP_SEED_PASSWORD", "testpassword123"),
@@ -94,15 +135,9 @@ export const screenshotPage = async ({
   width,
 }: ShotOptions): Promise<void> => {
   const chromium = await loadChromium();
-  const browser = (await chromium.launch()) as {
-    close: () => Promise<void>;
-    newPage: (options: unknown) => Promise<Page>;
-  };
+  const browser = (await chromium.launch()) as Browser;
   try {
-    const page = await browser.newPage({viewport: {height, width}});
-    if (login) {
-      await signInThroughUi(page, new URL(url).origin, login);
-    }
+    const page = await openPage(browser, {height, login, origin: new URL(url).origin, width});
     await page.goto(url, {waitUntil: "networkidle"});
     await acceptConsents(page);
     await page.screenshot({fullPage: true, path});
@@ -119,13 +154,14 @@ export const measureViewport = async (options: {
   login: Credentials;
 }): Promise<ViewportOutcome> => {
   const chromium = await loadChromium();
-  const browser = (await chromium.launch()) as {
-    close: () => Promise<void>;
-    newPage: (options: unknown) => Promise<Page>;
-  };
+  const browser = (await chromium.launch()) as Browser;
   try {
-    const page = await browser.newPage({viewport: {height: options.height, width: options.width}});
-    await signInThroughUi(page, new URL(options.url).origin, options.login);
+    const page = await openPage(browser, {
+      height: options.height,
+      login: options.login,
+      origin: new URL(options.url).origin,
+      width: options.width,
+    });
     await page.goto(options.url, {waitUntil: "networkidle"});
     await acceptConsents(page);
     const horizontalScroll = await page.evaluate(

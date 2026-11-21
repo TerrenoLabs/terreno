@@ -16,9 +16,9 @@ describe("run-logged-parallel", () => {
   it("prints both logs and fails when one command fails", () => {
     const result = run(["ok=echo hello", "bad=echo boom && exit 3"]);
     assert.equal(result.status, 3);
-    assert.include(result.stdout, "===== ok (exit 0) =====");
+    assert.match(result.stdout, /===== ok \(exit 0, \d+s\) =====/);
     assert.include(result.stdout, "hello");
-    assert.include(result.stdout, "===== bad (exit 3) =====");
+    assert.match(result.stdout, /===== bad \(exit 3, \d+s\) =====/);
     assert.include(result.stdout, "boom");
   });
 

@@ -24,12 +24,19 @@ for spec in "$@"; do
   cmd=${spec#*=}
   echo "$name" > "$dir/$i.name"
   # shellcheck disable=SC2094
-  sh -c "$cmd" > "$dir/$i.log" 2>&1 &
+  start=$(date +%s)
+  (
+    sh -c "$cmd"
+    status=$?
+    echo $(($(date +%s) - start)) > "$dir/$i.seconds"
+    exit "$status"
+  ) > "$dir/$i.log" 2>&1 &
   echo $! > "$dir/$i.pid"
   i=$((i + 1))
 done
 count=$i
 
+ticks=0
 while true; do
   alive=0
   i=0
@@ -43,8 +50,11 @@ while true; do
   if [ "$alive" -eq 0 ]; then
     break
   fi
-  echo "parallel still running"
-  sleep 20
+  ticks=$((ticks + 1))
+  if [ $((ticks % 20)) -eq 0 ]; then
+    echo "parallel still running"
+  fi
+  sleep 1
 done
 
 fail=0
@@ -54,7 +64,8 @@ while [ "$i" -lt "$count" ]; do
   name=$(cat "$dir/$i.name")
   status=0
   wait "$pid" || status=$?
-  echo "===== $name (exit $status) ====="
+  seconds=$(cat "$dir/$i.seconds" 2>/dev/null || echo "?")
+  echo "===== $name (exit $status, ${seconds}s) ====="
   cat "$dir/$i.log"
   if [ "$status" -ne 0 ]; then
     fail=$status

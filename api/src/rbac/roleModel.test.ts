@@ -195,6 +195,74 @@ describe("rbac role model", () => {
     expect(roles).toHaveLength(terrenoDefaultRoles.length);
   });
 
+  it("writes nothing when re-seeding an already-seeded catalog", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    const extraRoles = [
+      organizationOperatorRole,
+      {displayName: "Clinician", isSealed: true, name: "clinician", permissions: {user: ["read"]}},
+    ];
+    await RbacRole.seedDefaults({extraRoles, statements: terrenoStatements});
+    const before = await RbacRole.find({}).lean();
+
+    const calls: string[] = [];
+    mongoose.set("debug", (collectionName: string, method: string) => {
+      if (collectionName === RbacRole.collection.collectionName) {
+        calls.push(method);
+      }
+    });
+    try {
+      await RbacRole.seedDefaults({extraRoles, statements: terrenoStatements});
+    } finally {
+      mongoose.set("debug", false);
+    }
+
+    expect(calls).toEqual(["find"]);
+    const after = await RbacRole.find({}).lean();
+    expect(after).toEqual(before);
+  });
+
+  it("seeds an empty collection from concurrent callers without duplicates", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.init();
+    await Promise.all([
+      RbacRole.seedDefaults({statements: terrenoStatements}),
+      RbacRole.seedDefaults({statements: terrenoStatements}),
+      RbacRole.seedDefaults({statements: terrenoStatements}),
+    ]);
+
+    const roles = await RbacRole.find({});
+    expect(roles.map((role) => role.name).sort()).toEqual(
+      terrenoDefaultRoles.map((role) => role.name).sort()
+    );
+    for (const role of roles) {
+      expect(role.created).toBeInstanceOf(Date);
+      expect(role.updated).toBeInstanceOf(Date);
+    }
+  });
+
+  it("refreshes a drifted sealed role and bumps only its updated time", async () => {
+    await setupDb();
+    const RbacRole = createRbacRoleModel(mongoose.connection);
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+    await RbacRole.collection.updateOne(
+      {name: "superadmin"},
+      {$set: {displayName: "Tampered", permissions: {user: ["read"]}}}
+    );
+    const memberBefore = await RbacRole.findExactlyOne({name: "member"});
+    const superBefore = await RbacRole.findExactlyOne({name: "superadmin"});
+
+    await RbacRole.seedDefaults({statements: terrenoStatements});
+
+    const superAfter = await RbacRole.findExactlyOne({name: "superadmin"});
+    expect(superAfter.displayName).toBe("Super Admin");
+    expect(superAfter.permissions.user).toContain("delete");
+    expect(superAfter.updated.getTime()).toBeGreaterThan(superBefore.updated.getTime());
+    const memberAfter = await RbacRole.findExactlyOne({name: "member"});
+    expect(memberAfter.updated.getTime()).toBe(memberBefore.updated.getTime());
+  });
+
   it("does not overwrite customized unsealed roles on re-seed", async () => {
     await setupDb();
     const RbacRole = createRbacRoleModel(mongoose.connection);

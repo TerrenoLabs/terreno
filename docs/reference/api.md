@@ -1363,6 +1363,12 @@ Re-seeding default roles does not overwrite customized unsealed roles, except se
 actions into stored permissions (`admin` — full grants; `auditor` — `list` and `read` per
 resource) without removing consumer-defined grants on other resources.
 
+`seedDefaults` is safe to call on every boot. It reads all seeded roles (Terreno defaults plus
+`defaultRoles`) in one query, compares each against what the code would write, and sends one
+`bulkWrite` with only the roles that differ. A catalog that is already seeded costs one `find` and
+no writes. New roles are upserts on `name`, so several services seeding an empty collection at once
+do not fail on the unique index.
+
 When `accessControl` is configured, each observability HTTP route checks `admin:access` and
 the mapped resource action. Callers with `user.admin === true` still receive full access
 (legacy compatibility). RBAC-only operators need `admin:access` plus the exact action for

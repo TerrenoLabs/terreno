@@ -1,3 +1,4 @@
+import isEqual from "lodash/isEqual";
 import type {Document} from "mongoose";
 import mongoose, {type Connection, type Model} from "mongoose";
 import type {APIErrorConstructor} from "../errors";
@@ -117,65 +118,102 @@ const mergeGrants = (permissions: PermissionSet, grants: SeededRoleGrant[]): Per
     permissions
   );
 
+type SeedFields = Pick<
+  RbacRoleDocument,
+  | "appliedGrants"
+  | "description"
+  | "displayName"
+  | "excludesRoles"
+  | "isLocked"
+  | "isSealed"
+  | "permissions"
+>;
+
+type SeedOp =
+  | {kind: "insert"; name: string; fields: SeedFields}
+  | {kind: "update"; name: string; set: Partial<SeedFields>};
+
 /**
- * Insert missing default roles. Existing unsealed roles are left unchanged so admin
- * customizations survive process restarts. Sealed roles are refreshed from code.
+ * Decide what one seeded role needs, without touching the database. Existing unsealed roles are
+ * left unchanged so admin customizations survive process restarts, except the admin/auditor
+ * observability merge and operator added grants. Sealed roles are refreshed from code. Returns
+ * undefined when the stored row already matches, so a seeded catalog costs no writes.
  */
-const upsertSeededRole = async (
-  model: RbacRoleModel,
+const planSeededRole = (
   role: RoleDefinition,
-  statements: Statements
-): Promise<void> => {
+  statements: Statements,
+  existing: RbacRoleDocument | undefined
+): SeedOp | undefined => {
   const permissions = expandRolePermissions(role.permissions, statements);
-  const existing = await model.findOneOrNone({name: role.name});
-  if (existing) {
-    if (!existing.isSealed) {
-      if (role.name === "admin") {
-        existing.permissions = mergeMissingResourcePermissions(
-          existing.permissions,
-          permissions,
-          ADMIN_MERGED_RESOURCES
-        );
-        await existing.save();
-      } else if (role.name === "auditor") {
-        existing.permissions = mergeMissingResourcePermissions(
-          existing.permissions,
-          observabilityReadOnlyPermissionSpec(statements),
-          OBSERVABILITY_RBAC_RESOURCES
-        );
-        await existing.save();
-      } else {
-        const applied = new Set(existing.appliedGrants ?? []);
-        const pending = addedGrantsFor(role, statements).filter((grant) => !applied.has(grant.id));
-        if (pending.length > 0) {
-          existing.permissions = mergeGrants(existing.permissions, pending);
-          existing.appliedGrants = [...applied, ...pending.map((grant) => grant.id)];
-          await existing.save();
-        }
-      }
-      return;
-    }
-    existing.description = role.description;
-    existing.displayName = role.displayName;
-    existing.excludesRoles = role.excludesRoles ?? [];
-    existing.isLocked = role.isLocked ?? false;
-    existing.isSealed = true;
-    existing.permissions = permissions;
-    await existing.save();
-    return;
+  if (!existing) {
+    // A new row starts with every added grant, so none is merged in later.
+    const addedGrants = addedGrantsFor(role, statements);
+    return {
+      fields: {
+        appliedGrants: addedGrants.map((grant) => grant.id),
+        description: role.description,
+        displayName: role.displayName,
+        excludesRoles: role.excludesRoles ?? [],
+        isLocked: role.isLocked ?? false,
+        isSealed: role.isSealed ?? false,
+        permissions: mergeGrants(permissions, addedGrants),
+      },
+      kind: "insert",
+      name: role.name,
+    };
   }
-  // A new row starts with every added grant, so none is merged in later.
-  const addedGrants = addedGrantsFor(role, statements);
-  await model.create({
-    appliedGrants: addedGrants.map((grant) => grant.id),
-    description: role.description,
-    displayName: role.displayName,
-    excludesRoles: role.excludesRoles ?? [],
-    isLocked: role.isLocked ?? false,
-    isSealed: role.isSealed ?? false,
+
+  const changedFields = (wanted: Partial<SeedFields>): SeedOp | undefined => {
+    const set: Partial<SeedFields> = {};
+    for (const [key, value] of Object.entries(wanted) as [keyof SeedFields, unknown][]) {
+      // Mongo stores an unset optional field as missing or null; both match undefined.
+      if (value === undefined && existing[key] == null) {
+        continue;
+      }
+      if (!isEqual(existing[key], value)) {
+        (set as Record<string, unknown>)[key] = value;
+      }
+    }
+    return Object.keys(set).length > 0 ? {kind: "update", name: role.name, set} : undefined;
+  };
+
+  const stored = existing.permissions ?? {};
+  if (existing.isSealed) {
+    return changedFields({
+      description: role.description,
+      displayName: role.displayName,
+      excludesRoles: role.excludesRoles ?? [],
+      isLocked: role.isLocked ?? false,
+      permissions,
+    });
+  }
+  if (role.name === "admin") {
+    return changedFields({
+      permissions: mergeMissingResourcePermissions(stored, permissions, ADMIN_MERGED_RESOURCES),
+    });
+  }
+  if (role.name === "auditor") {
+    return changedFields({
+      permissions: mergeMissingResourcePermissions(
+        stored,
+        observabilityReadOnlyPermissionSpec(statements),
+        OBSERVABILITY_RBAC_RESOURCES
+      ),
+    });
+  }
+  const applied = new Set(existing.appliedGrants ?? []);
+  const pending = addedGrantsFor(role, statements).filter((grant) => !applied.has(grant.id));
+  if (pending.length === 0) {
+    return undefined;
+  }
+  return {
+    kind: "update",
     name: role.name,
-    permissions: mergeGrants(permissions, addedGrants),
-  });
+    set: {
+      appliedGrants: [...applied, ...pending.map((grant) => grant.id)],
+      permissions: mergeGrants(stored, pending),
+    },
+  };
 };
 
 export const expandRolePermissions = (
@@ -290,20 +328,53 @@ rbacRoleSchema.plugin(findExactlyOne);
 
 rbacRoleSchema.statics = {
   ...rbacRoleSchema.statics,
+  /**
+   * Reads every seeded role in one query and writes only the roles whose stored row differs, in
+   * one bulkWrite. On an already-seeded catalog this is a single read and no writes. Upserts
+   * keyed on `name` let concurrent boots seed an empty collection without duplicate-key errors.
+   */
   async seedDefaults(
     this: RbacRoleModel,
     {statements, extraRoles}: {statements: Statements; extraRoles?: RoleDefinition[]}
   ): Promise<void> {
     const terrenoNames = new Set(terrenoDefaultRoles.map((role) => role.name));
-    for (const role of terrenoDefaultRoles) {
-      await upsertSeededRole(this, role, statements);
+    const roles = [
+      ...terrenoDefaultRoles,
+      ...(extraRoles ?? []).filter((role) => !terrenoNames.has(role.name)),
+    ];
+    const stored = await this.find({name: {$in: roles.map((role) => role.name)}})
+      .lean<RbacRoleDocument[]>()
+      .exec();
+    const storedByName = new Map(stored.map((row) => [row.name, row]));
+
+    const ops = roles
+      .map((role) => planSeededRole(role, statements, storedByName.get(role.name)))
+      .filter((op): op is SeedOp => op !== undefined);
+    if (ops.length === 0) {
+      return;
     }
-    for (const role of extraRoles ?? []) {
-      if (terrenoNames.has(role.name)) {
-        continue;
-      }
-      await upsertSeededRole(this, role, statements);
-    }
+
+    // bulkWrite bypasses createdUpdatedPlugin's save hooks, so timestamps are set here.
+    const now = new Date();
+    await this.bulkWrite(
+      ops.map((op) =>
+        op.kind === "insert"
+          ? {
+              updateOne: {
+                filter: {name: op.name},
+                update: {$setOnInsert: {...op.fields, created: now, name: op.name, updated: now}},
+                upsert: true,
+              },
+            }
+          : {
+              updateOne: {
+                filter: {name: op.name},
+                update: {$set: {...op.set, updated: now}},
+              },
+            }
+      ),
+      {ordered: false}
+    );
   },
 };
 

@@ -176,8 +176,9 @@ describe("Button", () => {
     const LegacySurface: FC<{children: ReactNode}> = ({children}) => {
       const value = ThemeModule.useTheme();
       const {primaryDark: _primaryDark, ...surface} = value.theme.surface;
+      const legacyTheme = {...value.theme, surface} as typeof value.theme;
       return (
-        <ThemeModule.ThemeContext.Provider value={{...value, theme: {...value.theme, surface}}}>
+        <ThemeModule.ThemeContext.Provider value={{...value, theme: legacyTheme}}>
           {children}
         </ThemeModule.ThemeContext.Provider>
       );

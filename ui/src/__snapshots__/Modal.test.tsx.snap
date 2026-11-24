@@ -466,7 +466,7 @@ exports[`Modal renders with both buttons 1`] = `
                     "style": {
                       "alignItems": "center",
                       "alignSelf": "flex-start",
-                      "backgroundColor": "#0E9DCD",
+                      "backgroundColor": "#0C80A7",
                       "borderColor": undefined,
                       "borderRadius": 360,
                       "borderWidth": undefined,

@@ -26,6 +26,10 @@
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
     // In-memory flag server shared by the syncdb flags hook tests.
     "syncdb/src/flags/flagTestServer.ts": ["files"],
+    // Render-audit harness copied from the react-performance skill: run by
+    // `ui`'s `performance:renders` script and by hand (compareAudits, pageAudit), never
+    // imported by shipped code.
+    "ui/benchmarks/renderAudit/**": ["files", "exports", "types"],
     "example-backend/migrations/**": ["files", "exports", "types"],
     // Bin entry points (terreno-test-shard / terreno-test-hygiene): the pure functions and
     // types behind them are exported for their unit tests only, not as a library surface.

@@ -254,3 +254,48 @@ The benchmarks print machine-readable `UI_P0_BENCHMARK_RESULTS`, `UI_P1_BENCHMAR
 `UI_P2_BUTTON_BENCHMARK_RESULTS`, `UI_P2_RESPONSIVE_BOX_BENCHMARK_RESULTS`,
 `UI_DATATABLE_VIRTUAL_BENCHMARK_RESULTS`, or `UI_IMPORT_BENCHMARK_RESULTS` JSON lines for CI or
 local reporting.
+
+## Render audits
+
+Timing benchmarks say how long a workload took. Render audits say which components rendered
+and why, so a fix can be judged by counts that do not vary between machines.
+
+```bash
+cd ui
+bun run performance:renders                         # run every audit and its render budget
+RENDER_AUDIT_PRINT=1 bun run performance:renders    # also print the per-step tables
+RENDER_AUDIT_OUT=/tmp/after bun run performance:renders   # write <Component>.json reports
+bun benchmarks/renderAudit/compareAudits.ts /tmp/before/Pagination.json /tmp/after/Pagination.json
+```
+
+`ui/benchmarks/renderAudit/` holds the collector (`renderAudit.ts`, built on
+[bippy](https://github.com/aidenybai/bippy)), one `<Component>.audit.test.tsx` per audited
+component, and `pageAudit.ts` for auditing a running web page through Playwright. Each audit
+mounts the component, re-renders it with the same props, then changes one prop per step. Every
+render is classified as `mount`, `props`, `state`, `context`, `unstable-props` (equal value,
+new identity), or `parent` (nothing it reads changed). The last two are wasted renders.
+
+`preload.ts` must be the first `--preload`: React reports commits only to a devtools hook
+that exists before the renderer loads. The audits are not part of `bun run test`.
+
+The workflow for auditing and fixing another component is the `react-performance` skill in
+[TerrenoLabs/terreno-skills](https://github.com/TerrenoLabs/terreno-skills). The collector
+scripts are copied from that skill; change them there.
+
+### November 2026 results
+
+Renders per step in the test renderer, before and after memoizing the repeated child and
+passing it a stable handler (`useStableCallback`).
+
+| Component | Step | Renders before | after | Wasted before | after |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `MultiselectField` (8 options) | one option selected | 60 | 10 | 51 | 1 |
+| `MultiselectField` (8 options) | new `onChange` identity | 59 | 2 | 59 | 2 |
+| `Pagination` (20 pages) | page 1 to 2 | 26 | 19 | 8 | 1 |
+| `Pagination` (20 pages) | new `setPage` identity | 17 | 6 | 17 | 6 |
+| `SegmentedControl` (4 items) | selection 0 to 1 | 8 | 8 | 2 | 0 |
+| `SegmentedControl` (4 items) | new `onChange` identity | 8 | 4 | 8 | 4 |
+
+The wasted renders that remain are the component's own root re-rendering under its parent
+and the two `Pagination` arrow buttons. Wrapping those in `memo` would save one or two cheap
+renders each.

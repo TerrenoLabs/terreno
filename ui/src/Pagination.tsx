@@ -1,10 +1,13 @@
-import {type FC, useMemo} from "react";
+import {type FC, memo, useCallback, useMemo} from "react";
 import {Pressable, View} from "react-native";
 
 import type {IconName, PaginationProps} from "./Common";
 import {Icon} from "./Icon";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
+import {useStableCallback} from "./useStableCallback";
+
+const ignorePress = (): void => {};
 
 const PaginationButton: FC<{
   type: "first" | "prev" | "next" | "last" | "more";
@@ -47,20 +50,27 @@ const PaginationButton: FC<{
   );
 };
 
+// Memoized so a page change re-renders the two numbers whose highlight moved, not all of them.
 const PaginationNumber: FC<{
   number: number | "more";
   current: boolean;
-  onClick: () => void;
-}> = ({number, current, onClick}) => {
+  onSelect: (page: number) => void;
+}> = memo(({number, current, onSelect}) => {
+  const handlePress = useCallback((): void => {
+    if (number !== "more") {
+      onSelect(number);
+    }
+  }, [number, onSelect]);
+
   // Shortcut to make rendering the number buttons easier.
   if (number === "more") {
-    return <PaginationButton onClick={() => {}} type="more" />;
+    return <PaginationButton onClick={ignorePress} type="more" />;
   }
   return (
     <Pressable
       accessibilityHint={`Click to go to page ${number}`}
       accessibilityLabel="Pagination Number"
-      onPress={onClick}
+      onPress={handlePress}
       style={{
         alignItems: "center",
         borderRadius: 4,
@@ -73,10 +83,12 @@ const PaginationNumber: FC<{
       <Text color={current ? "accent" : "primary"}>{number}</Text>
     </Pressable>
   );
-};
+});
+PaginationNumber.displayName = "PaginationNumber";
 
 export const Pagination: FC<PaginationProps> = ({totalPages, page, setPage, testID}) => {
   const {theme} = useTheme();
+  const selectPage = useStableCallback(setPage);
 
   // Determine the number of pages to show. Show the first page,
   // the page before and after the current page, and the last page.
@@ -153,7 +165,7 @@ export const Pagination: FC<PaginationProps> = ({totalPages, page, setPage, test
           current={number === page}
           key={number === "more" ? `more${index}` : number}
           number={number}
-          onClick={() => setPage(number as number)}
+          onSelect={selectPage}
         />
       ))}
 

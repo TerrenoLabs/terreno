@@ -32,6 +32,7 @@ import {
 } from "../models/mcpOAuthToken";
 import {MCP_SERVICE_TOKEN_PREFIX} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
+import {createRouteRateLimitMiddleware} from "../rateLimit/routeRateLimit";
 import type {
   McpOAuthAuthorizationDocument,
   McpOAuthClientDocument,
@@ -270,6 +271,9 @@ const rejectDelegatedCredentials = (req: Request, _res: Response, next: NextFunc
 };
 
 const consentGuards = [rejectDelegatedCredentials, authenticateMiddleware()];
+
+/** Per-IP limit on the approve endpoint, on top of the app-wide limiter. Per process. */
+const MCP_OAUTH_APPROVE_RATE_LIMIT = {max: 30, windowMs: 60_000};
 
 const requireUser = (req: Request): User => {
   const user = req.user as unknown as User | undefined;
@@ -787,6 +791,7 @@ const addConsentRoutes = (
   app.post(
     "/oauth/authorize/:request/approve",
     [
+      createRouteRateLimitMiddleware({name: "mcp-oauth-approve", ...MCP_OAUTH_APPROVE_RATE_LIMIT}),
       ...consentGuards,
       decisionOpenApiBuilder("approveMcpOAuthRequest", "Approve a pending MCP OAuth request")
         .withRequestBody<{scope: string}>(

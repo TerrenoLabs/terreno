@@ -566,6 +566,20 @@
       "path": "feature-flags/src/featureFlagsApp.ts",
       "reason": "false positive",
       "comment": "TerrenoApp mounts createRateLimitMiddleware app-wide before every plugin route (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 343,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauthConsentPage.ts",
+      "reason": "false positive",
+      "comment": "Route has createRouteRateLimitMiddleware (per-IP) and TerrenoApp mounts createRateLimitMiddleware app-wide before it (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 344,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauth.ts",
+      "reason": "false positive",
+      "comment": "Route has createRouteRateLimitMiddleware (per-IP) and TerrenoApp mounts createRateLimitMiddleware app-wide before it (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
     }
   ]
 }

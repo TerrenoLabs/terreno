@@ -2299,6 +2299,18 @@ describe("MCP OAuth approval policy", () => {
       expect((await McpOAuthAuthorization.findOneOrNone({requestId}))?.codeHash).toBeUndefined();
     });
 
+    it("answers 429 once one IP calls approve more than 30 times a minute", async () => {
+      const admin = await authAsUser(app, "admin");
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const res = await admin.post("/oauth/authorize/unknown-request/approve");
+        expect(res.status).toBe(404);
+      }
+
+      const limited = await admin.post("/oauth/authorize/unknown-request/approve");
+
+      expect(limited.status).toBe(429);
+    });
+
     it("still lets a non-admin deny", async () => {
       const requestId = await pendingRequest(app);
       const notAdmin = await authAsUser(app, "notAdmin");

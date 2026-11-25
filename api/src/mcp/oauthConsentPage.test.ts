@@ -395,6 +395,30 @@ describe("MCP OAuth built-in consent page", () => {
     });
   });
 
+  describe("rate limits", () => {
+    it("answers 429 once one IP submits the form more than 10 times a minute", async () => {
+      for (let attempt = 0; attempt < 10; attempt += 1) {
+        const res = await submit(app, "/oauth/consent/unknown-request", {decision: "deny"});
+        expect(res.status).toBe(400);
+      }
+
+      const limited = await submit(app, "/oauth/consent/unknown-request", {decision: "deny"});
+
+      expect(limited.status).toBe(429);
+      expect(limited.headers["retry-after"]).toBeDefined();
+    });
+
+    it("answers 429 once one IP loads the page more than 60 times a minute", async () => {
+      for (let attempt = 0; attempt < 60; attempt += 1) {
+        await supertest(app).get("/oauth/consent/unknown-request");
+      }
+
+      const limited = await supertest(app).get("/oauth/consent/unknown-request");
+
+      expect(limited.status).toBe(429);
+    });
+  });
+
   describe("JSON consent endpoints in builtin mode", () => {
     it("refuses the JSON approve, so a session alone can't skip the password and code", async () => {
       const owner = await createOwner(app);

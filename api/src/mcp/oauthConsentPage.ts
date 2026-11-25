@@ -14,6 +14,7 @@ import {type BetterAuthInstance, verifyBetterAuthCredentialPassword} from "../be
 import {isAPIError} from "../errors";
 import {logger} from "../logger";
 import {McpOAuthConsentAttempt} from "../models/mcpOAuthConsentAttempt";
+import {createRouteRateLimitMiddleware} from "../rateLimit/routeRateLimit";
 import type {McpOAuthAuthorizationDocument, McpOAuthClientDocument} from "../types/mcpOAuth";
 import {
   approvalPolicyProblem,
@@ -31,6 +32,15 @@ const TOTP_PERIOD_SECONDS = 30;
 const TOTP_DIGITS = 6;
 // Accept the previous and next step for clock drift, as Better Auth's own verify does.
 const TOTP_WINDOW = 1;
+
+/**
+ * Per-IP limits on the page, on top of the app-wide limiter and the per-email lockout. The POST
+ * checks a password, so it is strict. Counters are per process.
+ */
+const MCP_OAUTH_CONSENT_PAGE_RATE_LIMITS = {
+  page: {max: 60, windowMs: 60_000},
+  submit: {max: 10, windowMs: 60_000},
+};
 
 const WRONG_CREDENTIALS = "Wrong email, password, or authenticator code.";
 const LOCKED = "Too many failed attempts. Try again in 15 minutes.";
@@ -299,7 +309,16 @@ export const addMcpOAuthConsentPage = (
 ): void => {
   const {oauth} = options;
 
-  app.get("/oauth/consent/:request", async (req: Request, res: Response, next) => {
+  const pageLimiter = createRouteRateLimitMiddleware({
+    name: "mcp-oauth-consent-page",
+    ...MCP_OAUTH_CONSENT_PAGE_RATE_LIMITS.page,
+  });
+  const submitLimiter = createRouteRateLimitMiddleware({
+    name: "mcp-oauth-consent-submit",
+    ...MCP_OAUTH_CONSENT_PAGE_RATE_LIMITS.submit,
+  });
+
+  app.get("/oauth/consent/:request", pageLimiter, async (req: Request, res: Response, next) => {
     try {
       const loaded = await loadRequest(res, String(req.params.request));
       if (loaded) {
@@ -310,7 +329,7 @@ export const addMcpOAuthConsentPage = (
     }
   });
 
-  app.post("/oauth/consent/:request", async (req: Request, res: Response, next) => {
+  app.post("/oauth/consent/:request", submitLimiter, async (req: Request, res: Response, next) => {
     try {
       const loaded = await loadRequest(res, String(req.params.request));
       if (!loaded) {

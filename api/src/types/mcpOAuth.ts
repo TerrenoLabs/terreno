@@ -34,6 +34,13 @@ export interface McpOAuthClientDocument extends mongoose.Document {
   userId?: mongoose.Types.ObjectId;
 }
 
+/** A validated Client ID Metadata Document, as `McpOAuthClient.upsertFromMetadataDocument` takes it. */
+export interface McpOAuthMetadataDocumentClient {
+  clientId: string;
+  clientName?: string;
+  redirectUris: string[];
+}
+
 interface McpOAuthClientStatics
   extends FindExactlyOnePlugin<McpOAuthClientDocument>,
     FindOneOrNonePlugin<McpOAuthClientDocument> {
@@ -41,6 +48,14 @@ interface McpOAuthClientStatics
     this: McpOAuthClientModel,
     options: McpOAuthConfidentialClientOptions
   ) => Promise<{client: McpOAuthClientDocument; clientSecret: string}>;
+  /**
+   * Create or refresh the public client for a Client ID Metadata Document. Returns null when the
+   * client was revoked: a revoked CIMD client stays revoked.
+   */
+  upsertFromMetadataDocument: (
+    this: McpOAuthClientModel,
+    document: McpOAuthMetadataDocumentClient
+  ) => Promise<McpOAuthClientDocument | null>;
   /** Mark the client revoked and end every token it holds. */
   revoke: (this: McpOAuthClientModel, clientId: string) => Promise<McpOAuthClientDocument | null>;
 }

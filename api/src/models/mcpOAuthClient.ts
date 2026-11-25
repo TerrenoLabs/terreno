@@ -7,6 +7,7 @@ import type {
   McpOAuthClientDocument,
   McpOAuthClientModel,
   McpOAuthConfidentialClientOptions,
+  McpOAuthMetadataDocumentClient,
 } from "../types/mcpOAuth";
 import {generateMcpOAuthSecret, hashMcpOAuthSecret, McpOAuthToken} from "./mcpOAuthToken";
 
@@ -134,6 +135,41 @@ mcpOAuthClientSchema.statics = {
     );
     await McpOAuthToken.revokeClient(clientId);
     return this.findOneOrNone({clientId});
+  },
+  async upsertFromMetadataDocument(
+    this: McpOAuthClientModel,
+    document: McpOAuthMetadataDocumentClient
+  ): Promise<McpOAuthClientDocument | null> {
+    const now = DateTime.now().toJSDate();
+    try {
+      // The filter excludes a revoked row, so the upsert's insert collides with it on the unique
+      // clientId instead of reviving it.
+      return await this.findOneAndUpdate(
+        {clientId: document.clientId, revokedAt: {$exists: false}},
+        {
+          $set: {
+            ...(document.clientName ? {clientName: document.clientName} : {}),
+            grantTypes: ["authorization_code", "refresh_token"],
+            redirectUris: document.redirectUris,
+            responseTypes: ["code"],
+            tokenEndpointAuthMethod: "none",
+            updated: now,
+          },
+          $setOnInsert: {created: now},
+          $unset: {
+            ...(document.clientName ? {} : {clientName: ""}),
+            clientSecretHash: "",
+            userId: "",
+          },
+        },
+        {returnDocument: "after", upsert: true}
+      );
+    } catch (error) {
+      if ((error as {code?: number}).code === 11000) {
+        return null;
+      }
+      throw error;
+    }
   },
 };
 

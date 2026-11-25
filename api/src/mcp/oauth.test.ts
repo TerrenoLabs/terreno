@@ -1812,3 +1812,402 @@ describe("MCP OAuth opt-in", () => {
     });
   });
 });
+
+describe("MCP OAuth client ID metadata documents", () => {
+  const CLAUDE_AI = "https://claude.ai/oauth/mcp-oauth-client-metadata";
+  const CLAUDE_CODE = "https://claude.ai/oauth/claude-code-client-metadata";
+
+  const claudeAiDocument = {
+    client_id: CLAUDE_AI,
+    client_name: "Claude",
+    grant_types: ["authorization_code", "refresh_token"],
+    redirect_uris: [REDIRECT_URI],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+  };
+  const claudeCodeDocument = {
+    client_id: CLAUDE_CODE,
+    client_name: "Claude Code",
+    redirect_uris: ["http://localhost/callback", "http://127.0.0.1/callback"],
+    token_endpoint_auth_method: "none",
+  };
+
+  /** A fake network: each URL answers with the Response its factory builds. Records every fetch. */
+  const fakeNetwork = (
+    routes: Record<string, () => Response>
+  ): {
+    calls: {init?: RequestInit; url: string}[];
+    fetch: (url: string, init?: RequestInit) => Promise<Response>;
+  } => {
+    const calls: {init?: RequestInit; url: string}[] = [];
+    return {
+      calls,
+      fetch: async (url: string, init?: RequestInit): Promise<Response> => {
+        calls.push({init, url});
+        const route = routes[url];
+        return route ? route() : new Response("not found", {status: 404});
+      },
+    };
+  };
+
+  const jsonResponse = (body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      headers: {"content-type": "application/json"},
+      status: 200,
+    });
+
+  const cimdApp = (
+    fetch: (url: string, init?: RequestInit) => Promise<Response>,
+    allowedClientIds: string[] = [CLAUDE_AI, CLAUDE_CODE]
+  ): express.Application => {
+    const {allowedRedirectHosts: _hosts, dynamicClientRegistration: _dcr, ...rest} = oauthOptions;
+    return buildApp({
+      mcpOAuth: {...rest, clientIdMetadataDocuments: {allowedClientIds, fetch}},
+    });
+  };
+
+  const authorizeAs = (
+    app: express.Application,
+    clientId: string,
+    redirectUri: string,
+    challenge: string
+  ): supertest.Test =>
+    startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      redirect_uri: redirectUri,
+      response_type: "code",
+      state: "cimd-state",
+    });
+
+  beforeEach(async () => {
+    await setupDb();
+    await Promise.all([
+      McpOAuthAuthorization.deleteMany({}),
+      McpOAuthClient.deleteMany({}),
+      McpOAuthToken.deleteMany({}),
+    ]);
+    clearMCPRegistry();
+  });
+
+  describe("metadata", () => {
+    it("advertises client_id_metadata_document_supported only with a non-empty allowlist", async () => {
+      const {fetch} = fakeNetwork({});
+      const withList = await supertest(cimdApp(fetch)).get(
+        "/.well-known/oauth-authorization-server"
+      );
+      const emptyList = await supertest(cimdApp(fetch, [])).get(
+        "/.well-known/oauth-authorization-server"
+      );
+      const without = await supertest(buildApp()).get("/.well-known/oauth-authorization-server");
+
+      expect(withList.body.client_id_metadata_document_supported).toBe(true);
+      expect(withList.body.token_endpoint_auth_methods_supported).toContain("none");
+      expect(emptyList.body.client_id_metadata_document_supported).toBeUndefined();
+      expect(without.body.client_id_metadata_document_supported).toBeUndefined();
+    });
+  });
+
+  describe("authorize", () => {
+    it("fetches an allowlisted document once and redirects to consent", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const first = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const second = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(first.status).toBe(302);
+      expect(first.headers.location.startsWith("https://app.example.com/oauth/consent?")).toBe(
+        true
+      );
+      expect(second.status).toBe(302);
+      expect(network.calls.map((call) => call.url)).toEqual([CLAUDE_AI]);
+      expect(network.calls[0].init?.redirect).toBe("manual");
+      expect(network.calls[0].init?.signal).toBeDefined();
+      const stored = await McpOAuthClient.findOneOrNone({clientId: CLAUDE_AI});
+      expect(stored?.clientName).toBe("Claude");
+      expect(stored?.redirectUris).toEqual([REDIRECT_URI]);
+      expect(stored?.tokenEndpointAuthMethod).toBe("none");
+      expect(stored?.grantTypes).toEqual(["authorization_code", "refresh_token"]);
+    });
+
+    it("shows the document's client name on the consent request", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const agent = await authAsUser(app, "notAdmin");
+      const {challenge} = createPkce();
+
+      const authorize = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const consent = await agent.get(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}`
+      );
+
+      expect(consent.status).toBe(200);
+      expect(consent.body.data.clientId).toBe(CLAUDE_AI);
+      expect(consent.body.data.clientName).toBe("Claude");
+    });
+
+    it("answers Unknown client_id for a URL that is not allowlisted, without fetching it", async () => {
+      const other = "https://evil.example.com/client.json";
+      const network = fakeNetwork({
+        [other]: () => jsonResponse({...claudeAiDocument, client_id: other}),
+      });
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(app, other, REDIRECT_URI, challenge);
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({error: "invalid_request", error_description: "Unknown client_id"});
+      expect(res.headers.location).toBeUndefined();
+      expect(network.calls).toEqual([]);
+    });
+
+    const badDocuments: [string, () => Response, string][] = [
+      [
+        "a client_id that differs from the URL",
+        () => jsonResponse({...claudeAiDocument, client_id: CLAUDE_CODE}),
+        "client_id does not match its URL",
+      ],
+      ["a 404", () => new Response("missing", {status: 404}), "answered HTTP 404"],
+      [
+        "a redirect from the document host",
+        () =>
+          new Response(null, {headers: {location: "https://evil.example.com/doc"}, status: 302}),
+        "answered HTTP 302",
+      ],
+      [
+        "a body over 16 KiB",
+        () => jsonResponse({...claudeAiDocument, padding: "x".repeat(20 * 1024)}),
+        "too large",
+      ],
+      ["invalid JSON", () => new Response("{not json", {status: 200}), "not valid JSON"],
+      [
+        "redirect_uris that is not an array",
+        () => jsonResponse({...claudeAiDocument, redirect_uris: REDIRECT_URI}),
+        "redirect_uris must list",
+      ],
+      [
+        "redirect_uris with a non-string entry",
+        () => jsonResponse({...claudeAiDocument, redirect_uris: [REDIRECT_URI, 42]}),
+        "redirect_uris must list",
+      ],
+      [
+        "an empty redirect_uris",
+        () => jsonResponse({...claudeAiDocument, redirect_uris: []}),
+        "redirect_uris must list",
+      ],
+      [
+        "a confidential token_endpoint_auth_method",
+        () =>
+          jsonResponse({...claudeAiDocument, token_endpoint_auth_method: "client_secret_basic"}),
+        "Only public clients",
+      ],
+    ];
+    for (const [label, respond, reason] of badDocuments) {
+      it(`answers 400 without redirecting for ${label}`, async () => {
+        const network = fakeNetwork({[CLAUDE_AI]: respond});
+        const app = cimdApp(network.fetch);
+        const {challenge} = createPkce();
+
+        const res = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("invalid_request");
+        expect(res.body.error_description).toContain(reason);
+        expect(res.headers.location).toBeUndefined();
+        expect(network.calls).toHaveLength(1);
+        expect(await McpOAuthClient.countDocuments({clientId: CLAUDE_AI})).toBe(0);
+      });
+    }
+
+    it("answers 400 when the fetch throws (timeout or network error)", async () => {
+      const app = cimdApp(async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      });
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error_description).toContain("could not be fetched");
+      expect(res.headers.location).toBeUndefined();
+    });
+
+    it("does not cache a failed fetch", async () => {
+      let attempt = 0;
+      const network = fakeNetwork({
+        [CLAUDE_AI]: () => {
+          attempt += 1;
+          return attempt === 1
+            ? new Response("busy", {status: 503})
+            : jsonResponse(claudeAiDocument);
+        },
+      });
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const first = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const second = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(first.status).toBe(400);
+      expect(second.status).toBe(302);
+      expect(network.calls).toHaveLength(2);
+    });
+
+    it("matches the Claude Code document's loopback redirects on any port", async () => {
+      const network = fakeNetwork({[CLAUDE_CODE]: () => jsonResponse(claudeCodeDocument)});
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const localhost = await authorizeAs(
+        app,
+        CLAUDE_CODE,
+        "http://localhost:51234/callback",
+        challenge
+      );
+      const ipv4 = await authorizeAs(
+        app,
+        CLAUDE_CODE,
+        "http://127.0.0.1:40000/callback",
+        challenge
+      );
+
+      expect(localhost.status).toBe(302);
+      expect(ipv4.status).toBe(302);
+    });
+
+    it("keeps non-loopback redirects exact: an https redirect on another port is refused", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(
+        app,
+        CLAUDE_AI,
+        "https://claude.ai:8443/api/mcp/auth_callback",
+        challenge
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("invalid_request");
+      expect(res.headers.location).toBeUndefined();
+    });
+  });
+
+  describe("flow", () => {
+    it("completes code, token, /mcp, and refresh for a CIMD client", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const agent = await authAsUser(app, "notAdmin");
+      const {challenge, verifier} = createPkce();
+
+      const authorize = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const approve = await agent.post(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+      );
+      const redirect = new URL(approve.body.data.redirectUrl);
+      expect(redirect.searchParams.get("state")).toBe("cimd-state");
+      expect(redirect.searchParams.get("iss")).toBe(ISSUER);
+      const tokens = await exchangeCode(app, {
+        clientId: CLAUDE_AI,
+        code: redirect.searchParams.get("code") as string,
+        verifier,
+      });
+      expect(tokens.status).toBe(200);
+
+      const mcp = await callMcp(app, tokens.body.access_token);
+      expect(mcp.status).toBe(200);
+      expect(toolPayload(mcp.text).credential).toBe("oauth");
+
+      const refreshed = await refresh(app, CLAUDE_AI, tokens.body.refresh_token);
+      expect(refreshed.status).toBe(200);
+      expect((await callMcp(app, refreshed.body.access_token)).status).toBe(200);
+      expect(network.calls).toHaveLength(1);
+    });
+
+    it("keeps a revoked CIMD client revoked: its tokens end and authorize answers 400", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const agent = await authAsUser(app, "notAdmin");
+      const {challenge, verifier} = createPkce();
+      const authorize = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const approve = await agent.post(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+      );
+      const tokens = await exchangeCode(app, {
+        clientId: CLAUDE_AI,
+        code: new URL(approve.body.data.redirectUrl).searchParams.get("code") as string,
+        verifier,
+      });
+      expect(tokens.status).toBe(200);
+
+      await McpOAuthClient.revoke(CLAUDE_AI);
+
+      expect((await callMcp(app, tokens.body.access_token)).status).toBe(401);
+      const refreshed = await refresh(app, CLAUDE_AI, tokens.body.refresh_token);
+      expect(refreshed.status).toBe(401);
+      expect(refreshed.body.error).toBe("invalid_client");
+      const again = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, createPkce().challenge);
+      expect(again.status).toBe(400);
+      expect(again.body.error).toBe("invalid_request");
+      expect(again.headers.location).toBeUndefined();
+      const stored = await McpOAuthClient.findOneOrNone({clientId: CLAUDE_AI});
+      expect(stored?.revokedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  it("refuses to show a pending request once its client is revoked", async () => {
+    const app = buildApp();
+    const agent = await authAsUser(app, "notAdmin");
+    const clientId = await registerClient(app);
+    const authorize = await startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: createPkce().challenge,
+      code_challenge_method: "S256",
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+    });
+    const requestId = requestIdFrom(authorize.headers.location);
+
+    await McpOAuthClient.revoke(clientId);
+    const res = await agent.get(`/oauth/authorize/${requestId}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.title).toBe("The client was revoked");
+  });
+
+  describe("resolveMcpOAuthOption", () => {
+    const base: McpOAuthOptions = {consentUrl: CONSENT_URL, enabled: true, issuer: ISSUER};
+
+    it("throws at boot for an allowlisted id that is not a plain https URL", () => {
+      for (const id of [
+        "http://claude.ai/oauth/mcp-oauth-client-metadata",
+        "https://claude.ai/oauth/doc?x=1",
+        "https://claude.ai/oauth/doc#frag",
+        "not a url",
+      ]) {
+        let thrown: unknown;
+        try {
+          resolveMcpOAuthOption({...base, clientIdMetadataDocuments: {allowedClientIds: [id]}});
+        } catch (error) {
+          thrown = error;
+        }
+        expect((thrown as {title?: string}).title).toBe("MCP OAuth is misconfigured");
+        expect((thrown as {detail?: string}).detail).toContain(
+          "clientIdMetadataDocuments.allowedClientIds"
+        );
+      }
+    });
+
+    it("leaves CIMD off for an empty allowlist", () => {
+      const resolved = resolveMcpOAuthOption({
+        ...base,
+        clientIdMetadataDocuments: {allowedClientIds: []},
+      });
+      expect(resolved?.clientIdMetadataDocuments).toBeUndefined();
+    });
+  });
+});

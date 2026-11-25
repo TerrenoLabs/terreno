@@ -65,6 +65,23 @@ const SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = ["none", "client_secret_basic", "c
 export const SUPPORTED_RESPONSE_TYPES = ["code"];
 export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/** Fetch used to load client metadata documents. Defaults to the global `fetch`. */
+export type McpOAuthMetadataFetch = (
+  url: string,
+  init?: RequestInit
+) => Promise<globalThis.Response>;
+
+/** `mcpOAuth.clientIdMetadataDocuments`: which URL client ids the server accepts. */
+export interface McpOAuthClientIdMetadataDocumentsOption {
+  /**
+   * Exact https URLs accepted as `client_id`, for example
+   * `https://claude.ai/oauth/mcp-oauth-client-metadata`. No other URL is ever fetched.
+   */
+  allowedClientIds: string[];
+  /** Injected for tests. Defaults to the global `fetch`. */
+  fetch?: McpOAuthMetadataFetch;
+}
+
 export interface McpOAuthOptions {
   /** Turns the authorization server on. Every other field is ignored while false. */
   enabled: boolean;
@@ -115,6 +132,13 @@ export interface McpOAuthOptions {
   authorizationRequestTtlSeconds?: number;
   /** How long an issued authorization code can be exchanged. Default: 60. */
   authorizationCodeTtlSeconds?: number;
+  /**
+   * Accept Client ID Metadata Documents (CIMD) for these exact https client ids, as Claude.ai's
+   * "Use Claude's published identity" sends. `/oauth/authorize` fetches an allowlisted id's
+   * document (no redirects, 5 s timeout, 16 KiB cap, cached 10 minutes) and stores it as a public
+   * `McpOAuthClient`. Off when absent or empty.
+   */
+  clientIdMetadataDocuments?: McpOAuthClientIdMetadataDocumentsOption;
 }
 
 export type McpOAuthAppOption = McpOAuthOptions;
@@ -124,6 +148,8 @@ export interface ResolvedMcpOAuthOptions {
   allowedRedirectHosts: string[];
   authorizationCodeTtlSeconds: number;
   authorizationRequestTtlSeconds: number;
+  /** Allowlisted CIMD client ids and the fetch to load them, or undefined while off. */
+  clientIdMetadataDocuments: {allowedClientIds: string[]; fetch: McpOAuthMetadataFetch} | undefined;
   consentUrl: string;
   dynamicClientRegistration: boolean;
   issuer: string;
@@ -197,6 +223,34 @@ const resolveGrants = (grants: McpOAuthOptions["grants"]): McpOAuthGrant[] => {
   return grants;
 };
 
+const resolveClientIdMetadataDocuments = (
+  option: McpOAuthClientIdMetadataDocumentsOption | undefined
+): ResolvedMcpOAuthOptions["clientIdMetadataDocuments"] => {
+  const ids = option?.allowedClientIds ?? [];
+  if (!Array.isArray(ids)) {
+    throw misconfigured("mcpOAuth.clientIdMetadataDocuments.allowedClientIds must be an array");
+  }
+  if (ids.length === 0) {
+    return undefined;
+  }
+  for (const id of ids) {
+    const parsed = URL.canParse(id) ? new URL(id) : undefined;
+    // An exact, normalized https URL with a path, so the string the client sends is the URL fetched.
+    if (
+      parsed?.protocol !== "https:" ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.pathname === "/" ||
+      parsed.href !== id
+    ) {
+      throw misconfigured(
+        `mcpOAuth.clientIdMetadataDocuments.allowedClientIds must be https URLs with a path and no query or fragment, got "${id}"`
+      );
+    }
+  }
+  return {allowedClientIds: [...ids], fetch: option?.fetch ?? ((url, init) => fetch(url, init))};
+};
+
 /** RFC 9728 §3.1: the well-known segment goes between the host and the resource's path. */
 export const protectedResourceMetadataPath = (resource: string): string => {
   const {pathname} = new URL(resource);
@@ -258,6 +312,7 @@ export const resolveMcpOAuthOption = (
       DEFAULT_AUTHORIZATION_REQUEST_TTL_SECONDS,
       "authorizationRequestTtlSeconds"
     ),
+    clientIdMetadataDocuments: resolveClientIdMetadataDocuments(option.clientIdMetadataDocuments),
     consentUrl: option.consentUrl,
     dynamicClientRegistration,
     grants,
@@ -300,6 +355,7 @@ export const buildAuthorizationServerMetadata = (
   ...(oauth.dynamicClientRegistration
     ? {registration_endpoint: `${oauth.issuer}/oauth/register`}
     : {}),
+  ...(oauth.clientIdMetadataDocuments ? {client_id_metadata_document_supported: true} : {}),
   authorization_endpoint: `${oauth.issuer}/oauth/authorize`,
   authorization_response_iss_parameter_supported: true,
   code_challenge_methods_supported: ["S256"],

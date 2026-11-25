@@ -60,6 +60,24 @@ Dynamic client registration (`POST /oauth/register`) is a separate opt-in and st
   },
   ```
 
+- **Claude's published identity (CIMD).** Claude.ai's recommended connector option sends a URL as `client_id`: a Client ID Metadata Document that Anthropic hosts, listing Claude's redirect URIs. List the documents you accept, and a user can add your app by URL with no client to create and no registration endpoint.
+
+  ```typescript
+  mcpOAuth: {
+    clientIdMetadataDocuments: {
+      allowedClientIds: [
+        "https://claude.ai/oauth/mcp-oauth-client-metadata", // Claude.ai connectors
+        "https://claude.ai/oauth/claude-code-client-metadata", // Claude Code
+      ],
+    },
+    consentUrl: "https://app.example.com/oauth/consent",
+    enabled: true,
+    issuer: "https://api.example.com",
+  },
+  ```
+
+  The metadata then has `client_id_metadata_document_supported: true`. Claude picks CIMD only when that flag is set and `token_endpoint_auth_methods_supported` lists `none`, which Terreno always lists. On `/oauth/authorize`, an allowlisted id is fetched from that exact URL with no redirects followed, a 5 second timeout, and a 16 KiB cap. The document's `client_id` must equal the URL, and `redirect_uris` must be a non-empty array of https or loopback http URLs. A good document is cached for 10 minutes; a failure is not cached. It is stored as a public `McpOAuthClient` whose `clientId` is the URL, so the token, refresh, and revocation flows treat it like any other client. The Claude Code document's `http://localhost/callback` matches any port, like other loopback redirects. Any other URL `client_id` gets `400 Unknown client_id` and is never fetched: the allowlist is what stops the server being pointed at an arbitrary host. `McpOAuthClient.revoke("https://claude.ai/oauth/mcp-oauth-client-metadata")` ends its tokens, and the client stays revoked: later authorize requests get a 400.
+
 ### Choose grants
 
 `grants` decides what a client can do once the user approves it. The consent screen shows one checkbox per grant, and `/mcp` enforces the grants on every tool. Without `grants`, the default `mcp` scope is accepted and not enforced.

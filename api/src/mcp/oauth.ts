@@ -33,6 +33,11 @@ import type {
 } from "../types/mcpOAuth";
 import {bearerFromHeaders, isCredentialEpochStale, userTokenEpoch} from "./auth";
 import {
+  ClientMetadataDocumentError,
+  type ClientMetadataDocumentResolver,
+  createClientMetadataDocumentResolver,
+} from "./oauthClientMetadataDocument";
+import {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
   LOOPBACK_HOSTS,
@@ -288,6 +293,18 @@ const loadPendingAuthorization = async (
   return authorization;
 };
 
+/** The client of a pending request, refusing one that was revoked or removed after authorize. */
+const loadActiveClient = async (clientId: string): Promise<McpOAuthClientDocument> => {
+  const client = await McpOAuthClient.findOneOrNone({clientId});
+  if (!client || client.revokedAt) {
+    throw new BadRequestError({
+      code: "mcp-oauth-client-revoked",
+      title: "The client was revoked",
+    });
+  }
+  return client;
+};
+
 const addDiscoveryRoutes = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
   const protectedResource = (_req: Request, res: Response): void => {
     sendProtocolJson(res, 200, buildProtectedResourceMetadata(oauth));
@@ -417,7 +434,50 @@ const redirectUriMatchesRegistered = (requested: string, registered: string[]): 
   });
 };
 
-const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
+/**
+ * The client an authorization request names. An allowlisted metadata-document id is fetched (or
+ * served from cache) and stored as a public client; a revoked one is refused before any fetch.
+ * Every other id must already be a stored client.
+ */
+const resolveAuthorizeClient = async (
+  clientId: string,
+  metadataDocuments: ClientMetadataDocumentResolver | undefined
+): Promise<McpOAuthClientDocument> => {
+  const stored = await McpOAuthClient.findOneOrNone({clientId});
+  if (stored?.revokedAt) {
+    throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+  }
+  if (!metadataDocuments?.isAllowed(clientId)) {
+    if (!stored) {
+      throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+    }
+    return stored;
+  }
+  let document: Awaited<ReturnType<ClientMetadataDocumentResolver["load"]>>;
+  try {
+    document = await metadataDocuments.load(clientId);
+  } catch (error) {
+    if (error instanceof ClientMetadataDocumentError) {
+      logger.warn("[MCPOAuth] Refused a client metadata document", {
+        clientId,
+        reason: error.message,
+      });
+      throw new OAuthProtocolError("invalid_request", error.message);
+    }
+    throw error;
+  }
+  const client = await McpOAuthClient.upsertFromMetadataDocument(document);
+  if (!client) {
+    throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+  }
+  return client;
+};
+
+const addAuthorizeRoute = (
+  app: Application,
+  oauth: ResolvedMcpOAuthOptions,
+  metadataDocuments: ClientMetadataDocumentResolver | undefined
+): void => {
   app.get(
     "/oauth/authorize",
     oauthHandler(async (req, res) => {
@@ -426,10 +486,7 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
       if (!clientId) {
         throw new OAuthProtocolError("invalid_request", "client_id is required");
       }
-      const client = await McpOAuthClient.findOneOrNone({clientId});
-      if (!client || client.revokedAt) {
-        throw new OAuthProtocolError("invalid_request", "Unknown client_id");
-      }
+      const client = await resolveAuthorizeClient(clientId, metadataDocuments);
       // RFC 6749 §4.1.2.1: never redirect to an unverified URI, so these two fail in place.
       const requestedRedirect = stringParam(query.redirect_uri);
       const redirectUri =
@@ -549,11 +606,11 @@ const addConsentRoutes = (
     asyncHandler(async (req, res) => {
       requireUser(req);
       const authorization = await loadPendingAuthorization(String(req.params.request));
-      const client = await McpOAuthClient.findOneOrNone({clientId: authorization.clientId});
+      const client = await loadActiveClient(authorization.clientId);
       return res.json({
         data: {
           clientId: authorization.clientId,
-          clientName: client?.clientName ?? null,
+          clientName: client.clientName ?? null,
           expiresAt: authorization.expiresAt.toISOString(),
           grants: consentGrantsFor(authorization.scope, oauth.grants),
           redirectHost: new URL(authorization.redirectUri).host,
@@ -1071,7 +1128,10 @@ export const addMcpOAuthRoutes = (app: Application, options: McpOAuthRoutesOptio
   if (oauth.dynamicClientRegistration) {
     addRegistrationRoute(app, oauth);
   }
-  addAuthorizeRoute(app, oauth);
+  const metadataDocuments = oauth.clientIdMetadataDocuments
+    ? createClientMetadataDocumentResolver(oauth.clientIdMetadataDocuments)
+    : undefined;
+  addAuthorizeRoute(app, oauth, metadataDocuments);
   addConsentRoutes(app, oauth, openApi);
   addTokenRoutes(app, oauth, userModel);
 };

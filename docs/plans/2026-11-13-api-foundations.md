@@ -293,7 +293,7 @@ None — no canvas.
   - Docs: docs/reference/create-terreno-app.md, docs/how-to/deploy-backend-to-cloud-run.md
   - Skills: building-terreno-apps, update-docs
 
-- [ ] **T10** — Make `@terreno/test` an optional peer of `@terreno/api` and drop test files from the tarball
+- [x] **T10** — Make `@terreno/test` an optional peer of `@terreno/api` and drop test files from the tarball
   - Depends on: T2
   - Files: api/package.json, api/src/packageManifest.test.ts, package.json files of workspace packages that import `@terreno/api/testing` or `@terreno/test` without declaring `@terreno/test`, bun.lock, docs/reference/test.md
   - Criteria:

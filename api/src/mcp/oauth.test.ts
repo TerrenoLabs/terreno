@@ -2036,6 +2036,27 @@ describe("MCP OAuth client ID metadata documents", () => {
       expect(res.headers.location).toBeUndefined();
     });
 
+    it("answers 400 when the body stalls or breaks mid-read", async () => {
+      const app = cimdApp(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              pull: (controller) => {
+                controller.error(new DOMException("The operation timed out.", "TimeoutError"));
+              },
+            }),
+            {status: 200}
+          )
+      );
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error_description).toContain("could not be read");
+      expect(res.headers.location).toBeUndefined();
+    });
+
     it("does not cache a failed fetch", async () => {
       let attempt = 0;
       const network = fakeNetwork({

@@ -43,7 +43,14 @@ const readCappedBody = async (response: Response, limit: number): Promise<string
   const chunks: Uint8Array[] = [];
   let total = 0;
   for (;;) {
-    const {done, value} = await reader.read();
+    let chunk: Awaited<ReturnType<typeof reader.read>>;
+    try {
+      chunk = await reader.read();
+    } catch {
+      // A body that stalls past the fetch timeout, or a dropped connection, lands here.
+      throw new ClientMetadataDocumentError("The client metadata document could not be read");
+    }
+    const {done, value} = chunk;
     if (done) {
       break;
     }

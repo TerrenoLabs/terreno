@@ -4,7 +4,7 @@ import type {NextFunction, Request, Response} from "express";
 import type {Model, SchemaType} from "mongoose";
 import type {ZodSchema, ZodType} from "zod";
 import {asyncHandler, type ModelRouterOptions, type RESTMethod} from "./api";
-import {authenticateMiddleware, type User} from "./auth";
+import {authenticateMiddleware} from "./auth";
 import {loadDocOr404} from "./docLoader";
 import {APIError, ForbiddenError, ValidationError} from "./errors";
 import {defaultOpenApiErrorResponses} from "./openApi";
@@ -13,6 +13,7 @@ import {createIsPermitted} from "./rbac/middleware";
 import {buildAccessScopeCheck} from "./rbac/modelRouterAccess";
 import type {AnyTerrenoAccess, ModelRouterAccessOptions} from "./rbac/types";
 import {assertCanWriteTargetUser, assertCanWriteUserIdentity} from "./rbac/userWriteGuards";
+import type {RegisteredUser} from "./types/register";
 
 // At least two characters: leading letter plus one or more alphanumeric/_/- chars.
 export const ACTION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]+$/;
@@ -20,7 +21,7 @@ export const ACTION_NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_-]+$/;
 export interface ActionContext<TDoc, TBody, TQuery> {
   req: Request;
   res: Response;
-  user: User | undefined;
+  user: RegisteredUser | undefined;
   body: TBody;
   query: TQuery;
   doc: TDoc;

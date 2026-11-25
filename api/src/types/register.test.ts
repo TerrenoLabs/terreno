@@ -37,4 +37,25 @@ describe("TerrenoRegister consumer fixtures", () => {
     }
     expect(exitCode).toBe(0);
   }, 120_000);
+
+  it("an augmented consumer types action, query filter, permission and req.user callbacks", () => {
+    const {exitCode, output} = runFixture("registeredUser");
+    expect(output).not.toContain("callbacks.ts");
+    expect(exitCode).toBe(0);
+  }, 120_000);
+
+  it("an augmented consumer with @types/passport types req.user without a conflict", () => {
+    const {exitCode, output} = runFixture("registeredUserPassport");
+    if (exitCode !== 0) {
+      console.error(output);
+    }
+    expect(exitCode).toBe(0);
+  }, 120_000);
+
+  it("an unaugmented consumer keeps its own req.user declaration and the default User", () => {
+    const {exitCode, output} = runFixture("unregisteredUser");
+    expect(output).not.toContain("callbacks.ts");
+    expect(output).not.toContain("TS2717");
+    expect(exitCode).toBe(0);
+  }, 120_000);
 });

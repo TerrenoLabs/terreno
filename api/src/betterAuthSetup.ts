@@ -253,7 +253,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
       : undefined,
     basePath,
     baseURL,
-    database: mongodbAdapter(mongoClient.db()),
+    database: mongodbAdapter(mongoClient.db() as unknown as Parameters<typeof mongodbAdapter>[0]),
     emailAndPassword: {
       enabled: true,
       revokeSessionsOnPasswordReset: true,

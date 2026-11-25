@@ -23,7 +23,7 @@ import {
   maybeRecordModelRouterAudit,
   snapshotAuditBefore,
 } from "./audit/record";
-import {authenticateMiddleware, omitUserRolesFromWriteBody, type User} from "./auth";
+import {authenticateMiddleware, omitUserRolesFromWriteBody} from "./auth";
 import {
   assertNoBulkCollision,
   type BulkBodyValidator,
@@ -81,6 +81,7 @@ import {
   type TerrenoTransformer,
   transform,
 } from "./transformers";
+import type {RegisteredUser} from "./types/register";
 import {isValidObjectId} from "./utils";
 
 // noExplicitAny: Framework routers accept consumer models with arbitrary query helpers, methods, virtuals, and hydrated document types
@@ -198,7 +199,7 @@ export interface ModelRouterOptions<T> {
    * If the query is acceptable as-is, return `query` as-is.
    */
   queryFilter?: (
-    user?: User,
+    user?: RegisteredUser,
     query?: Record<string, unknown>
   ) => Record<string, unknown> | null | Promise<Record<string, unknown> | null>;
   /**

@@ -9,10 +9,11 @@ import {APIError} from "./errors";
 import {methodPermissionDeniedError} from "./modelRouterWrites";
 import {isOrgMemberPermission, OrgQueryFilter} from "./orgs/orgPermissions";
 import {getCurrentRequestContext} from "./requestContext";
+import type {RegisteredUser} from "./types/register";
 
 export type PermissionMethod<T> = (
   method: RESTMethod,
-  user?: User,
+  user?: RegisteredUser,
   obj?: T
 ) => boolean | Promise<boolean>;
 

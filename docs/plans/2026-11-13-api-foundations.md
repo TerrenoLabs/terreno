@@ -102,7 +102,7 @@ None — no canvas.
   - Docs: none in this task; the reference section is written in T12
   - Skills: terreno-backend-api
 
-- [ ] **T2** — Derive `user` from the registry in actions, query filters and permissions, and add the opt-in `req.user` typing entry
+- [x] **T2** — Derive `user` from the registry in actions, query filters and permissions, and add the opt-in `req.user` typing entry
   - Depends on: T1
   - Files: api/src/actions.ts, api/src/api.ts, api/src/permissions.ts, api/types/expressUser.d.ts, api/package.json, api/typeFixtures/registeredUser/callbacks.ts, api/typeFixtures/unregisteredUser/callbacks.ts, docs/explanation/model-router-actions.md
   - Criteria:

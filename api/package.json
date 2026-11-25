@@ -81,6 +81,9 @@
       "default": "./dist/sentryV10DataCollection.js",
       "types": "./dist/sentryV10DataCollection.d.ts"
     },
+    "./expressUser": {
+      "types": "./types/expressUser.d.ts"
+    },
     "./testing": {
       "default": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
@@ -95,6 +98,7 @@
     "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
+    "types/**/*",
     ".ai/**/*"
   ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",

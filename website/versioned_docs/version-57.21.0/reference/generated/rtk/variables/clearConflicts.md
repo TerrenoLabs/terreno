@@ -1,1 +1,0 @@
-> **clearConflicts**: `ActionCreatorWithoutPayload`\<`"offline/clearConflicts"`\>

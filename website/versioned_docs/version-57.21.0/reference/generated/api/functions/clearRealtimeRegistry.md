@@ -1,5 +1,0 @@
-> **clearRealtimeRegistry**(): `void`
-
-## Returns
-
-`void`

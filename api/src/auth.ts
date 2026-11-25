@@ -49,7 +49,16 @@ export interface User {
   emailVerified?: boolean;
 }
 
-export interface UserModel extends Model<User> {
+/**
+ * Any Mongoose model of an app user document (`_id`, `admin`, optional `email`). Plain
+ * models and `passport-local-mongoose` models both satisfy it; only the legacy Passport
+ * helpers need `PassportUserModel`.
+ */
+// noExplicitAny: Mongoose model generics are invariant; an app's own document, statics and methods types must all be accepted
+// biome-ignore lint/suspicious/noExplicitAny: Mongoose model generics are invariant; an app's own document, statics and methods types must all be accepted
+export type TerrenoUserModel = Model<any, any, any, any, any, any, any>;
+
+export interface PassportUserModel extends TerrenoUserModel {
   createAnonymousUser?: (id?: string) => Promise<User>;
   // Allows additional setup during signup. This will be passed the rest of req.body from the signup
   postCreate?: (body: Record<string, unknown>) => Promise<void>;
@@ -63,6 +72,9 @@ export interface UserModel extends Model<User> {
     findOpts: boolean | {selectHashSaltFields?: boolean}
   ): Query<User | null, User>;
 }
+
+/** @deprecated Use `PassportUserModel` (Passport helpers) or `TerrenoUserModel` (any app user model). */
+export type UserModel = PassportUserModel;
 
 export interface GenerateTokensOptions {
   sessionId?: string;

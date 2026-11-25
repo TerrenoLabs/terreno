@@ -1,7 +1,7 @@
 import express from "express";
 
 import {asyncHandler} from "../api";
-import {authenticateMiddleware, type User, type UserModel} from "../auth";
+import {authenticateMiddleware, type TerrenoUserModel, type User} from "../auth";
 import {APIError} from "../errors";
 import type {TerrenoPlugin} from "../terrenoPlugin";
 import type {AnyTerrenoAccess} from "./types";
@@ -15,7 +15,7 @@ const pathParam = (value: string | string[] | undefined, title: string): string 
 
 export interface RbacRouterOptions {
   access: AnyTerrenoAccess;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
   basePath?: string;
 }
 

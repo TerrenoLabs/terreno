@@ -125,7 +125,7 @@ None — no canvas.
   - Docs: docs/explanation/model-router-actions.md (handler `user`); callback signatures in the reference are written in T12
   - Skills: terreno-backend-api, model-router-actions, update-docs
 
-- [ ] **T3** — Accept any app user model on `userModel` options with `TerrenoUserModel`
+- [x] **T3** — Accept any app user model on `userModel` options with `TerrenoUserModel`
   - Depends on: T1
   - Files: api/src/auth.ts, api/src/terrenoApp.ts, api/src/betterAuthApp.ts, api/src/betterAuthSetup.ts, api/src/betterAuthSetPassword.ts, api/src/accountSecurity/accountSecurityApp.ts, api/src/accountSecurity/orgSecurityRoutes.ts, api/src/accountSecurity/securityEventHooks.ts, api/src/rbac/access.ts, api/src/rbac/routes.ts, api/src/rbac/backfillAdmins.ts, api/src/seedRunner.ts, api/src/realtime/types.ts, api/src/realtime/socketAuth.ts, api/src/sync/syncApp.ts, api/src/index.ts, api/typeFixtures/registeredUser/userModel.ts, docs/explanation/authentication.md
   - Criteria:

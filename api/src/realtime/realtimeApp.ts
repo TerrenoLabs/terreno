@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/bun";
 import type express from "express";
 import {Server, type Socket} from "socket.io";
 
-import type {UserModel} from "../auth";
+import type {TerrenoUserModel} from "../auth";
 import {findBetterAuthProvider, getProvidedBetterAuth} from "../betterAuthApp";
 import {APIError} from "../errors";
 import {logger} from "../logger";
@@ -146,8 +146,8 @@ export class RealtimeApp implements TerrenoPlugin {
    * This RealtimeApp's `userModel`, else the TerrenoApp's, matching what `TerrenoApp({realtime})`
    * passes to the RealtimeApp it registers.
    */
-  private resolveUserModel(): UserModel | undefined {
-    return this.config.userModel ?? (this.terrenoApp?.getUserModel() as UserModel | undefined);
+  private resolveUserModel(): TerrenoUserModel | undefined {
+    return this.config.userModel ?? this.terrenoApp?.getUserModel();
   }
 
   /**

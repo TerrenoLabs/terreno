@@ -1,10 +1,10 @@
-import type {UserModel} from "../auth";
+import type {TerrenoUserModel} from "../auth";
 import {logger} from "../logger";
 import type {AnyTerrenoAccess} from "./types";
 
 export interface BackfillAdminsOptions {
   access: AnyTerrenoAccess;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
   roleName?: string;
   wetRun?: boolean;
 }

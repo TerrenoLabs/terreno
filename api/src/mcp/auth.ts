@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import {DateTime} from "luxon";
 
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {logger} from "../logger";
 import {MCP_OAUTH_ACCESS_TOKEN_PREFIX, McpOAuthToken} from "../models/mcpOAuthToken";
@@ -10,7 +10,7 @@ import {findOneOrNoneFor} from "../plugins";
 import type {RequestCredential} from "../requestContext";
 
 export interface MCPAuthContext {
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
   betterAuth?: BetterAuthInstance;
   mcpServiceTokens?: boolean;
   /** Accept `mcpat_` OAuth access tokens issued by the MCP OAuth server. */
@@ -76,7 +76,7 @@ export const bearerFromHeaders = (
 
 const authenticateServiceToken = async (
   token: string,
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): Promise<MCPAuthResult | undefined> => {
   const serviceToken = await McpServiceToken.verify(token);
   if (!serviceToken) {
@@ -112,7 +112,7 @@ const authenticateServiceToken = async (
 
 const authenticateOAuthAccessToken = async (
   token: string,
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): Promise<MCPAuthResult | undefined> => {
   const accessToken = await McpOAuthToken.verifyAccessToken(token);
   if (!accessToken) {

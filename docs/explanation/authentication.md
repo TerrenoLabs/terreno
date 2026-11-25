@@ -105,6 +105,10 @@ a strict Content-Security-Policy. See
 
 ### Email/Password (JWT / Local Strategy — legacy)
 
+### Which user model type each path needs
+
+`userModel` options (`TerrenoApp`, `BetterAuthApp`, `createAccess`, `rbacRouter`, `AccountSecurityApp`, `RealtimeApp`, `CommsApp`) take `TerrenoUserModel`: any Mongoose model whose document has `_id`, `admin`, and an optional `email`. A plain model with its own statics and methods needs no cast. The legacy Passport setup (`setupAuth`, `addAuthRoutes`, `setupGitHubAuth`, `addGitHubAuthRoutes`) needs `PassportUserModel`, a model with the `passport-local-mongoose` plugin; `TerrenoApp` checks for it when it mounts those routes. `UserModel` is a deprecated alias of `PassportUserModel`.
+
 Traditional username/password authentication using `passport-local-mongoose`.
 
 **Flow:**

@@ -8,7 +8,13 @@ import qs from "qs";
 import {AccountSecurityApp} from "./accountSecurity/accountSecurityApp";
 import type {AdminChangeEvent, TerrenoAppAdminEvent} from "./adminTypes";
 import type {ModelRouterRegistration} from "./api";
-import {addAuthRoutes, addMeRoutes, setupAuth, type UserModel as UserMongooseModel} from "./auth";
+import {
+  addAuthRoutes,
+  addMeRoutes,
+  type PassportUserModel,
+  setupAuth,
+  type TerrenoUserModel,
+} from "./auth";
 import {findBetterAuthProvider, getProvidedBetterAuth} from "./betterAuthApp";
 import {
   applyJwtPasswordResetToBetterAuth,
@@ -74,12 +80,24 @@ type CorsOrigin =
       ) => void
     ) => void);
 
+// The legacy Passport setup is the only caller that needs the Passport statics, so the one
+// narrowing from the app's model happens here, with the same failure `setupAuth` raises.
+const isPassportUserModel = (userModel: TerrenoUserModel): userModel is PassportUserModel =>
+  typeof (userModel as {createStrategy?: unknown}).createStrategy === "function";
+
+const passportUserModel = (userModel: TerrenoUserModel): PassportUserModel => {
+  if (!isPassportUserModel(userModel)) {
+    throw new APIError({status: 500, title: "setupAuth userModel must have .createStrategy()"});
+  }
+  return userModel;
+};
+
 /**
  * Configuration options for TerrenoApp.
  */
 export interface TerrenoAppOptions {
-  /** Mongoose User model with passport-local-mongoose plugin */
-  userModel: UserMongooseModel;
+  /** Mongoose model of the app user document; any model with `admin` and optional `email` works */
+  userModel: TerrenoUserModel;
   /** CORS origin configuration (default: "*") */
   corsOrigin?: CorsOrigin;
   /** Logging configuration options */
@@ -439,7 +457,7 @@ export class TerrenoApp {
 
     // JWT decode before rate limiting so authenticated keys use userId.
     // Auth routes mount after the limiter so login is in the auth bucket.
-    setupAuth(app, options.userModel);
+    setupAuth(app, passportUserModel(options.userModel));
     app.use((req, res, next) => {
       updateRequestContextFromRequest(req, res);
       next();
@@ -482,7 +500,7 @@ export class TerrenoApp {
       },
       openapi: "3.0.0",
     });
-    addAuthRoutes(app, options.userModel, authOptions, oapi);
+    addAuthRoutes(app, passportUserModel(options.userModel), authOptions, oapi);
 
     if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
@@ -526,8 +544,13 @@ export class TerrenoApp {
 
     // GitHub OAuth
     if (options.githubAuth) {
-      setupGitHubAuth(app, options.userModel, options.githubAuth);
-      addGitHubAuthRoutes(app, options.userModel, options.githubAuth, options.authOptions);
+      setupGitHubAuth(app, passportUserModel(options.userModel), options.githubAuth);
+      addGitHubAuthRoutes(
+        app,
+        passportUserModel(options.userModel),
+        options.githubAuth,
+        options.authOptions
+      );
     }
 
     // Mount configuration app if configured
@@ -607,7 +630,13 @@ export class TerrenoApp {
 
     // /auth/me must be registered after plugins so that session middleware
     // (e.g. Better Auth) has a chance to populate req.user first.
-    addMeRoutes(app, options.userModel, options.authOptions, options.accessControl, oapi);
+    addMeRoutes(
+      app,
+      passportUserModel(options.userModel),
+      options.authOptions,
+      options.accessControl,
+      oapi
+    );
 
     Sentry.setupExpressErrorHandler(app);
 

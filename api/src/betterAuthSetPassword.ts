@@ -33,7 +33,7 @@ import {
 import {DateTime} from "luxon";
 import {z} from "zod";
 
-import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
+import {type HasSetPassword, setPasswordForUser, type TerrenoUserModel} from "./auth";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
 
@@ -58,7 +58,7 @@ interface PassportUserDoc {
  * prove the session owns that User.
  */
 const findLinkedAppUser = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   betterAuthUserId: string
 ): Promise<PassportUserDoc | null> =>
   (await findOneOrNoneFor(userModel, {
@@ -80,7 +80,7 @@ const syncPasswordToAppUser = async ({
 }: {
   betterAuthUserId: string;
   password: string;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): Promise<void> => {
   try {
     const appUser = await findLinkedAppUser(userModel, betterAuthUserId);
@@ -132,7 +132,7 @@ const firstCredential = (rows: CredentialRow[]): CredentialRow | undefined =>
 export const createSetPasswordPlugin = ({
   userModel,
 }: {
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
 } = {}): BetterAuthPlugin => {
   const terrenoSetPassword = createAuthEndpoint(
     SET_PASSWORD_PATH,

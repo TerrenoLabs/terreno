@@ -3,7 +3,7 @@ import type express from "express";
 import type {RequestHandler} from "express";
 import type {Connection} from "mongoose";
 import type {RESTMethod} from "../api";
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import type {PermissionMethod} from "../permissions";
 import type {RbacAuditWrite} from "./auditModel";
 import type {RbacRoleDocument, RoleDefinition} from "./roleModel";
@@ -162,7 +162,7 @@ export interface AccessOptions<S extends Statements> {
    * Default `false` so existing single-tenant apps stay unchanged. New apps from bootstrap pass `true`.
    */
   organizations?: boolean;
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
   defaultRoles?: RoleDefinition[];
   scopes?: ResourceScopes<S>;
   fieldViews?: ResourceFieldViews<S>;
@@ -223,5 +223,5 @@ export interface TerrenoAccess<S extends Statements> {
    * The `userModel` passed to `createAccess`. Write paths use it to recognize the user model when
    * it is compiled under a name other than `"User"`.
    */
-  readonly userModel?: UserModel;
+  readonly userModel?: TerrenoUserModel;
 }

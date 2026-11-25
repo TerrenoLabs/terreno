@@ -10,7 +10,7 @@
 
 import {DateTime, Duration} from "luxon";
 
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import type {BetterAuthConfig} from "../betterAuth";
 import {logger} from "../logger";
 import {findOneOrNoneFor} from "../plugins";
@@ -422,7 +422,7 @@ export const createSecurityNotificationListener = ({
   throttleMinutes = DEFAULT_SECURITY_NOTIFICATION_THROTTLE_MINUTES,
 }: {
   getMailConfig: () => SecurityMailConfig;
-  getUserModel: () => UserModel;
+  getUserModel: () => TerrenoUserModel;
   includeOrgName?: boolean;
   /** The current time in epoch milliseconds. Tests pass a fake clock. */
   now?: () => number;

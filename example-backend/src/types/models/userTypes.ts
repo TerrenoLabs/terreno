@@ -24,6 +24,9 @@ export type UserDocument = DefaultDoc &
     /** Set by platform staff to refuse every request and socket handshake (isDisabledPlugin). */
     disabled: boolean;
     email: string;
+    /** Hex string of `_id`; satisfies the framework `User` shape that built-in permissions read. */
+    id: string;
+    __v: number;
     name: string;
     oauthProvider?: "google" | "github" | "apple" | null;
     emailVerified: boolean;

@@ -2,7 +2,7 @@ import {randomUUID} from "node:crypto";
 import express from "express";
 import jwt, {type JwtPayload} from "jsonwebtoken";
 import {DateTime} from "luxon";
-import type {Model, ObjectId, Query} from "mongoose";
+import type {Model, ObjectId, Query, Types} from "mongoose";
 import ms, {type StringValue} from "ms";
 import passport from "passport";
 import {Strategy as AnonymousStrategy} from "passport-anonymous";
@@ -31,7 +31,7 @@ import {
 } from "./requestContext";
 
 export interface User {
-  _id: ObjectId | string;
+  _id: ObjectId | Types.ObjectId | string;
   id: string;
   // Whether the user should be treated as an admin or not.
   // Admins can have extra abilities in permissions declarations

@@ -4,10 +4,9 @@ import {
   type JSONValue,
   modelRouter,
   Permissions,
-  type User as TerrenoUser,
   z,
 } from "@terreno/api";
-import type {Document, Model} from "mongoose";
+import type {Document} from "mongoose";
 import {User} from "../models/user";
 import type {UserDocument} from "../types/models/userTypes";
 
@@ -25,7 +24,7 @@ const serializeUser = (doc: SerializableUser): Record<string, unknown> => {
   return rest;
 };
 
-export const usersRouter = modelRouter("/users", User as unknown as Model<UserDocument>, {
+export const usersRouter = modelRouter("/users", User, {
   admin: {
     adminAccess: {},
     defaultSort: "-created",
@@ -55,7 +54,7 @@ export const usersRouter = modelRouter("/users", User as unknown as Model<UserDo
         }
         const admin = user as {_id?: unknown; id?: string} | undefined;
         // Ends the user's refresh tokens, MCP credentials, and Better Auth sessions too.
-        await changeUserPassword(doc as unknown as TerrenoUser, password, {
+        await changeUserPassword(doc, password, {
           adminId: admin?._id ?? admin?.id,
           app: req.app,
         });

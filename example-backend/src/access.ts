@@ -68,5 +68,5 @@ export const access = createAccess({
   },
   statementDescriptions: appStatementDescriptions,
   statements: appStatements,
-  userModel: User as unknown as import("@terreno/api").UserModel,
+  userModel: User,
 });

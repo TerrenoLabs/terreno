@@ -1,6 +1,6 @@
 import {beforeEach, describe, expect, it} from "bun:test";
 import type express from "express";
-import type {Document, HydratedDocument, ObjectId} from "mongoose";
+import type {Document, HydratedDocument, ObjectId, Types} from "mongoose";
 import supertest from "supertest";
 import type TestAgent from "supertest/lib/agent";
 
@@ -46,7 +46,7 @@ describe("query and transform", () => {
           read: [Permissions.IsAny],
           update: [Permissions.IsAny],
         },
-        queryFilter: (user?: {_id: ObjectId | string; admin: boolean}) => {
+        queryFilter: (user?: {_id: ObjectId | Types.ObjectId | string; admin: boolean}) => {
           if (!user?.admin) {
             return {hidden: {$ne: true}};
           }

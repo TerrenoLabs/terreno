@@ -129,7 +129,7 @@ const todoRouter = modelRouter("/todos", Todo, {
     read: [Permissions.IsOwner],
     update: [Permissions.IsOwner],
   },
-  preCreate: (body, req) => ({...body, ownerId: (req.user as unknown as UserDocument)?._id}),
+  preCreate: (body, req) => ({...body, ownerId: (req.user)?._id}),
   queryFilter: OwnerQueryFilter,
   sync: {
     scope: {type: "owner"}, // stream = todos|owner:{ownerId}

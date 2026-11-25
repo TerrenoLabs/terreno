@@ -171,7 +171,7 @@ None — no canvas.
   - Docs: none in this task (signatures are documented in T12)
   - Skills: terreno-backend-api, mongoose-schema-safety
 
-- [ ] **T5** — Delete the user casts from example-backend
+- [x] **T5** — Delete the user casts from example-backend
   - Depends on: T4
   - Files: example-backend/src/access.ts, example-backend/src/server.ts, example-backend/src/api/users.ts, example-backend/src/api/todos.ts, example-backend/src/api/projects.ts, example-backend/src/api/loadtest.ts, example-backend/src/jobs/bootstrapJobsWorker.ts, example-backend/src/utils/betterAuthUserSeed.ts, example-backend/src/types/express.d.ts, example-backend/src/types/terrenoRegister.d.ts, example-backend/src/noUserCasts.test.ts, docs/reference/syncdb.md
   - Criteria:

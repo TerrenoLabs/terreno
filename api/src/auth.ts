@@ -80,6 +80,10 @@ export interface GenerateTokensOptions {
   sessionId?: string;
 }
 
+// Apps that ran `setupAuth` have Passport strategies registered. Passport's registry is
+// process-wide, so the decision to call it is made per Express app.
+const passportApps = new WeakSet<object>();
+
 export const authenticateMiddleware = (anonymous = false) => {
   const strategies = ["jwt"];
   if (anonymous) {
@@ -88,6 +92,13 @@ export const authenticateMiddleware = (anonymous = false) => {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.user) {
       return next();
+    }
+    // Without setupAuth (legacyAuth: false) there is no jwt strategy: never call Passport.
+    if (!passportApps.has(req.app)) {
+      if (anonymous) {
+        return next();
+      }
+      return next(new Error("Unauthorized"));
     }
     // Failures use a custom callback rather than passport's `failWithError`:
     // passport's internal AuthenticationError touches `arguments.callee`,
@@ -544,6 +555,7 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
   if (!userModel.createStrategy) {
     throw new APIError({status: 500, title: "setupAuth userModel must have .createStrategy()"});
   }
+  passportApps.add(app);
 
   passport.use(new AnonymousStrategy());
   passport.use(userModel.createStrategy());

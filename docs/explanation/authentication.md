@@ -122,6 +122,29 @@ Traditional username/password authentication using `passport-local-mongoose`.
 - `POST /auth/signup` — Create new user account
 - `POST /auth/login` — Authenticate and receive tokens
 
+### Turning legacy auth off (`legacyAuth: false`)
+
+`new TerrenoApp({legacyAuth: false, userModel})` mounts no Passport strategies and none of
+the legacy routes. The user model needs no Passport plugin, and `TOKEN_SECRET` and
+`REFRESH_TOKEN_SECRET` are not read. Omitting the option keeps legacy auth on and logs one
+warning; the default becomes `false` in Terreno 60.
+
+| Route | Mounted by | Better Auth replacement |
+| --- | --- | --- |
+| `POST /auth/login` | `addAuthRoutes` | `POST {basePath}/sign-in/email` |
+| `POST /auth/signup` | `addAuthRoutes` | `POST {basePath}/sign-up/email` |
+| `POST /auth/refresh_token` | `addAuthRoutes` | Better Auth session |
+| `POST /auth/forgotPassword` | `addAuthRecoveryRoutes` | `sendResetPassword` hook |
+| `POST /auth/resetPassword`, `POST /resetPassword` | `addAuthRecoveryRoutes` | Better Auth reset-password |
+| `POST /auth/sendVerification` | `addAuthRecoveryRoutes` | `sendVerificationEmail` hook |
+| `POST /auth/verifyEmail` | `addAuthRecoveryRoutes` | Better Auth verify-email |
+
+`GET` and `PATCH /auth/me` stay mounted. `authenticateMiddleware` decides per Express app:
+without `setupAuth` it never calls Passport, so an unauthenticated request gets 401 (or
+continues anonymously when allowed) and a legacy JWT is not accepted. `githubAuth` together
+with `legacyAuth: false` throws at `build()`. `legacyAuth: false` with no `BetterAuthApp`
+logs one warning and still builds.
+
 ### GitHub OAuth Strategy (JWT — legacy)
 
 OAuth 2.0 authentication with GitHub.

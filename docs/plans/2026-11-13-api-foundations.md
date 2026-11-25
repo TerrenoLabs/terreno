@@ -209,7 +209,7 @@ None — no canvas.
   - Docs: docs/reference/create-terreno-app.md (generated files list)
   - Skills: terreno-backend-api, update-docs
 
-- [ ] **T7** — Add the `legacyAuth` option so a Better Auth app mounts no Passport or legacy routes
+- [x] **T7** — Add the `legacyAuth` option so a Better Auth app mounts no Passport or legacy routes
   - Depends on: T3
   - Files: api/src/terrenoApp.ts, api/src/auth.ts, api/src/terrenoApp.legacyAuth.test.ts, api/e2e/smoke.ts, docs/explanation/authentication.md, docs/reference/environment-variables.md
   - Criteria:

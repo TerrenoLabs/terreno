@@ -18,6 +18,8 @@ import {DateTime} from "luxon";
 import type {Schema} from "mongoose";
 
 const SERVE_ARG = "serve";
+// Third argument of the child: serve with `legacyAuth: false` and a user model with no Passport.
+const NO_LEGACY_ARG = "no-legacy";
 
 interface SmokeWidget {
   _id: string;
@@ -35,15 +37,21 @@ const serve = async (): Promise<void> => {
   const {default: mongoose} = await import("mongoose");
   const {default: passportLocalMongoose} = await import("passport-local-mongoose");
 
+  const isLegacyAuthDisabled = process.argv[3] === NO_LEGACY_ARG;
   const userSchema = new mongoose.Schema({
     admin: {default: false, description: "Whether the user is an admin", type: Boolean},
     email: {description: "Sign-in email", type: String},
     name: {description: "Display name", type: String},
   });
-  userSchema.plugin(passportLocalMongoose as unknown as (schema: Schema, options: object) => void, {
-    usernameCaseInsensitive: true,
-    usernameField: "email",
-  });
+  if (!isLegacyAuthDisabled) {
+    userSchema.plugin(
+      passportLocalMongoose as unknown as (schema: Schema, options: object) => void,
+      {
+        usernameCaseInsensitive: true,
+        usernameField: "email",
+      }
+    );
+  }
   userSchema.plugin(createdUpdatedPlugin);
   const User = mongoose.model("User", userSchema);
 
@@ -79,6 +87,7 @@ const serve = async (): Promise<void> => {
 
   await mongoose.connect(process.env.MONGO_URI as string);
   const app = new TerrenoApp({
+    ...(isLegacyAuthDisabled ? {legacyAuth: false} : {}),
     loggingOptions: {logRequests: false},
     userModel: User as unknown as ConstructorParameters<typeof TerrenoApp>[0]["userModel"],
   })
@@ -95,6 +104,46 @@ const expectStatus = async (res: Response, status: number, step: string): Promis
     throw new Error(`${step}: expected ${status}, got ${res.status}: ${body}`);
   }
   return body ? JSON.parse(body) : undefined;
+};
+
+/** Parent: a second child with `legacyAuth: false` mounts no legacy routes and still guards routes. */
+const runNoLegacyChecks = async (): Promise<void> => {
+  const port = await freePort();
+  const baseUrl = `http://127.0.0.1:${port}`;
+  const server = await spawnUntilReady({
+    cmd: [process.execPath, __filename, SERVE_ARG, NO_LEGACY_ARG],
+    env: {
+      MONGO_URI: await smokeMongoUri({databaseName: "apiSmokeNoLegacy"}),
+      PORT: String(port),
+      SESSION_SECRET: "api-smoke-session-secret",
+      TOKEN_ISSUER: "api-smoke",
+    },
+    timeoutMs: 20000,
+    url: `${baseUrl}/health`,
+  });
+  try {
+    await expectStatus(
+      await fetch(`${baseUrl}/auth/login`, {
+        body: JSON.stringify({email: "nobody@example.com", password: "x"}),
+        headers: {"Content-Type": "application/json"},
+        method: "POST",
+      }),
+      404,
+      "POST /auth/login with legacyAuth: false"
+    );
+    console.info("✅ legacyAuth: false mounts no POST /auth/login");
+    await expectStatus(
+      await fetch(`${baseUrl}/widgets`),
+      401,
+      "unauthenticated GET /widgets with legacyAuth: false"
+    );
+    console.info("✅ legacyAuth: false still answers 401 on protected routes");
+  } catch (error: unknown) {
+    console.error(`--- no-legacy server output ---\n${server.output()}`);
+    throw error;
+  } finally {
+    await server.stop();
+  }
 };
 
 /** Parent: boots the child and walks the happy path over HTTP. */
@@ -166,6 +215,8 @@ const run = async (): Promise<void> => {
       throw new Error("GET /widgets: the created widget is missing from the list");
     }
     console.info("✅ GET /widgets lists it");
+
+    await runNoLegacyChecks();
   } catch (error: unknown) {
     if (server) {
       console.error(`--- server output ---\n${server.output()}`);

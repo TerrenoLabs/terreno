@@ -35,9 +35,9 @@ Comprehensive guide to environment variables used across Terreno packages and ex
 | Variable | Read by | Required | Default | Secret | Scope |
 |----------|---------|----------|---------|--------|-------|
 | `AUTH_PROVIDER` | `@terreno/api` | ❌ | `jwt` | No | server |
-| `TOKEN_SECRET` | `@terreno/api` | ✅ if JWT | — | Yes | server |
+| `TOKEN_SECRET` | `@terreno/api` | ✅ if JWT (not read with `legacyAuth: false`) | — | Yes | server |
 | `TOKEN_ISSUER` | `@terreno/api` | ✅ if JWT | — | No | server |
-| `REFRESH_TOKEN_SECRET` | `@terreno/api` | ✅ if JWT | — | Yes | server |
+| `REFRESH_TOKEN_SECRET` | `@terreno/api` | ✅ if JWT (not read with `legacyAuth: false`) | — | Yes | server |
 | `SESSION_SECRET` | `@terreno/api` | ✅ if JWT | — | Yes | server |
 | `TOKEN_EXPIRES_IN` | `@terreno/api` | ❌ | `15m` | No | server |
 | `REFRESH_TOKEN_EXPIRES_IN` | `@terreno/api` | ❌ | `30d` | No | server |

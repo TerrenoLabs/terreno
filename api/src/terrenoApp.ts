@@ -106,6 +106,13 @@ export interface TerrenoAppOptions {
   authOptions?: AuthOptions;
   /** GitHub OAuth configuration (enables GitHub authentication if provided) */
   githubAuth?: GitHubAuthOptions;
+  /**
+   * Legacy Passport/JWT auth. `false` mounts no Passport strategies and none of `/auth/login`,
+   * `/auth/signup`, `/auth/refresh_token`, `/auth/forgotPassword`, `/auth/resetPassword`,
+   * `/auth/sendVerification`, `/auth/verifyEmail`, `/resetPassword`; use Better Auth.
+   * Omitted behaves as `true` and logs a warning; the default becomes `false` in Terreno 60.
+   */
+  legacyAuth?: boolean;
   /** Skip calling app.listen() in start() method (useful for testing) */
   skipListen?: boolean;
   /**
@@ -417,6 +424,20 @@ export class TerrenoApp {
 
     const app = express();
     const options = this.options;
+    const legacyAuth = options.legacyAuth !== false;
+    if (options.legacyAuth === undefined) {
+      logger.warn(
+        "TerrenoApp `legacyAuth` is not set: legacy Passport/JWT auth stays on. Set `legacyAuth: true` to keep it or `false` to use Better Auth only; the default becomes false in Terreno 60."
+      );
+    }
+    if (!legacyAuth && options.githubAuth) {
+      throw new APIError({status: 500, title: "githubAuth requires legacyAuth"});
+    }
+    if (!legacyAuth && !findBetterAuthProvider(this.registrations)) {
+      logger.warn(
+        "TerrenoApp `legacyAuth` is false and no BetterAuthApp is registered: no auth provider will populate req.user."
+      );
+    }
     // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
     // instance exists, so the app User guard and sync are installed with it.
     const betterAuthProvider = findBetterAuthProvider(this.registrations);
@@ -457,7 +478,9 @@ export class TerrenoApp {
 
     // JWT decode before rate limiting so authenticated keys use userId.
     // Auth routes mount after the limiter so login is in the auth bucket.
-    setupAuth(app, passportUserModel(options.userModel));
+    if (legacyAuth) {
+      setupAuth(app, passportUserModel(options.userModel));
+    }
     app.use((req, res, next) => {
       updateRequestContextFromRequest(req, res);
       next();
@@ -500,7 +523,9 @@ export class TerrenoApp {
       },
       openapi: "3.0.0",
     });
-    addAuthRoutes(app, passportUserModel(options.userModel), authOptions, oapi);
+    if (legacyAuth) {
+      addAuthRoutes(app, passportUserModel(options.userModel), authOptions, oapi);
+    }
 
     if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
@@ -632,7 +657,9 @@ export class TerrenoApp {
     // (e.g. Better Auth) has a chance to populate req.user first.
     addMeRoutes(
       app,
-      passportUserModel(options.userModel),
+      legacyAuth
+        ? passportUserModel(options.userModel)
+        : (options.userModel as unknown as PassportUserModel),
       options.authOptions,
       options.accessControl,
       oapi

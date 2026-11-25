@@ -36,6 +36,7 @@ import type {AuthRecoveryMail, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
 import {updateRequestContextFromRequest} from "./requestContext";
+import type {RegisteredUser} from "./types/register";
 
 /**
  * The Better Auth instance type.
@@ -852,6 +853,9 @@ interface MutableUserDoc {
   save: () => Promise<unknown>;
 }
 
+/** The app user document `syncBetterAuthUser` returns: the registered user plus the fields it writes. */
+export type SyncedBetterAuthUser = RegisteredUser & MutableUserDoc;
+
 export interface SyncBetterAuthUserOptions {
   /**
    * The plaintext password from the sign-up or sign-in request being served. When an app User
@@ -1023,7 +1027,7 @@ const revokeUnprovenLegacyPassword = async (
   );
 };
 
-export const syncBetterAuthUser = async (
+const syncBetterAuthUserDoc = async (
   userModel: TerrenoUserModel,
   betterAuthUser: BetterAuthUser,
   oauthProvider?: string,
@@ -1107,6 +1111,24 @@ export const syncBetterAuthUser = async (
     throw error;
   }
 };
+
+/**
+ * Create or link the app user for a Better Auth user. Resolves to the registered user document
+ * (`TerrenoRegister`), so a caller reads and writes app fields and calls `save()` without a cast.
+ */
+export const syncBetterAuthUser = async (
+  userModel: TerrenoUserModel,
+  betterAuthUser: BetterAuthUser,
+  oauthProvider?: string,
+  options: SyncBetterAuthUserOptions = {}
+): Promise<SyncedBetterAuthUser> =>
+  // The document is hydrated from the app's own model, so it has the registered shape.
+  (await syncBetterAuthUserDoc(
+    userModel,
+    betterAuthUser,
+    oauthProvider,
+    options
+  )) as unknown as SyncedBetterAuthUser;
 
 const isVerifyEmailRefusal = (error: unknown): boolean =>
   isAPIError(error) && error.status === 409 && error.message === VERIFY_EMAIL_TO_USE_ACCOUNT;

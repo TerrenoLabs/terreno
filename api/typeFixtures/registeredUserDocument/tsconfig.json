@@ -1,0 +1,18 @@
+{
+  "compilerOptions": {
+    "lib": ["es2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "noEmit": true,
+    "paths": {
+      "@terreno/api": ["../../dist/index.d.ts"],
+      "@terreno/api/expressUser": ["../../types/expressUser.d.ts"],
+      "@terreno/comms": ["../../../comms/dist/index.d.ts"]
+    },
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "es2023",
+    "types": ["node"]
+  },
+  "include": ["./*.ts"]
+}

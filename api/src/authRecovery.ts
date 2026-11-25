@@ -17,6 +17,7 @@ import type {AuthOptions, AuthRecoveryMail} from "./expressServer";
 import {logger} from "./logger";
 import {createOpenApiBuilder} from "./openApiBuilder";
 import {findOneOrNoneFor} from "./plugins";
+import type {RegisteredUser} from "./types/register";
 
 const RESET_PASSWORD_SUBJECT = "Reset your password";
 const VERIFY_EMAIL_SUBJECT = "Verify your email";
@@ -252,7 +253,7 @@ export interface ChangeUserPasswordOptions {
  * `setPasswordForUser` alone revokes nothing.
  */
 export const changeUserPassword = async (
-  user: User,
+  user: RegisteredUser,
   password: string,
   options: ChangeUserPasswordOptions = {}
 ): Promise<void> => {

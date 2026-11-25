@@ -148,7 +148,7 @@ None — no canvas.
   - Docs: docs/explanation/authentication.md (which type each auth path needs); the reference entries are written in T12
   - Skills: terreno-backend-api, mongoose-schema-safety, update-docs
 
-- [ ] **T4** — Pass and receive the registered user document without a cast
+- [x] **T4** — Pass and receive the registered user document without a cast
   - Depends on: T2, T3
   - Files: api/src/api.ts, api/src/authRecovery.ts, api/src/seedRunner.ts, api/src/betterAuthSetup.ts, api/typeFixtures/registeredUser/userDocument.ts
   - Criteria:

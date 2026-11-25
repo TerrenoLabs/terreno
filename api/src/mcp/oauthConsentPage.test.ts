@@ -395,6 +395,46 @@ describe("MCP OAuth built-in consent page", () => {
     });
   });
 
+  describe("JSON consent endpoints in builtin mode", () => {
+    it("refuses the JSON approve, so a session alone can't skip the password and code", async () => {
+      const owner = await createOwner(app);
+      const sessionApp = new TerrenoApp({
+        mcpOAuth: {
+          clientIdMetadataDocuments: {
+            allowedClientIds: [CLAUDE_AI],
+            fetch: async () => new Response(JSON.stringify(claudeDocument), {status: 200}),
+          },
+          consent: {mode: "builtin", requireAdmin: true},
+          enabled: true,
+          issuer: ISSUER,
+        },
+        skipListen: true,
+        userModel: securityUserModel,
+      })
+        .addMiddleware(async (req, _res, next) => {
+          if (req.path.startsWith("/oauth/authorize/")) {
+            req.user = (await SecurityUser.findOne({
+              email: owner.email,
+            })) as unknown as typeof req.user;
+          }
+          next();
+        })
+        .register(new BetterAuthApp({config: testBetterAuthConfig(), userModel: securityUserModel}))
+        .register(noteRouter())
+        .build();
+      const {path} = await authorize(sessionApp);
+      const requestId = path.split("/").pop() as string;
+
+      const res = await supertest(sessionApp).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(res.status).toBe(403);
+      expect(res.body.title).toBe("Approve on the built-in consent page");
+      const pending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      expect(pending?.status).toBe("pending");
+      expect(pending?.codeHash).toBeUndefined();
+    });
+  });
+
   describe("boot", () => {
     it("throws without a Better Auth twoFactor config, and needs consentUrl in url mode", () => {
       const withoutTwoFactor = (): express.Application =>

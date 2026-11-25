@@ -803,6 +803,13 @@ const addConsentRoutes = (
     ],
     asyncHandler(async (req, res) => {
       const user = requireUser(req);
+      // Builtin mode asks for a password and code on every approval; a session must not skip it.
+      if (oauth.consent.mode === "builtin") {
+        throw new ForbiddenError({
+          code: "mcp-oauth-builtin-consent",
+          title: "Approve on the built-in consent page",
+        });
+      }
       const pending = await loadPendingAuthorization(String(req.params.request));
       const scope = approvedScope(req.body, pending.scope);
       const problem = await approvalPolicyProblem(user, oauth, betterAuth);

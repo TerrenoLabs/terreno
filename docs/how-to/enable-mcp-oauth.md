@@ -209,6 +209,7 @@ new TerrenoApp({
 - The user needs a Better Auth password and two-factor turned on. The app needs a `BetterAuthApp` whose config sets `twoFactor`, or it throws at boot.
 - A wrong email, password, or code shows one error and issues no code. A code can be used once. Five failures for one email within 15 minutes lock consent for that email, even with the right credentials. **Deny** sends the client `error=access_denied`.
 - With `requireAdmin`, a valid non-admin sees an error and the request stays pending.
+- The JSON `POST /oauth/authorize/:request/approve` answers 403 in this mode, so a signed-in session can't approve without the password and code. `GET /oauth/authorize/:request` and deny still work.
 - The page sends `Cache-Control: no-store` and a CSP of `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' <redirect origin>; frame-ancestors 'none'`. It counts against the `auth` rate-limit bucket.
 
 The code is checked in-process: the page reads the user's Better Auth `twoFactor` record and decrypts its secret with Better Auth's `symmetricDecrypt`, because Better Auth's `verify-totp` endpoint needs a sign-in session or challenge and would create a session. No session is created.

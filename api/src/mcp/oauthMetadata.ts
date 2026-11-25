@@ -65,6 +65,41 @@ const SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = ["none", "client_secret_basic", "c
 export const SUPPORTED_RESPONSE_TYPES = ["code"];
 export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/** Limits shared by dynamic registration and client metadata documents. */
+export const MAX_CLIENT_NAME_LENGTH = 200;
+export const MAX_REDIRECT_URIS = 10;
+
+/**
+ * Why `uri` can't be a public client's redirect URI, or undefined: it must be absolute, have no
+ * fragment, and use https (http only on a loopback host). Shared by dynamic registration, which
+ * also checks `allowedRedirectHosts`, and client metadata documents.
+ */
+export const redirectUriSchemeProblem = (uri: unknown): string | undefined => {
+  if (typeof uri !== "string") {
+    return "redirect_uris must be strings";
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    return `${uri} is not an absolute URL`;
+  }
+  if (parsed.hash) {
+    return `${uri} must not contain a fragment`;
+  }
+  if (
+    parsed.protocol !== "https:" &&
+    !(parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname))
+  ) {
+    return `${uri} must use https (http is allowed only for loopback hosts)`;
+  }
+  return undefined;
+};
+
+/** Path of the built-in consent page for one pending request, relative to the issuer. */
+export const builtinConsentPath = (requestId: string): string =>
+  `/oauth/consent/${encodeURIComponent(requestId)}`;
+
 /** Fetch used to load client metadata documents. Defaults to the global `fetch`. */
 export type McpOAuthMetadataFetch = (
   url: string,

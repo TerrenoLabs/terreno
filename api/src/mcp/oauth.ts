@@ -13,6 +13,7 @@ import mongoose from "mongoose";
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {authenticateMiddleware, type User, type UserModel} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
+import {isBetterAuthTwoFactorEnabled} from "../betterAuthTwoFactor";
 import {
   BadRequestError,
   ConflictError,
@@ -48,11 +49,15 @@ import {
 import {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
+  builtinConsentPath,
   LOOPBACK_HOSTS,
+  MAX_CLIENT_NAME_LENGTH,
+  MAX_REDIRECT_URIS,
   type McpOAuthGrant,
   PUBLIC_CLIENT_GRANT_TYPES,
   protectedResourceMetadataPath,
   type ResolvedMcpOAuthOptions,
+  redirectUriSchemeProblem,
   SUPPORTED_RESPONSE_TYPES,
   sendProtocolJson,
 } from "./oauthMetadata";
@@ -62,8 +67,6 @@ const USED_CODE_RETENTION_SECONDS = 60 * 60;
 
 const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
-const MAX_CLIENT_NAME_LENGTH = 200;
-const MAX_REDIRECT_URIS = 10;
 
 export interface McpOAuthRoutesOptions {
   /** The app's Better Auth instance, for the two-factor approval policy and the built-in page. */
@@ -136,23 +139,11 @@ const hostMatches = (hostname: string, pattern: string): boolean => {
 
 /** Returns why a redirect URI is not acceptable, or undefined when it is. */
 const redirectUriProblem = (uri: unknown, allowedHosts: string[]): string | undefined => {
-  if (typeof uri !== "string") {
-    return "redirect_uris must be strings";
+  const schemeProblem = redirectUriSchemeProblem(uri);
+  if (schemeProblem) {
+    return schemeProblem;
   }
-  let parsed: URL;
-  try {
-    parsed = new URL(uri);
-  } catch {
-    return `${uri} is not an absolute URL`;
-  }
-  if (parsed.hash) {
-    return `${uri} must not contain a fragment`;
-  }
-  const hostname = parsed.hostname.toLowerCase();
-  const isLoopback = LOOPBACK_HOSTS.has(hostname);
-  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback)) {
-    return `${uri} must use https (http is allowed only for loopback hosts)`;
-  }
+  const hostname = new URL(uri as string).hostname.toLowerCase();
   if (!allowedHosts.some((pattern) => hostMatches(hostname, pattern))) {
     return `${hostname} is not an allowed redirect host`;
   }
@@ -318,24 +309,16 @@ export const loadActiveClient = async (clientId: string): Promise<McpOAuthClient
   return client;
 };
 
-interface TwoFactorUserContext {
-  internalAdapter: {
-    findUserById: (userId: string) => Promise<{twoFactorEnabled?: boolean | null} | null>;
-  };
-}
-
 /** Whether the user's linked Better Auth account has two-factor turned on. */
 const hasTwoFactorEnabled = async (
   user: User,
   betterAuth: BetterAuthInstance | undefined
 ): Promise<boolean> => {
   const betterAuthId = (user as {betterAuthId?: unknown}).betterAuthId;
-  if (!betterAuth || typeof betterAuthId !== "string" || betterAuthId === "") {
+  if (!betterAuth || typeof betterAuthId !== "string") {
     return false;
   }
-  const context = (await betterAuth.$context) as unknown as TwoFactorUserContext;
-  const betterAuthUser = await context.internalAdapter.findUserById(betterAuthId);
-  return betterAuthUser?.twoFactorEnabled === true;
+  return isBetterAuthTwoFactorEnabled(betterAuth, betterAuthId);
 };
 
 /** Why `mcpOAuth.consent` refuses this user as an approver, or undefined when it allows them. */
@@ -690,7 +673,7 @@ const addAuthorizeRoute = (
       res.redirect(
         302,
         oauth.consent.mode === "builtin" || !oauth.consentUrl
-          ? `${oauth.issuer}/oauth/consent/${encodeURIComponent(requestId)}`
+          ? `${oauth.issuer}${builtinConsentPath(requestId)}`
           : appendParams(oauth.consentUrl, {request: requestId})
       );
     })

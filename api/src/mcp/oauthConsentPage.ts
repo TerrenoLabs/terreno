@@ -4,16 +4,21 @@
  * SPA consent screen and approval never rests on a long-lived session. Password and TOTP are
  * checked against the user's Better Auth credential account and `twoFactor` record in-process.
  */
-import {createHmac, timingSafeEqual} from "node:crypto";
-import {symmetricDecrypt} from "better-auth/crypto";
 import type {Application, Request, Response} from "express";
 import {DateTime} from "luxon";
 
 import type {User, UserModel} from "../auth";
 import {type BetterAuthInstance, verifyBetterAuthCredentialPassword} from "../betterAuthSetup";
+import {
+  BETTER_AUTH_TOTP_PERIOD_SECONDS,
+  BETTER_AUTH_TOTP_WINDOW,
+  findBetterAuthUserIdByEmail,
+  matchBetterAuthTotpStep,
+} from "../betterAuthTwoFactor";
 import {isAPIError} from "../errors";
 import {logger} from "../logger";
 import {McpOAuthConsentAttempt} from "../models/mcpOAuthConsentAttempt";
+import {findOneOrNoneFor} from "../plugins";
 import {createRouteRateLimitMiddleware} from "../rateLimit/routeRateLimit";
 import type {McpOAuthAuthorizationDocument, McpOAuthClientDocument} from "../types/mcpOAuth";
 import {
@@ -24,14 +29,10 @@ import {
   loadActiveClient,
   loadPendingAuthorization,
 } from "./oauth";
-import type {ResolvedMcpOAuthOptions} from "./oauthMetadata";
+import {builtinConsentPath, type ResolvedMcpOAuthOptions} from "./oauthMetadata";
 
 const MAX_FAILURES = 5;
 const LOCKOUT_MINUTES = 15;
-const TOTP_PERIOD_SECONDS = 30;
-const TOTP_DIGITS = 6;
-// Accept the previous and next step for clock drift, as Better Auth's own verify does.
-const TOTP_WINDOW = 1;
 
 /**
  * Per-IP limits on the page, on top of the app-wide limiter and the per-email lockout. The POST
@@ -50,10 +51,6 @@ export interface McpOAuthConsentPageOptions {
   oauth: ResolvedMcpOAuthOptions;
   userModel: UserModel;
 }
-
-/** Path of the built-in consent page for one pending request. */
-const builtinConsentPath = (requestId: string): string =>
-  `/oauth/consent/${encodeURIComponent(requestId)}`;
 
 const escapeHtml = (value: string): string =>
   value.replace(
@@ -126,47 +123,6 @@ ${error ? `<p class="error" role="alert">${escapeHtml(error)}</p>` : ""}
   );
 };
 
-interface ConsentBetterAuthContext {
-  adapter: {
-    findOne: <T>(args: {
-      model: string;
-      where: {field: string; value: string}[];
-    }) => Promise<T | null>;
-  };
-  internalAdapter: {
-    findUserByEmail: (email: string) => Promise<{user: {id: string}} | null>;
-  };
-  secretConfig: Parameters<typeof symmetricDecrypt>[0]["key"];
-}
-
-/** One RFC 4226 HOTP value: HMAC-SHA1, dynamic truncation, six digits. */
-const hotp = (secret: Buffer, counter: number): string => {
-  const message = Buffer.alloc(8);
-  message.writeBigUInt64BE(BigInt(counter));
-  const digest = createHmac("sha1", secret).update(message).digest();
-  const offset = digest[digest.length - 1] & 0x0f;
-  const value = (digest.readUInt32BE(offset) & 0x7fffffff) % 10 ** TOTP_DIGITS;
-  return String(value).padStart(TOTP_DIGITS, "0");
-};
-
-/** The RFC 6238 time step `code` matches, within the drift window, or null. */
-const matchTotpStep = (secret: string, code: string): number | null => {
-  if (!/^\d{6}$/.test(code)) {
-    return null;
-  }
-  const key = Buffer.from(secret, "utf8");
-  const current = Math.floor(DateTime.now().toSeconds() / TOTP_PERIOD_SECONDS);
-  let matched: number | null = null;
-  // Check every step in the window so timing doesn't reveal which one matched.
-  for (let offset = -TOTP_WINDOW; offset <= TOTP_WINDOW; offset += 1) {
-    const step = current + offset;
-    if (timingSafeEqual(Buffer.from(hotp(key, step)), Buffer.from(code))) {
-      matched = step;
-    }
-  }
-  return matched;
-};
-
 const normalizeEmail = (value: unknown): string =>
   typeof value === "string" ? value.trim().toLowerCase() : "";
 
@@ -196,7 +152,7 @@ const useTotpStep = async (betterAuthUserId: string, step: number): Promise<bool
     await McpOAuthConsentAttempt.create({
       // Keep it past the last moment the step could still verify.
       expiresAt: DateTime.now()
-        .plus({seconds: TOTP_PERIOD_SECONDS * (TOTP_WINDOW + 2)})
+        .plus({seconds: BETTER_AUTH_TOTP_PERIOD_SECONDS * (BETTER_AUTH_TOTP_WINDOW + 2)})
         .toJSDate(),
       key: betterAuthUserId,
       kind: "totpStep",
@@ -223,31 +179,24 @@ const verifyApprover = async (
   code: string
 ): Promise<User | null> => {
   const {betterAuth, userModel} = options;
-  const context = (await betterAuth.$context) as unknown as ConsentBetterAuthContext;
-  const found = email ? await context.internalAdapter.findUserByEmail(email) : null;
-  if (!found) {
+  const betterAuthId = await findBetterAuthUserIdByEmail(betterAuth, email);
+  if (!betterAuthId) {
     return null;
   }
-  const betterAuthId = found.user.id;
   const passwordCheck = await verifyBetterAuthCredentialPassword(
     betterAuth,
     {betterAuthId},
     password
   );
-  const twoFactor = await context.adapter.findOne<{secret: string; verified?: boolean | null}>({
-    model: "twoFactor",
-    where: [{field: "userId", value: betterAuthId}],
-  });
-  if (passwordCheck !== "verified" || !twoFactor || twoFactor.verified === false) {
+  if (passwordCheck !== "verified") {
     return null;
   }
-  const secret = await symmetricDecrypt({data: twoFactor.secret, key: context.secretConfig});
-  const step = matchTotpStep(secret, code);
+  const step = await matchBetterAuthTotpStep(betterAuth, betterAuthId, code);
   if (step === null || !(await useTotpStep(betterAuthId, step))) {
     return null;
   }
-  const user = (await userModel.findOne({betterAuthId})) as unknown as User | null;
-  return user ?? null;
+  // findOneOrNoneFor refuses a duplicated betterAuthId instead of picking one user.
+  return (await findOneOrNoneFor(userModel, {betterAuthId} as never)) as unknown as User | null;
 };
 
 /** The pending request and its client, or an error page and null. */

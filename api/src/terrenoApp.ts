@@ -578,7 +578,17 @@ export class TerrenoApp {
         openApi: oapi,
         userModel: options.userModel,
       });
-      if (mcpOAuth.consent.mode === "builtin" && betterAuth) {
+      if (mcpOAuth.consent.mode === "builtin") {
+        // /oauth/authorize redirects here, so builtin mode without the page must not boot.
+        if (!betterAuth) {
+          throw new APIError({
+            code: "mcp-oauth-misconfigured",
+            detail:
+              'mcpOAuth.consent.mode "builtin" needs a registered BetterAuthApp that provides a Better Auth instance',
+            status: 500,
+            title: "MCP OAuth is misconfigured",
+          });
+        }
         addMcpOAuthConsentPage(app, {betterAuth, oauth: mcpOAuth, userModel: options.userModel});
       }
     }

@@ -343,6 +343,23 @@ describe("MCP OAuth built-in consent page", () => {
       expect(res.status).toBe(400);
       expect(res.text).toContain("Wrong email, password, or authenticator code.");
     });
+
+    it("refuses, with no redirect, when two app users share the owner's betterAuthId", async () => {
+      const owner = await createOwner(app);
+      const linked = await SecurityUser.findOne({email: owner.email}).lean();
+      await SecurityUser.collection.insertOne({
+        admin: true,
+        betterAuthId: linked?.betterAuthId,
+        email: uniqueEmail("duplicate"),
+      });
+      const {path} = await authorize(app);
+
+      const res = await approveAs(app, path, owner);
+
+      expect(res.status).toBe(500);
+      expect(res.headers.location).toBeUndefined();
+      expect((await McpOAuthAuthorization.findOneOrNone({}))?.status).toBe("pending");
+    });
   });
 
   describe("deny and bad requests", () => {
@@ -483,6 +500,26 @@ describe("MCP OAuth built-in consent page", () => {
 
       expect(withoutTwoFactor).toThrow("MCP OAuth is misconfigured");
       expect(urlModeWithoutConsentUrl).toThrow("MCP OAuth is misconfigured");
+    });
+
+    it("throws when builtin mode has no Better Auth instance to mount the page with", () => {
+      // A provider that reports a twoFactor config but no instance would otherwise skip the
+      // page, and authorize would redirect to a route that doesn't exist.
+      const providerWithoutInstance = {
+        getAuth: (): undefined => undefined,
+        getBetterAuthConfig: () => testBetterAuthConfig(),
+        register: (): void => {},
+      };
+      const build = (): express.Application =>
+        new TerrenoApp({
+          mcpOAuth: {consent: {mode: "builtin"}, enabled: true, issuer: ISSUER},
+          skipListen: true,
+          userModel: securityUserModel,
+        })
+          .register(providerWithoutInstance)
+          .build();
+
+      expect(build).toThrow("MCP OAuth is misconfigured");
     });
   });
 

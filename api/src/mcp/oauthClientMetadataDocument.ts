@@ -6,7 +6,12 @@
 import {DateTime} from "luxon";
 
 import type {McpOAuthMetadataDocumentClient} from "../types/mcpOAuth";
-import {LOOPBACK_HOSTS, type McpOAuthMetadataFetch} from "./oauthMetadata";
+import {
+  MAX_CLIENT_NAME_LENGTH,
+  MAX_REDIRECT_URIS,
+  type McpOAuthMetadataFetch,
+  redirectUriSchemeProblem,
+} from "./oauthMetadata";
 
 /** The parts of a client metadata document the authorization server stores. */
 type ClientMetadataDocument = McpOAuthMetadataDocumentClient;
@@ -27,8 +32,6 @@ export class ClientMetadataDocumentError extends Error {}
 const FETCH_TIMEOUT_MS = 5000;
 const MAX_DOCUMENT_BYTES = 16 * 1024;
 const CACHE_MINUTES = 10;
-const MAX_CLIENT_NAME_LENGTH = 200;
-const MAX_REDIRECT_URIS = 10;
 
 /** Read at most `limit` bytes of the body, failing as soon as it is larger. */
 const readCappedBody = async (response: Response, limit: number): Promise<string> => {
@@ -65,22 +68,6 @@ const readCappedBody = async (response: Response, limit: number): Promise<string
 };
 
 /** A redirect URI a public client may use: https, or http on a loopback host; no fragment. */
-const isUsableRedirectUri = (uri: string): boolean => {
-  let parsed: URL;
-  try {
-    parsed = new URL(uri);
-  } catch {
-    return false;
-  }
-  if (parsed.hash) {
-    return false;
-  }
-  return (
-    parsed.protocol === "https:" ||
-    (parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname))
-  );
-};
-
 const parseDocument = (clientId: string, text: string): ClientMetadataDocument => {
   let raw: unknown;
   try {
@@ -102,7 +89,9 @@ const parseDocument = (clientId: string, text: string): ClientMetadataDocument =
     !Array.isArray(redirectUris) ||
     redirectUris.length === 0 ||
     redirectUris.length > MAX_REDIRECT_URIS ||
-    !redirectUris.every((uri) => typeof uri === "string" && isUsableRedirectUri(uri))
+    !redirectUris.every(
+      (uri) => typeof uri === "string" && redirectUriSchemeProblem(uri) === undefined
+    )
   ) {
     throw new ClientMetadataDocumentError(
       `redirect_uris must list 1 to ${MAX_REDIRECT_URIS} https or loopback http URLs`

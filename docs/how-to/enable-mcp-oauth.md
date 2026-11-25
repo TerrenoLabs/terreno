@@ -315,7 +315,16 @@ curl -i -X POST https://api.example.com/mcp \
 # HTTP/1.1 401 … WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"
 
 curl https://api.example.com/.well-known/oauth-authorization-server
+# With clientIdMetadataDocuments: "client_id_metadata_document_supported": true
 ```
+
+To check Claude's published identity end to end, add the API's `/mcp` URL as a Claude.ai connector, choose **Use Claude's published identity**, approve on the consent page, and ask Claude to call a tool.
+
+| Regression case | Expected | Automated by |
+| --- | --- | --- |
+| Dynamic client registration flow with CIMD off | Unchanged | `api/src/mcp/oauth.test.ts` (registration and authorization code suites) |
+| SPA consent (`consentUrl`) with `consent` unset | Unchanged: any signed-in user approves | `api/src/mcp/oauth.test.ts` (consent suites, "lets any signed-in user approve when neither is set") |
+| Claude.ai connector with published identity, built-in consent | Connects after password + TOTP; tools work | Manual |
 
 ## What changes on `/mcp`
 

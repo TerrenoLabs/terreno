@@ -183,3 +183,25 @@ interface McpOAuthTokenStatics
 export interface McpOAuthTokenModel
   extends mongoose.Model<McpOAuthTokenDocument>,
     McpOAuthTokenStatics {}
+
+/** What a built-in consent page attempt record holds. */
+export type McpOAuthConsentAttemptKind = "failure" | "totpStep";
+
+/** A refused built-in consent attempt (for lockout) or a used TOTP step (for replay). */
+export interface McpOAuthConsentAttemptDocument extends mongoose.Document {
+  _id: mongoose.Types.ObjectId;
+  created: Date;
+  expiresAt: Date;
+  key: string;
+  kind: McpOAuthConsentAttemptKind;
+  step?: number;
+  updated: Date;
+}
+
+interface McpOAuthConsentAttemptStatics
+  extends FindExactlyOnePlugin<McpOAuthConsentAttemptDocument>,
+    FindOneOrNonePlugin<McpOAuthConsentAttemptDocument> {}
+
+export interface McpOAuthConsentAttemptModel
+  extends mongoose.Model<McpOAuthConsentAttemptDocument>,
+    McpOAuthConsentAttemptStatics {}

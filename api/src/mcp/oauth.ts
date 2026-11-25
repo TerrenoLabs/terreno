@@ -175,7 +175,7 @@ const splitScope = (scope: string | undefined | null): string[] => {
 };
 
 /** The consent-screen view of one grant. */
-interface McpOAuthConsentGrant {
+export interface McpOAuthConsentGrant {
   access: McpOAuthGrant["access"];
   description: string | null;
   label: string;
@@ -186,7 +186,7 @@ interface McpOAuthConsentGrant {
  * Describe each requested scope for the consent screen, in requested order. Without configured
  * grants a scope is shown by name and treated as full access, since nothing narrows it.
  */
-const consentGrantsFor = (
+export const consentGrantsFor = (
   scope: string | undefined | null,
   grants: McpOAuthGrant[] | undefined
 ): McpOAuthConsentGrant[] => {
@@ -280,7 +280,7 @@ const requireUser = (req: Request): User => {
 };
 
 /** Load a pending request for the consent endpoints, or explain why it cannot be decided. */
-const loadPendingAuthorization = async (
+export const loadPendingAuthorization = async (
   requestId: string
 ): Promise<McpOAuthAuthorizationDocument> => {
   const authorization = await McpOAuthAuthorization.findOneOrNone({requestId});
@@ -303,7 +303,7 @@ const loadPendingAuthorization = async (
 };
 
 /** The client of a pending request, refusing one that was revoked or removed after authorize. */
-const loadActiveClient = async (clientId: string): Promise<McpOAuthClientDocument> => {
+export const loadActiveClient = async (clientId: string): Promise<McpOAuthClientDocument> => {
   const client = await McpOAuthClient.findOneOrNone({clientId});
   if (!client || client.revokedAt) {
     throw new BadRequestError({
@@ -335,7 +335,7 @@ const hasTwoFactorEnabled = async (
 };
 
 /** Why `mcpOAuth.consent` refuses this user as an approver, or undefined when it allows them. */
-const approvalPolicyProblem = async (
+export const approvalPolicyProblem = async (
   user: User,
   oauth: ResolvedMcpOAuthOptions,
   betterAuth: BetterAuthInstance | undefined
@@ -354,7 +354,7 @@ const approvalPolicyProblem = async (
  * by the JSON approve endpoint and the built-in consent page, which check the approval policy
  * first. Refuses a client revoked since authorize.
  */
-const approveAuthorization = async ({
+export const approveAuthorization = async ({
   oauth,
   pending,
   scope,
@@ -399,6 +399,43 @@ const approveAuthorization = async ({
     userId: String(user._id),
   });
   return appendParams(approved.redirectUri, {code, iss: oauth.issuer, state: approved.state});
+};
+
+/**
+ * Deny a pending request and return the client redirect carrying `error=access_denied`. The
+ * built-in consent page denies without a signed-in user, so `userId` is optional.
+ */
+export const denyAuthorization = async ({
+  oauth,
+  pending,
+  userId,
+}: {
+  oauth: ResolvedMcpOAuthOptions;
+  pending: McpOAuthAuthorizationDocument;
+  userId?: string;
+}): Promise<string> => {
+  const denied = await McpOAuthAuthorization.findOneAndUpdate(
+    {_id: pending._id, status: "pending"},
+    {
+      $set: {
+        status: "denied",
+        ...(userId ? {userId: new mongoose.Types.ObjectId(userId)} : {}),
+      },
+    },
+    {returnDocument: "after"}
+  );
+  if (!denied) {
+    throw new ConflictError({
+      code: "mcp-oauth-request-decided",
+      title: "Authorization request was already decided",
+    });
+  }
+  return appendParams(denied.redirectUri, {
+    error: "access_denied",
+    error_description: "The user denied the request",
+    iss: oauth.issuer,
+    state: denied.state,
+  });
 };
 
 const addDiscoveryRoutes = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
@@ -646,7 +683,12 @@ const addAuthorizeRoute = (
         state,
         status: "pending",
       });
-      res.redirect(302, appendParams(oauth.consentUrl, {request: requestId}));
+      res.redirect(
+        302,
+        oauth.consent.mode === "builtin" || !oauth.consentUrl
+          ? `${oauth.issuer}/oauth/consent/${encodeURIComponent(requestId)}`
+          : appendParams(oauth.consentUrl, {request: requestId})
+      );
     })
   );
 };
@@ -778,32 +820,8 @@ const addConsentRoutes = (
     asyncHandler(async (req, res) => {
       const user = requireUser(req);
       const pending = await loadPendingAuthorization(String(req.params.request));
-      const denied = await McpOAuthAuthorization.findOneAndUpdate(
-        {_id: pending._id, status: "pending"},
-        {
-          $set: {
-            status: "denied",
-            userId: new mongoose.Types.ObjectId(String(user._id)),
-          },
-        },
-        {returnDocument: "after"}
-      );
-      if (!denied) {
-        throw new ConflictError({
-          code: "mcp-oauth-request-decided",
-          title: "Authorization request was already decided",
-        });
-      }
-      return res.json({
-        data: {
-          redirectUrl: appendParams(denied.redirectUri, {
-            error: "access_denied",
-            error_description: "The user denied the request",
-            iss: oauth.issuer,
-            state: denied.state,
-          }),
-        },
-      });
+      const redirectUrl = await denyAuthorization({oauth, pending, userId: String(user._id)});
+      return res.json({data: {redirectUrl}});
     })
   );
 };

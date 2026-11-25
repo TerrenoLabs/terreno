@@ -187,6 +187,32 @@ mcpOAuth: {
 
 A user who fails either check gets `403` from `POST /oauth/authorize/:request/approve`, and the request stays pending, so an approver who is allowed can still decide it. Anyone signed in can still deny. These checks look at who the user is. They do not ask for a second factor at approval time.
 
+### Built-in consent page
+
+An app with no consent screen of its own, for example a single-owner backend, can let the API serve one. Set `consent.mode: "builtin"` and leave out `consentUrl`:
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  mcpOAuth: {
+    clientIdMetadataDocuments: {
+      allowedClientIds: ["https://claude.ai/oauth/mcp-oauth-client-metadata"],
+    },
+    consent: {mode: "builtin", requireAdmin: true},
+    enabled: true,
+    issuer: "https://api.example.com",
+  },
+}).register(new BetterAuthApp({config: {...betterAuthConfig, twoFactor: {issuer: "My App"}}}));
+```
+
+- `/oauth/authorize` redirects to `${issuer}/oauth/consent/<request>`. The page shows the client name, the redirect host, and the requested grants, and asks for email, password, and the code from an authenticator app on every approval.
+- The user needs a Better Auth password and two-factor turned on. The app needs a `BetterAuthApp` whose config sets `twoFactor`, or it throws at boot.
+- A wrong email, password, or code shows one error and issues no code. A code can be used once. Five failures for one email within 15 minutes lock consent for that email, even with the right credentials. **Deny** sends the client `error=access_denied`.
+- With `requireAdmin`, a valid non-admin sees an error and the request stays pending.
+- The page sends `Cache-Control: no-store` and a CSP of `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' <redirect origin>; frame-ancestors 'none'`. It counts against the `auth` rate-limit bucket.
+
+The code is checked in-process: the page reads the user's Better Auth `twoFactor` record and decrypts its secret with Better Auth's `symmetricDecrypt`, because Better Auth's `verify-totp` endpoint needs a sign-in session or challenge and would create a session. No session is created.
+
 ### Build your own consent page
 
 The client sends the user's browser to `/oauth/authorize`. Terreno checks the client, redirect URI, PKCE, and scope, stores a pending request, and redirects to `consentUrl?request=<id>`. Your page:
@@ -311,7 +337,7 @@ Refresh tokens rotate on every use. If an old refresh token comes back, Terreno 
 
 - Public clients use PKCE `S256` only. `plain` PKCE is rejected. Confidential clients use `client_credentials` with `client_secret_basic` or `client_secret_post`. `private_key_jwt` is not supported. Dynamic registration cannot create a confidential client.
 - Tokens, codes, and refresh tokens are stored as SHA-256 hashes.
-- Registration, authorize, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
+- Registration, authorize, the built-in consent page, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
 - If a browser-based client (such as the MCP Inspector) runs discovery from another origin, allow that origin in `corsOrigin`.
 
 To put `/mcp` on the public internet behind a Cloudflare Tunnel, see [Expose an MCP server safely](expose-mcp-server-safely.md).

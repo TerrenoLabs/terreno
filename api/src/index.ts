@@ -158,6 +158,7 @@ export * from "./models/consentForm";
 export * from "./models/consentResponse";
 export {McpOAuthAuthorization} from "./models/mcpOAuthAuthorization";
 export {McpOAuthClient} from "./models/mcpOAuthClient";
+export {McpOAuthConsentAttempt} from "./models/mcpOAuthConsentAttempt";
 export {McpOAuthRevokedFamily} from "./models/mcpOAuthRevokedFamily";
 export {McpOAuthFamilyRevokedError, McpOAuthToken} from "./models/mcpOAuthToken";
 export {McpRequestLog} from "./models/mcpRequestLog";
@@ -347,6 +348,8 @@ export type {
   McpOAuthAuthorizationStatus,
   McpOAuthClientDocument,
   McpOAuthConfidentialClientOptions,
+  McpOAuthConsentAttemptDocument,
+  McpOAuthConsentAttemptKind,
   McpOAuthMetadataDocumentClient,
   McpOAuthRevokedFamilyDocument,
   McpOAuthTokenDocument,

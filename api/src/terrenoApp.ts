@@ -32,6 +32,7 @@ import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./gi
 import {type LoggingOptions, logger, setupLogging} from "./logger";
 import {type McpRequestLogAppOption, resolveMcpRequestLogOption} from "./mcp/adminTracking";
 import {addMcpOAuthRoutes} from "./mcp/oauth";
+import {addMcpOAuthConsentPage} from "./mcp/oauthConsentPage";
 import {type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauthMetadata";
 import {mountMCPServer} from "./mcp/server";
 import {
@@ -577,6 +578,9 @@ export class TerrenoApp {
         openApi: oapi,
         userModel: options.userModel,
       });
+      if (mcpOAuth.consent.mode === "builtin" && betterAuth) {
+        addMcpOAuthConsentPage(app, {betterAuth, oauth: mcpOAuth, userModel: options.userModel});
+      }
     }
     mountMCPServer(app, {
       betterAuth,

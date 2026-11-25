@@ -16,7 +16,7 @@ This guide fits any Terreno backend with MCP tools. It is written for the single
 | --- | --- | --- |
 | `POST /mcp` | MCP clients | Public. Every request needs a Bearer credential. |
 | `/.well-known/oauth-protected-resource/mcp`, `/.well-known/oauth-authorization-server` | MCP clients during discovery | Public |
-| `/oauth/authorize`, `/oauth/token`, `/oauth/register`, `/oauth/revoke` | MCP clients and the user's browser | Public, rate limited |
+| `/oauth/authorize`, `/oauth/token`, `/oauth/register`, `/oauth/revoke`, `/oauth/consent/*` (built-in consent page) | MCP clients and the user's browser | Public, rate limited |
 | `/console` (including `/console/oauth/consent`), `/api/auth` | Operators, and any user approving an OAuth connection (they sign in and approve in the console) | Behind Cloudflare Access when every OAuth approver is in the Access policy; otherwise public, guarded by Better Auth and the `admin` check |
 | `/admin` | The console's admin API | Behind Cloudflare Access when `/console` is |
 | `/health` | Uptime checks | Public |

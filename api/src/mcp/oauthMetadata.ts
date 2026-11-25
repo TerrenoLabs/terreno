@@ -84,6 +84,12 @@ export interface McpOAuthClientIdMetadataDocumentsOption {
 
 /** `mcpOAuth.consent`: who may approve a connection. */
 export interface McpOAuthConsentOption {
+  /**
+   * `"builtin"` serves a consent page from the API that asks for email, password, and an
+   * authenticator code on every approval; it needs a `BetterAuthApp` with `twoFactor`.
+   * `"url"` (default) redirects to `consentUrl`.
+   */
+  mode?: "builtin" | "url";
   /** Only users with `admin: true` may approve. Default false. */
   requireAdmin?: boolean;
   /**
@@ -111,9 +117,10 @@ export interface McpOAuthOptions {
   /**
    * App page that hosts the consent screen. `/oauth/authorize` redirects the browser here with
    * `?request=<id>` added. The page reads the request with `GET /oauth/authorize/:request` and
-   * posts the user's decision to `/oauth/authorize/:request/approve` or `/deny`.
+   * posts the user's decision to `/oauth/authorize/:request/approve` or `/deny`. Required unless
+   * `consent.mode` is `"builtin"`.
    */
-  consentUrl: string;
+  consentUrl?: string;
   /**
    * Mount RFC 7591 dynamic client registration at `POST /oauth/register` and advertise it in the
    * metadata. Default: false. The endpoint is unauthenticated, so anyone who can reach the API
@@ -169,9 +176,10 @@ export interface ResolvedMcpOAuthOptions {
   authorizationRequestTtlSeconds: number;
   /** Allowlisted CIMD client ids and the fetch to load them, or undefined while off. */
   clientIdMetadataDocuments: {allowedClientIds: string[]; fetch: McpOAuthMetadataFetch} | undefined;
-  /** Approval policy, enforced on the consent endpoints. */
-  consent: {requireAdmin: boolean; requireTwoFactor: boolean};
-  consentUrl: string;
+  /** Approval policy, enforced on the consent endpoints, and where consent happens. */
+  consent: {mode: "builtin" | "url"; requireAdmin: boolean; requireTwoFactor: boolean};
+  /** The app's consent page. Undefined in builtin mode without one. */
+  consentUrl: string | undefined;
   dynamicClientRegistration: boolean;
   issuer: string;
   refreshTokenTtlSeconds: number;
@@ -290,7 +298,12 @@ export const resolveMcpOAuthOption = (
   if (!option?.enabled) {
     return undefined;
   }
+  const mode = option.consent?.mode ?? "url";
+  if (mode !== "builtin" && mode !== "url") {
+    throw misconfigured(`mcpOAuth.consent.mode must be "builtin" or "url", got "${mode}"`);
+  }
   const consent = {
+    mode,
     requireAdmin: option.consent?.requireAdmin === true,
     requireTwoFactor: option.consent?.requireTwoFactor === true,
   };
@@ -299,6 +312,15 @@ export const resolveMcpOAuthOption = (
       "mcpOAuth.consent.requireTwoFactor needs a BetterAuthApp whose config sets twoFactor"
     );
   }
+  // The page checks the password and code against Better Auth, so it can't run without it.
+  if (mode === "builtin" && !context.betterAuthTwoFactor) {
+    throw misconfigured(
+      'mcpOAuth.consent.mode "builtin" needs a BetterAuthApp whose config sets twoFactor'
+    );
+  }
+  if (mode === "url" && option.consentUrl === undefined) {
+    throw misconfigured("mcpOAuth.consentUrl is required unless consent.mode is builtin");
+  }
   const issuerUrl = parseAbsoluteUrl(option.issuer, "issuer");
   if (issuerUrl.pathname !== "/" || issuerUrl.search || issuerUrl.hash) {
     throw misconfigured("mcpOAuth.issuer must be an origin with no path, query, or fragment");
@@ -306,7 +328,9 @@ export const resolveMcpOAuthOption = (
   if (issuerUrl.protocol !== "https:" && !LOOPBACK_HOSTS.has(issuerUrl.hostname)) {
     throw misconfigured("mcpOAuth.issuer must use https outside localhost");
   }
-  parseAbsoluteUrl(option.consentUrl, "consentUrl");
+  if (option.consentUrl !== undefined) {
+    parseAbsoluteUrl(option.consentUrl, "consentUrl");
+  }
   const dynamicClientRegistration = option.dynamicClientRegistration === true;
   const allowedRedirectHosts = option.allowedRedirectHosts ?? [];
   if (dynamicClientRegistration && allowedRedirectHosts.length === 0) {

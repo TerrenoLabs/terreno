@@ -65,6 +65,81 @@ const SUPPORTED_TOKEN_ENDPOINT_AUTH_METHODS = ["none", "client_secret_basic", "c
 export const SUPPORTED_RESPONSE_TYPES = ["code"];
 export const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
+/** Limits shared by dynamic registration and client metadata documents. */
+export const MAX_CLIENT_NAME_LENGTH = 200;
+export const MAX_REDIRECT_URIS = 10;
+
+/**
+ * Why `uri` can't be a public client's redirect URI, or undefined: it must be absolute, have no
+ * fragment, and use https (http only on a loopback host). Shared by dynamic registration, which
+ * also checks `allowedRedirectHosts`, and client metadata documents.
+ */
+export const redirectUriSchemeProblem = (uri: unknown): string | undefined => {
+  if (typeof uri !== "string") {
+    return "redirect_uris must be strings";
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(uri);
+  } catch {
+    return `${uri} is not an absolute URL`;
+  }
+  if (parsed.hash) {
+    return `${uri} must not contain a fragment`;
+  }
+  if (
+    parsed.protocol !== "https:" &&
+    !(parsed.protocol === "http:" && LOOPBACK_HOSTS.has(parsed.hostname))
+  ) {
+    return `${uri} must use https (http is allowed only for loopback hosts)`;
+  }
+  return undefined;
+};
+
+/** Path of the built-in consent page for one pending request, relative to the issuer. */
+export const builtinConsentPath = (requestId: string): string =>
+  `/oauth/consent/${encodeURIComponent(requestId)}`;
+
+/** Fetch used to load client metadata documents. Defaults to the global `fetch`. */
+export type McpOAuthMetadataFetch = (
+  url: string,
+  init?: RequestInit
+) => Promise<globalThis.Response>;
+
+/** `mcpOAuth.clientIdMetadataDocuments`: which URL client ids the server accepts. */
+export interface McpOAuthClientIdMetadataDocumentsOption {
+  /**
+   * Exact https URLs accepted as `client_id`, for example
+   * `https://claude.ai/oauth/mcp-oauth-client-metadata`. No other URL is ever fetched.
+   */
+  allowedClientIds: string[];
+  /** Injected for tests. Defaults to the global `fetch`. */
+  fetch?: McpOAuthMetadataFetch;
+}
+
+/** `mcpOAuth.consent`: who may approve a connection. */
+export interface McpOAuthConsentOption {
+  /**
+   * `"builtin"` serves a consent page from the API that asks for email, password, and an
+   * authenticator code on every approval; it needs a `BetterAuthApp` with `twoFactor`.
+   * `"url"` (default) redirects to `consentUrl`.
+   */
+  mode?: "builtin" | "url";
+  /** Only users with `admin: true` may approve. Default false. */
+  requireAdmin?: boolean;
+  /**
+   * Only users with Better Auth two-factor enabled may approve. Default false. Needs a registered
+   * `BetterAuthApp` whose config sets `twoFactor`, or the app throws at boot.
+   */
+  requireTwoFactor?: boolean;
+}
+
+/** What the app around `mcpOAuth` provides, for boot checks that depend on it. */
+export interface McpOAuthBootContext {
+  /** Whether a Better Auth instance with the `twoFactor` plugin is registered. */
+  betterAuthTwoFactor?: boolean;
+}
+
 export interface McpOAuthOptions {
   /** Turns the authorization server on. Every other field is ignored while false. */
   enabled: boolean;
@@ -77,9 +152,10 @@ export interface McpOAuthOptions {
   /**
    * App page that hosts the consent screen. `/oauth/authorize` redirects the browser here with
    * `?request=<id>` added. The page reads the request with `GET /oauth/authorize/:request` and
-   * posts the user's decision to `/oauth/authorize/:request/approve` or `/deny`.
+   * posts the user's decision to `/oauth/authorize/:request/approve` or `/deny`. Required unless
+   * `consent.mode` is `"builtin"`.
    */
-  consentUrl: string;
+  consentUrl?: string;
   /**
    * Mount RFC 7591 dynamic client registration at `POST /oauth/register` and advertise it in the
    * metadata. Default: false. The endpoint is unauthenticated, so anyone who can reach the API
@@ -115,6 +191,15 @@ export interface McpOAuthOptions {
   authorizationRequestTtlSeconds?: number;
   /** How long an issued authorization code can be exchanged. Default: 60. */
   authorizationCodeTtlSeconds?: number;
+  /**
+   * Accept Client ID Metadata Documents (CIMD) for these exact https client ids, as Claude.ai's
+   * "Use Claude's published identity" sends. `/oauth/authorize` fetches an allowlisted id's
+   * document (no redirects, 5 s timeout, 16 KiB cap, cached 10 minutes) and stores it as a public
+   * `McpOAuthClient`. Off when absent or empty.
+   */
+  clientIdMetadataDocuments?: McpOAuthClientIdMetadataDocumentsOption;
+  /** Who may approve a connection. Unset, any signed-in user may. */
+  consent?: McpOAuthConsentOption;
 }
 
 export type McpOAuthAppOption = McpOAuthOptions;
@@ -124,7 +209,12 @@ export interface ResolvedMcpOAuthOptions {
   allowedRedirectHosts: string[];
   authorizationCodeTtlSeconds: number;
   authorizationRequestTtlSeconds: number;
-  consentUrl: string;
+  /** Allowlisted CIMD client ids and the fetch to load them, or undefined while off. */
+  clientIdMetadataDocuments: {allowedClientIds: string[]; fetch: McpOAuthMetadataFetch} | undefined;
+  /** Approval policy, enforced on the consent endpoints, and where consent happens. */
+  consent: {mode: "builtin" | "url"; requireAdmin: boolean; requireTwoFactor: boolean};
+  /** The app's consent page. Undefined in builtin mode without one. */
+  consentUrl: string | undefined;
   dynamicClientRegistration: boolean;
   issuer: string;
   refreshTokenTtlSeconds: number;
@@ -197,6 +287,34 @@ const resolveGrants = (grants: McpOAuthOptions["grants"]): McpOAuthGrant[] => {
   return grants;
 };
 
+const resolveClientIdMetadataDocuments = (
+  option: McpOAuthClientIdMetadataDocumentsOption | undefined
+): ResolvedMcpOAuthOptions["clientIdMetadataDocuments"] => {
+  const ids = option?.allowedClientIds ?? [];
+  if (!Array.isArray(ids)) {
+    throw misconfigured("mcpOAuth.clientIdMetadataDocuments.allowedClientIds must be an array");
+  }
+  if (ids.length === 0) {
+    return undefined;
+  }
+  for (const id of ids) {
+    const parsed = URL.canParse(id) ? new URL(id) : undefined;
+    // An exact, normalized https URL with a path, so the string the client sends is the URL fetched.
+    if (
+      parsed?.protocol !== "https:" ||
+      parsed.search ||
+      parsed.hash ||
+      parsed.pathname === "/" ||
+      parsed.href !== id
+    ) {
+      throw misconfigured(
+        `mcpOAuth.clientIdMetadataDocuments.allowedClientIds must be https URLs with a path and no query or fragment, got "${id}"`
+      );
+    }
+  }
+  return {allowedClientIds: [...ids], fetch: option?.fetch ?? ((url, init) => fetch(url, init))};
+};
+
 /** RFC 9728 §3.1: the well-known segment goes between the host and the resource's path. */
 export const protectedResourceMetadataPath = (resource: string): string => {
   const {pathname} = new URL(resource);
@@ -209,10 +327,34 @@ export const protectedResourceMetadataPath = (resource: string): string => {
  * Misconfiguration throws at boot rather than failing the first client's flow.
  */
 export const resolveMcpOAuthOption = (
-  option: McpOAuthAppOption | undefined
+  option: McpOAuthAppOption | undefined,
+  context: McpOAuthBootContext = {}
 ): ResolvedMcpOAuthOptions | undefined => {
   if (!option?.enabled) {
     return undefined;
+  }
+  const mode = option.consent?.mode ?? "url";
+  if (mode !== "builtin" && mode !== "url") {
+    throw misconfigured(`mcpOAuth.consent.mode must be "builtin" or "url", got "${mode}"`);
+  }
+  const consent = {
+    mode,
+    requireAdmin: option.consent?.requireAdmin === true,
+    requireTwoFactor: option.consent?.requireTwoFactor === true,
+  };
+  if (consent.requireTwoFactor && !context.betterAuthTwoFactor) {
+    throw misconfigured(
+      "mcpOAuth.consent.requireTwoFactor needs a BetterAuthApp whose config sets twoFactor"
+    );
+  }
+  // The page checks the password and code against Better Auth, so it can't run without it.
+  if (mode === "builtin" && !context.betterAuthTwoFactor) {
+    throw misconfigured(
+      'mcpOAuth.consent.mode "builtin" needs a BetterAuthApp whose config sets twoFactor'
+    );
+  }
+  if (mode === "url" && option.consentUrl === undefined) {
+    throw misconfigured("mcpOAuth.consentUrl is required unless consent.mode is builtin");
   }
   const issuerUrl = parseAbsoluteUrl(option.issuer, "issuer");
   if (issuerUrl.pathname !== "/" || issuerUrl.search || issuerUrl.hash) {
@@ -221,7 +363,9 @@ export const resolveMcpOAuthOption = (
   if (issuerUrl.protocol !== "https:" && !LOOPBACK_HOSTS.has(issuerUrl.hostname)) {
     throw misconfigured("mcpOAuth.issuer must use https outside localhost");
   }
-  parseAbsoluteUrl(option.consentUrl, "consentUrl");
+  if (option.consentUrl !== undefined) {
+    parseAbsoluteUrl(option.consentUrl, "consentUrl");
+  }
   const dynamicClientRegistration = option.dynamicClientRegistration === true;
   const allowedRedirectHosts = option.allowedRedirectHosts ?? [];
   if (dynamicClientRegistration && allowedRedirectHosts.length === 0) {
@@ -258,6 +402,8 @@ export const resolveMcpOAuthOption = (
       DEFAULT_AUTHORIZATION_REQUEST_TTL_SECONDS,
       "authorizationRequestTtlSeconds"
     ),
+    clientIdMetadataDocuments: resolveClientIdMetadataDocuments(option.clientIdMetadataDocuments),
+    consent,
     consentUrl: option.consentUrl,
     dynamicClientRegistration,
     grants,
@@ -300,6 +446,7 @@ export const buildAuthorizationServerMetadata = (
   ...(oauth.dynamicClientRegistration
     ? {registration_endpoint: `${oauth.issuer}/oauth/register`}
     : {}),
+  ...(oauth.clientIdMetadataDocuments ? {client_id_metadata_document_supported: true} : {}),
   authorization_endpoint: `${oauth.issuer}/oauth/authorize`,
   authorization_response_iss_parameter_supported: true,
   code_challenge_methods_supported: ["S256"],

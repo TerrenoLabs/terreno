@@ -166,6 +166,7 @@ describe("HTTP rate limiting", () => {
       "/oauth/authorize?client_id=abc",
       "/oauth/token",
       "/oauth/revoke",
+      "/oauth/consent/request-id",
     ];
     for (const originalUrl of authPaths) {
       assert.equal(

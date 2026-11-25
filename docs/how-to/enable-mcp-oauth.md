@@ -60,6 +60,24 @@ Dynamic client registration (`POST /oauth/register`) is a separate opt-in and st
   },
   ```
 
+- **Claude's published identity (CIMD).** Claude.ai's recommended connector option sends a URL as `client_id`: a Client ID Metadata Document that Anthropic hosts, listing Claude's redirect URIs. List the documents you accept, and a user can add your app by URL with no client to create and no registration endpoint.
+
+  ```typescript
+  mcpOAuth: {
+    clientIdMetadataDocuments: {
+      allowedClientIds: [
+        "https://claude.ai/oauth/mcp-oauth-client-metadata", // Claude.ai connectors
+        "https://claude.ai/oauth/claude-code-client-metadata", // Claude Code
+      ],
+    },
+    consentUrl: "https://app.example.com/oauth/consent",
+    enabled: true,
+    issuer: "https://api.example.com",
+  },
+  ```
+
+  The metadata then has `client_id_metadata_document_supported: true`. Claude picks CIMD only when that flag is set and `token_endpoint_auth_methods_supported` lists `none`, which Terreno always lists. On `/oauth/authorize`, an allowlisted id is fetched from that exact URL with no redirects followed, a 5 second timeout, and a 16 KiB cap. The document's `client_id` must equal the URL, and `redirect_uris` must be a non-empty array of https or loopback http URLs. A good document is cached for 10 minutes; a failure is not cached. It is stored as a public `McpOAuthClient` whose `clientId` is the URL, so the token, refresh, and revocation flows treat it like any other client. The Claude Code document's `http://localhost/callback` matches any port, like other loopback redirects. Any other URL `client_id` gets `400 Unknown client_id` and is never fetched: the allowlist is what stops the server being pointed at an arbitrary host. `McpOAuthClient.revoke("https://claude.ai/oauth/mcp-oauth-client-metadata")` ends its tokens, and the client stays revoked: later authorize requests get a 400.
+
 ### Choose grants
 
 `grants` decides what a client can do once the user approves it. The consent screen shows one checkbox per grant, and `/mcp` enforces the grants on every tool. Without `grants`, the default `mcp` scope is accepted and not enforced.
@@ -150,6 +168,51 @@ export default OAuthConsent;
 Props and error copy: [syncdb reference → MCP OAuth consent](../reference/syncdb.md#mcp-oauth-consent).
 
 If the backend serves `@terreno/admin-spa` (`AdminSpaServeApp`), it already has a consent page: set `consentUrl` to `${issuer}/console/oauth/consent` (use your `basePath` if it is not `/console`). It uses the Better Auth session cookie and approves every requested grant, with no checkboxes. See [admin-spa reference](../reference/admin-spa.md#mcp-oauth-consent-route).
+
+### Limit who can approve
+
+By default any signed-in user can approve a connection. For an app with one owner, or where connectors should need an admin, set `consent`:
+
+```typescript
+mcpOAuth: {
+  consent: {requireAdmin: true, requireTwoFactor: true},
+  consentUrl: "https://app.example.com/oauth/consent",
+  enabled: true,
+  issuer: "https://api.example.com",
+},
+```
+
+- `requireAdmin`: only users with `admin: true` can approve.
+- `requireTwoFactor`: only users whose Better Auth account has two-factor turned on can approve. It needs a registered `BetterAuthApp` whose config sets `twoFactor`, or the app throws at boot.
+
+A user who fails either check gets `403` from `POST /oauth/authorize/:request/approve`, and the request stays pending, so an approver who is allowed can still decide it. Anyone signed in can still deny. These checks look at who the user is. They do not ask for a second factor at approval time.
+
+### Built-in consent page
+
+An app with no consent screen of its own, for example a single-owner backend, can let the API serve one. Set `consent.mode: "builtin"` and leave out `consentUrl`:
+
+```typescript
+new TerrenoApp({
+  userModel: User,
+  mcpOAuth: {
+    clientIdMetadataDocuments: {
+      allowedClientIds: ["https://claude.ai/oauth/mcp-oauth-client-metadata"],
+    },
+    consent: {mode: "builtin", requireAdmin: true},
+    enabled: true,
+    issuer: "https://api.example.com",
+  },
+}).register(new BetterAuthApp({config: {...betterAuthConfig, twoFactor: {issuer: "My App"}}}));
+```
+
+- `/oauth/authorize` redirects to `${issuer}/oauth/consent/<request>`. The page shows the client name, the redirect host, and the requested grants, and asks for email, password, and the code from an authenticator app on every approval.
+- The user needs a Better Auth password and two-factor turned on. The app needs a `BetterAuthApp` whose config sets `twoFactor`, or it throws at boot.
+- A wrong email, password, or code shows one error and issues no code. A code can be used once. Five failures for one email within 15 minutes lock consent for that email, even with the right credentials. **Deny** sends the client `error=access_denied`.
+- With `requireAdmin`, a valid non-admin sees an error and the request stays pending.
+- The JSON `POST /oauth/authorize/:request/approve` answers 403 in this mode, so a signed-in session can't approve without the password and code. `GET /oauth/authorize/:request` and deny still work.
+- The page sends `Cache-Control: no-store` and a CSP of `default-src 'none'; style-src 'unsafe-inline'; form-action 'self' <redirect origin>; frame-ancestors 'none'`. It counts against the `auth` rate-limit bucket, and also has its own per-IP limits: 10 form submissions and 60 page loads a minute, answered with 429. These counters are per process.
+
+The code is checked in-process: the page reads the user's Better Auth `twoFactor` record and decrypts its secret with Better Auth's `symmetricDecrypt`, because Better Auth's `verify-totp` endpoint needs a sign-in session or challenge and would create a session. No session is created.
 
 ### Build your own consent page
 
@@ -253,7 +316,16 @@ curl -i -X POST https://api.example.com/mcp \
 # HTTP/1.1 401 … WWW-Authenticate: Bearer resource_metadata="…/.well-known/oauth-protected-resource/mcp"
 
 curl https://api.example.com/.well-known/oauth-authorization-server
+# With clientIdMetadataDocuments: "client_id_metadata_document_supported": true
 ```
+
+To check Claude's published identity end to end, add the API's `/mcp` URL as a Claude.ai connector, choose **Use Claude's published identity**, approve on the consent page, and ask Claude to call a tool.
+
+| Regression case | Expected | Automated by |
+| --- | --- | --- |
+| Dynamic client registration flow with CIMD off | Unchanged | `api/src/mcp/oauth.test.ts` (registration and authorization code suites) |
+| SPA consent (`consentUrl`) with `consent` unset | Unchanged: any signed-in user approves | `api/src/mcp/oauth.test.ts` (consent suites, "lets any signed-in user approve when neither is set") |
+| Claude.ai connector with published identity, built-in consent | Connects after password + TOTP; tools work | Manual |
 
 ## What changes on `/mcp`
 
@@ -275,7 +347,7 @@ Refresh tokens rotate on every use. If an old refresh token comes back, Terreno 
 
 - Public clients use PKCE `S256` only. `plain` PKCE is rejected. Confidential clients use `client_credentials` with `client_secret_basic` or `client_secret_post`. `private_key_jwt` is not supported. Dynamic registration cannot create a confidential client.
 - Tokens, codes, and refresh tokens are stored as SHA-256 hashes.
-- Registration, authorize, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
+- Registration, authorize, the built-in consent page, token, and revoke count against the `auth` [rate-limit](rate-limiting.md) bucket. Turn rate limiting on in production, since registration is unauthenticated.
 - If a browser-based client (such as the MCP Inspector) runs discovery from another origin, allow that origin in `corsOrigin`.
 
 To put `/mcp` on the public internet behind a Cloudflare Tunnel, see [Expose an MCP server safely](expose-mcp-server-safely.md).

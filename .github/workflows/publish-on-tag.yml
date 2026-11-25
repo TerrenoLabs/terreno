@@ -642,6 +642,14 @@ jobs:
       - name: Build web export
         run: bun run build:web
 
+      - name: Verify web export
+        run: |
+          # Expo "server" output: dist/server/_expo/routes.json is what AdminSpaServeApp needs (else 503).
+          if [ ! -f dist/server/_expo/routes.json ] || [ ! -d dist/client/_expo ]; then
+            echo "::error::admin-spa dist/server/_expo/routes.json or dist/client/_expo is missing after build:web; refusing to publish"
+            exit 1
+          fi
+
       - name: Get latest @terreno/ui version
         id: ui_version
         run: |
@@ -690,7 +698,11 @@ jobs:
           UI_VERSION: ${{ steps.ui_version.outputs.ui_version }}
 
       - name: Publish to npm
-        run: npm publish --tag "${{ needs.check-changes.outputs.npmTag }}"
+        run: |
+          # Recheck right before publish so no later step can leave the tarball without dist/.
+          test -f dist/server/_expo/routes.json
+          test -d dist/client/_expo
+          npm publish --tag "${{ needs.check-changes.outputs.npmTag }}"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

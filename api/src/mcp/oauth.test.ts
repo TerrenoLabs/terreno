@@ -9,6 +9,7 @@ import type TestAgent from "supertest/lib/agent";
 import {modelRouter} from "../api";
 import type {UserModel as UserModelType} from "../auth";
 import {AuthToken} from "../authTokens";
+import {BetterAuthApp} from "../betterAuthApp";
 import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
 import {McpOAuthToken} from "../models/mcpOAuthToken";
@@ -17,6 +18,13 @@ import {Permissions, requireOAuthScope} from "../permissions";
 import {getCurrentRequestContext} from "../requestContext";
 import {TerrenoApp} from "../terrenoApp";
 import {authAsUser, setupDb, UserModel} from "../tests";
+import {
+  resetAccountSecurityState,
+  SecurityUser,
+  securityUserModel,
+  testBetterAuthConfig,
+} from "../tests/accountSecurityTestApp";
+import {enrollTwoFactor, PASSWORD, uniqueEmail} from "../tests/betterAuthStubs";
 import {type McpOAuthOptions, resolveMcpOAuthOption} from "./oauthMetadata";
 import {clearMCPRegistry} from "./registry";
 
@@ -1809,6 +1817,620 @@ describe("MCP OAuth opt-in", () => {
 
       expect(tokens.status).toBe(200);
       expect((await callMcp(app, tokens.body.access_token)).status).toBe(200);
+    });
+  });
+});
+
+describe("MCP OAuth client ID metadata documents", () => {
+  const CLAUDE_AI = "https://claude.ai/oauth/mcp-oauth-client-metadata";
+  const CLAUDE_CODE = "https://claude.ai/oauth/claude-code-client-metadata";
+
+  const claudeAiDocument = {
+    client_id: CLAUDE_AI,
+    client_name: "Claude",
+    grant_types: ["authorization_code", "refresh_token"],
+    redirect_uris: [REDIRECT_URI],
+    response_types: ["code"],
+    token_endpoint_auth_method: "none",
+  };
+  const claudeCodeDocument = {
+    client_id: CLAUDE_CODE,
+    client_name: "Claude Code",
+    redirect_uris: ["http://localhost/callback", "http://127.0.0.1/callback"],
+    token_endpoint_auth_method: "none",
+  };
+
+  /** A fake network: each URL answers with the Response its factory builds. Records every fetch. */
+  const fakeNetwork = (
+    routes: Record<string, () => Response>
+  ): {
+    calls: {init?: RequestInit; url: string}[];
+    fetch: (url: string, init?: RequestInit) => Promise<Response>;
+  } => {
+    const calls: {init?: RequestInit; url: string}[] = [];
+    return {
+      calls,
+      fetch: async (url: string, init?: RequestInit): Promise<Response> => {
+        calls.push({init, url});
+        const route = routes[url];
+        return route ? route() : new Response("not found", {status: 404});
+      },
+    };
+  };
+
+  const jsonResponse = (body: unknown): Response =>
+    new Response(JSON.stringify(body), {
+      headers: {"content-type": "application/json"},
+      status: 200,
+    });
+
+  const cimdApp = (
+    fetch: (url: string, init?: RequestInit) => Promise<Response>,
+    allowedClientIds: string[] = [CLAUDE_AI, CLAUDE_CODE]
+  ): express.Application => {
+    const {allowedRedirectHosts: _hosts, dynamicClientRegistration: _dcr, ...rest} = oauthOptions;
+    return buildApp({
+      mcpOAuth: {...rest, clientIdMetadataDocuments: {allowedClientIds, fetch}},
+    });
+  };
+
+  const authorizeAs = (
+    app: express.Application,
+    clientId: string,
+    redirectUri: string,
+    challenge: string
+  ): supertest.Test =>
+    startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+      redirect_uri: redirectUri,
+      response_type: "code",
+      state: "cimd-state",
+    });
+
+  beforeEach(async () => {
+    await setupDb();
+    await Promise.all([
+      McpOAuthAuthorization.deleteMany({}),
+      McpOAuthClient.deleteMany({}),
+      McpOAuthToken.deleteMany({}),
+    ]);
+    clearMCPRegistry();
+  });
+
+  describe("metadata", () => {
+    it("advertises client_id_metadata_document_supported only with a non-empty allowlist", async () => {
+      const {fetch} = fakeNetwork({});
+      const withList = await supertest(cimdApp(fetch)).get(
+        "/.well-known/oauth-authorization-server"
+      );
+      const emptyList = await supertest(cimdApp(fetch, [])).get(
+        "/.well-known/oauth-authorization-server"
+      );
+      const without = await supertest(buildApp()).get("/.well-known/oauth-authorization-server");
+
+      expect(withList.body.client_id_metadata_document_supported).toBe(true);
+      expect(withList.body.token_endpoint_auth_methods_supported).toContain("none");
+      expect(emptyList.body.client_id_metadata_document_supported).toBeUndefined();
+      expect(without.body.client_id_metadata_document_supported).toBeUndefined();
+    });
+  });
+
+  describe("authorize", () => {
+    it("fetches an allowlisted document once and redirects to consent", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const first = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const second = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(first.status).toBe(302);
+      expect(first.headers.location.startsWith("https://app.example.com/oauth/consent?")).toBe(
+        true
+      );
+      expect(second.status).toBe(302);
+      expect(network.calls.map((call) => call.url)).toEqual([CLAUDE_AI]);
+      expect(network.calls[0].init?.redirect).toBe("manual");
+      expect(network.calls[0].init?.signal).toBeDefined();
+      const stored = await McpOAuthClient.findOneOrNone({clientId: CLAUDE_AI});
+      expect(stored?.clientName).toBe("Claude");
+      expect(stored?.redirectUris).toEqual([REDIRECT_URI]);
+      expect(stored?.tokenEndpointAuthMethod).toBe("none");
+      expect(stored?.grantTypes).toEqual(["authorization_code", "refresh_token"]);
+    });
+
+    it("shows the document's client name on the consent request", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const agent = await authAsUser(app, "notAdmin");
+      const {challenge} = createPkce();
+
+      const authorize = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const consent = await agent.get(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}`
+      );
+
+      expect(consent.status).toBe(200);
+      expect(consent.body.data.clientId).toBe(CLAUDE_AI);
+      expect(consent.body.data.clientName).toBe("Claude");
+    });
+
+    it("answers Unknown client_id for a URL that is not allowlisted, without fetching it", async () => {
+      const other = "https://evil.example.com/client.json";
+      const network = fakeNetwork({
+        [other]: () => jsonResponse({...claudeAiDocument, client_id: other}),
+      });
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(app, other, REDIRECT_URI, challenge);
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({error: "invalid_request", error_description: "Unknown client_id"});
+      expect(res.headers.location).toBeUndefined();
+      expect(network.calls).toEqual([]);
+    });
+
+    const badDocuments: [string, () => Response, string][] = [
+      [
+        "a client_id that differs from the URL",
+        () => jsonResponse({...claudeAiDocument, client_id: CLAUDE_CODE}),
+        "client_id does not match its URL",
+      ],
+      ["a 404", () => new Response("missing", {status: 404}), "answered HTTP 404"],
+      [
+        "a redirect from the document host",
+        () =>
+          new Response(null, {headers: {location: "https://evil.example.com/doc"}, status: 302}),
+        "answered HTTP 302",
+      ],
+      [
+        "a body over 16 KiB",
+        () => jsonResponse({...claudeAiDocument, padding: "x".repeat(20 * 1024)}),
+        "too large",
+      ],
+      ["invalid JSON", () => new Response("{not json", {status: 200}), "not valid JSON"],
+      [
+        "redirect_uris that is not an array",
+        () => jsonResponse({...claudeAiDocument, redirect_uris: REDIRECT_URI}),
+        "redirect_uris must list",
+      ],
+      [
+        "redirect_uris with a non-string entry",
+        () => jsonResponse({...claudeAiDocument, redirect_uris: [REDIRECT_URI, 42]}),
+        "redirect_uris must list",
+      ],
+      [
+        "an empty redirect_uris",
+        () => jsonResponse({...claudeAiDocument, redirect_uris: []}),
+        "redirect_uris must list",
+      ],
+      [
+        "a confidential token_endpoint_auth_method",
+        () =>
+          jsonResponse({...claudeAiDocument, token_endpoint_auth_method: "client_secret_basic"}),
+        "Only public clients",
+      ],
+    ];
+    for (const [label, respond, reason] of badDocuments) {
+      it(`answers 400 without redirecting for ${label}`, async () => {
+        const network = fakeNetwork({[CLAUDE_AI]: respond});
+        const app = cimdApp(network.fetch);
+        const {challenge} = createPkce();
+
+        const res = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+        expect(res.status).toBe(400);
+        expect(res.body.error).toBe("invalid_request");
+        expect(res.body.error_description).toContain(reason);
+        expect(res.headers.location).toBeUndefined();
+        expect(network.calls).toHaveLength(1);
+        expect(await McpOAuthClient.countDocuments({clientId: CLAUDE_AI})).toBe(0);
+      });
+    }
+
+    it("answers 400 when the fetch throws (timeout or network error)", async () => {
+      const app = cimdApp(async () => {
+        throw new DOMException("The operation timed out.", "TimeoutError");
+      });
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error_description).toContain("could not be fetched");
+      expect(res.headers.location).toBeUndefined();
+    });
+
+    it("answers 400 when the body stalls or breaks mid-read", async () => {
+      const app = cimdApp(
+        async () =>
+          new Response(
+            new ReadableStream<Uint8Array>({
+              pull: (controller) => {
+                controller.error(new DOMException("The operation timed out.", "TimeoutError"));
+              },
+            }),
+            {status: 200}
+          )
+      );
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(res.status).toBe(400);
+      expect(res.body.error_description).toContain("could not be read");
+      expect(res.headers.location).toBeUndefined();
+    });
+
+    it("does not cache a failed fetch", async () => {
+      let attempt = 0;
+      const network = fakeNetwork({
+        [CLAUDE_AI]: () => {
+          attempt += 1;
+          return attempt === 1
+            ? new Response("busy", {status: 503})
+            : jsonResponse(claudeAiDocument);
+        },
+      });
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const first = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const second = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+
+      expect(first.status).toBe(400);
+      expect(second.status).toBe(302);
+      expect(network.calls).toHaveLength(2);
+    });
+
+    it("matches the Claude Code document's loopback redirects on any port", async () => {
+      const network = fakeNetwork({[CLAUDE_CODE]: () => jsonResponse(claudeCodeDocument)});
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const localhost = await authorizeAs(
+        app,
+        CLAUDE_CODE,
+        "http://localhost:51234/callback",
+        challenge
+      );
+      const ipv4 = await authorizeAs(
+        app,
+        CLAUDE_CODE,
+        "http://127.0.0.1:40000/callback",
+        challenge
+      );
+
+      expect(localhost.status).toBe(302);
+      expect(ipv4.status).toBe(302);
+    });
+
+    it("keeps non-loopback redirects exact: an https redirect on another port is refused", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const {challenge} = createPkce();
+
+      const res = await authorizeAs(
+        app,
+        CLAUDE_AI,
+        "https://claude.ai:8443/api/mcp/auth_callback",
+        challenge
+      );
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe("invalid_request");
+      expect(res.headers.location).toBeUndefined();
+    });
+  });
+
+  describe("flow", () => {
+    it("completes code, token, /mcp, and refresh for a CIMD client", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const agent = await authAsUser(app, "notAdmin");
+      const {challenge, verifier} = createPkce();
+
+      const authorize = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const approve = await agent.post(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+      );
+      const redirect = new URL(approve.body.data.redirectUrl);
+      expect(redirect.searchParams.get("state")).toBe("cimd-state");
+      expect(redirect.searchParams.get("iss")).toBe(ISSUER);
+      const tokens = await exchangeCode(app, {
+        clientId: CLAUDE_AI,
+        code: redirect.searchParams.get("code") as string,
+        verifier,
+      });
+      expect(tokens.status).toBe(200);
+
+      const mcp = await callMcp(app, tokens.body.access_token);
+      expect(mcp.status).toBe(200);
+      expect(toolPayload(mcp.text).credential).toBe("oauth");
+
+      const refreshed = await refresh(app, CLAUDE_AI, tokens.body.refresh_token);
+      expect(refreshed.status).toBe(200);
+      expect((await callMcp(app, refreshed.body.access_token)).status).toBe(200);
+      expect(network.calls).toHaveLength(1);
+    });
+
+    it("keeps a revoked CIMD client revoked: its tokens end and authorize answers 400", async () => {
+      const network = fakeNetwork({[CLAUDE_AI]: () => jsonResponse(claudeAiDocument)});
+      const app = cimdApp(network.fetch);
+      const agent = await authAsUser(app, "notAdmin");
+      const {challenge, verifier} = createPkce();
+      const authorize = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, challenge);
+      const approve = await agent.post(
+        `/oauth/authorize/${requestIdFrom(authorize.headers.location)}/approve`
+      );
+      const tokens = await exchangeCode(app, {
+        clientId: CLAUDE_AI,
+        code: new URL(approve.body.data.redirectUrl).searchParams.get("code") as string,
+        verifier,
+      });
+      expect(tokens.status).toBe(200);
+
+      await McpOAuthClient.revoke(CLAUDE_AI);
+
+      expect((await callMcp(app, tokens.body.access_token)).status).toBe(401);
+      const refreshed = await refresh(app, CLAUDE_AI, tokens.body.refresh_token);
+      expect(refreshed.status).toBe(401);
+      expect(refreshed.body.error).toBe("invalid_client");
+      const again = await authorizeAs(app, CLAUDE_AI, REDIRECT_URI, createPkce().challenge);
+      expect(again.status).toBe(400);
+      expect(again.body.error).toBe("invalid_request");
+      expect(again.headers.location).toBeUndefined();
+      const stored = await McpOAuthClient.findOneOrNone({clientId: CLAUDE_AI});
+      expect(stored?.revokedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  it("refuses to show a pending request once its client is revoked", async () => {
+    const app = buildApp();
+    const agent = await authAsUser(app, "notAdmin");
+    const clientId = await registerClient(app);
+    const authorize = await startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: createPkce().challenge,
+      code_challenge_method: "S256",
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+    });
+    const requestId = requestIdFrom(authorize.headers.location);
+
+    await McpOAuthClient.revoke(clientId);
+    const res = await agent.get(`/oauth/authorize/${requestId}`);
+
+    expect(res.status).toBe(400);
+    expect(res.body.title).toBe("The client was revoked");
+  });
+
+  describe("resolveMcpOAuthOption", () => {
+    const base: McpOAuthOptions = {consentUrl: CONSENT_URL, enabled: true, issuer: ISSUER};
+
+    it("throws at boot for an allowlisted id that is not a plain https URL", () => {
+      for (const id of [
+        "http://claude.ai/oauth/mcp-oauth-client-metadata",
+        "https://claude.ai/oauth/doc?x=1",
+        "https://claude.ai/oauth/doc#frag",
+        "not a url",
+      ]) {
+        let thrown: unknown;
+        try {
+          resolveMcpOAuthOption({...base, clientIdMetadataDocuments: {allowedClientIds: [id]}});
+        } catch (error) {
+          thrown = error;
+        }
+        expect((thrown as {title?: string}).title).toBe("MCP OAuth is misconfigured");
+        expect((thrown as {detail?: string}).detail).toContain(
+          "clientIdMetadataDocuments.allowedClientIds"
+        );
+      }
+    });
+
+    it("leaves CIMD off for an empty allowlist", () => {
+      const resolved = resolveMcpOAuthOption({
+        ...base,
+        clientIdMetadataDocuments: {allowedClientIds: []},
+      });
+      expect(resolved?.clientIdMetadataDocuments).toBeUndefined();
+    });
+  });
+});
+
+describe("MCP OAuth approval policy", () => {
+  const pendingRequest = async (app: express.Application): Promise<string> => {
+    const clientId = await registerClient(app);
+    const authorize = await startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: createPkce().challenge,
+      code_challenge_method: "S256",
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+    });
+    expect(authorize.status).toBe(302);
+    return requestIdFrom(authorize.headers.location);
+  };
+
+  describe("requireAdmin", () => {
+    let app: express.Application;
+
+    beforeEach(async () => {
+      await setupDb();
+      await Promise.all([
+        McpOAuthAuthorization.deleteMany({}),
+        McpOAuthClient.deleteMany({}),
+        McpOAuthToken.deleteMany({}),
+      ]);
+      clearMCPRegistry();
+      app = buildApp({mcpOAuth: {...oauthOptions, consent: {requireAdmin: true}}});
+    });
+
+    it("refuses a non-admin with 403 and leaves the request pending for an admin", async () => {
+      const requestId = await pendingRequest(app);
+      const notAdmin = await authAsUser(app, "notAdmin");
+      const admin = await authAsUser(app, "admin");
+
+      const refused = await notAdmin.post(`/oauth/authorize/${requestId}/approve`);
+      const stillPending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      const approved = await admin.post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(refused.status).toBe(403);
+      expect(refused.body.title).toBe("Only an admin can approve this connection");
+      expect(stillPending?.status).toBe("pending");
+      expect(stillPending?.codeHash).toBeUndefined();
+      expect(approved.status).toBe(200);
+      expect(new URL(approved.body.data.redirectUrl).searchParams.get("code")).toBeString();
+    });
+
+    it("refuses to approve once the client is revoked, without issuing a code", async () => {
+      const requestId = await pendingRequest(app);
+      const pending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      await McpOAuthClient.revoke(pending?.clientId as string);
+      const admin = await authAsUser(app, "admin");
+
+      const res = await admin.post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.title).toBe("The client was revoked");
+      expect((await McpOAuthAuthorization.findOneOrNone({requestId}))?.codeHash).toBeUndefined();
+    });
+
+    it("answers 429 once one IP calls approve more than 30 times a minute", async () => {
+      const admin = await authAsUser(app, "admin");
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        const res = await admin.post("/oauth/authorize/unknown-request/approve");
+        expect(res.status).toBe(404);
+      }
+
+      const limited = await admin.post("/oauth/authorize/unknown-request/approve");
+
+      expect(limited.status).toBe(429);
+    });
+
+    it("still lets a non-admin deny", async () => {
+      const requestId = await pendingRequest(app);
+      const notAdmin = await authAsUser(app, "notAdmin");
+
+      const denied = await notAdmin.post(`/oauth/authorize/${requestId}/deny`);
+
+      expect(denied.status).toBe(200);
+      expect(new URL(denied.body.data.redirectUrl).searchParams.get("error")).toBe("access_denied");
+    });
+  });
+
+  describe("requireTwoFactor", () => {
+    // The consent routes trust req.user when middleware already set it (see "approves consent
+    // when middleware already set req.user"); this stands in for a signed-in session.
+    let actingEmail: string | undefined;
+
+    const twoFactorApp = (consent: McpOAuthOptions["consent"]): express.Application =>
+      new TerrenoApp({
+        mcpOAuth: {...oauthOptions, consent},
+        skipListen: true,
+        userModel: securityUserModel,
+      })
+        .addMiddleware(async (req, _res, next) => {
+          if (actingEmail && req.path.startsWith("/oauth/authorize/")) {
+            req.user = (await SecurityUser.findOne({
+              email: actingEmail,
+            })) as unknown as typeof req.user;
+          }
+          next();
+        })
+        .register(new BetterAuthApp({config: testBetterAuthConfig(), userModel: securityUserModel}))
+        .register(noteRouter())
+        .build();
+
+    const signUpWithoutTwoFactor = async (app: express.Application): Promise<string> => {
+      const email = uniqueEmail("no-2fa");
+      const res = await supertest(app)
+        .post("/api/auth/sign-up/email")
+        .set("content-type", "application/json")
+        .send({email, name: "No 2FA", password: PASSWORD});
+      expect(res.status).toBe(200);
+      return email;
+    };
+
+    beforeEach(async () => {
+      await resetAccountSecurityState();
+      await Promise.all([
+        McpOAuthAuthorization.deleteMany({}),
+        McpOAuthClient.deleteMany({}),
+        McpOAuthToken.deleteMany({}),
+      ]);
+      actingEmail = undefined;
+    });
+
+    it("refuses a user without two-factor with 403 and approves one with it", async () => {
+      const app = twoFactorApp({requireTwoFactor: true});
+      const withoutEmail = await signUpWithoutTwoFactor(app);
+      const withEmail = uniqueEmail("with-2fa");
+      await enrollTwoFactor(app, withEmail);
+      const requestId = await pendingRequest(app);
+
+      actingEmail = withoutEmail;
+      const refused = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+      const stillPending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      actingEmail = withEmail;
+      const approved = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(refused.status).toBe(403);
+      expect(refused.body.title).toBe(
+        "Turn on two-factor authentication to approve this connection"
+      );
+      expect(stillPending?.status).toBe("pending");
+      expect(approved.status).toBe(200);
+    });
+
+    it("needs both when requireAdmin and requireTwoFactor are set", async () => {
+      const app = twoFactorApp({requireAdmin: true, requireTwoFactor: true});
+      const email = uniqueEmail("owner");
+      await enrollTwoFactor(app, email);
+      const requestId = await pendingRequest(app);
+      actingEmail = email;
+
+      const notYetAdmin = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+      await SecurityUser.updateOne({email}, {$set: {admin: true}});
+      const owner = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(notYetAdmin.status).toBe(403);
+      expect(owner.status).toBe(200);
+    });
+
+    it("lets any signed-in user approve when neither is set", async () => {
+      const app = twoFactorApp(undefined);
+      actingEmail = await signUpWithoutTwoFactor(app);
+      const requestId = await pendingRequest(app);
+
+      const approved = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(approved.status).toBe(200);
+    });
+
+    it("throws at boot without a Better Auth twoFactor config", () => {
+      const build = (betterAuth: boolean): express.Application => {
+        const terrenoApp = new TerrenoApp({
+          mcpOAuth: {...oauthOptions, consent: {requireTwoFactor: true}},
+          skipListen: true,
+          userModel: securityUserModel,
+        });
+        if (betterAuth) {
+          terrenoApp.register(
+            new BetterAuthApp({
+              config: testBetterAuthConfig({twoFactor: undefined}),
+              userModel: securityUserModel,
+            })
+          );
+        }
+        return terrenoApp.build();
+      };
+
+      expect(() => build(false)).toThrow("MCP OAuth is misconfigured");
+      expect(() => build(true)).toThrow("MCP OAuth is misconfigured");
     });
   });
 });

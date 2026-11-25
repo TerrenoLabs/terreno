@@ -32,6 +32,7 @@ import {addGitHubAuthRoutes, type GitHubAuthOptions, setupGitHubAuth} from "./gi
 import {type LoggingOptions, logger, setupLogging} from "./logger";
 import {type McpRequestLogAppOption, resolveMcpRequestLogOption} from "./mcp/adminTracking";
 import {addMcpOAuthRoutes} from "./mcp/oauth";
+import {addMcpOAuthConsentPage} from "./mcp/oauthConsentPage";
 import {type McpOAuthAppOption, resolveMcpOAuthOption} from "./mcp/oauthMetadata";
 import {mountMCPServer} from "./mcp/server";
 import {
@@ -400,9 +401,12 @@ export class TerrenoApp {
     const options = this.options;
     // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
     // instance exists, so the app User guard and sync are installed with it.
-    findBetterAuthProvider(this.registrations)?.adoptUserModel?.(options.userModel);
+    const betterAuthProvider = findBetterAuthProvider(this.registrations);
+    betterAuthProvider?.adoptUserModel?.(options.userModel);
     // Resolve first so a misconfigured issuer or consent URL fails at boot.
-    const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth);
+    const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth, {
+      betterAuthTwoFactor: Boolean(betterAuthProvider?.getBetterAuthConfig?.()?.twoFactor),
+    });
 
     // Record mount paths on layers for Express 5 → OpenAPI compat
     patchAppUse(app);
@@ -568,7 +572,25 @@ export class TerrenoApp {
       });
     }
     if (mcpOAuth) {
-      addMcpOAuthRoutes(app, {oauth: mcpOAuth, openApi: oapi, userModel: options.userModel});
+      addMcpOAuthRoutes(app, {
+        betterAuth,
+        oauth: mcpOAuth,
+        openApi: oapi,
+        userModel: options.userModel,
+      });
+      if (mcpOAuth.consent.mode === "builtin") {
+        // /oauth/authorize redirects here, so builtin mode without the page must not boot.
+        if (!betterAuth) {
+          throw new APIError({
+            code: "mcp-oauth-misconfigured",
+            detail:
+              'mcpOAuth.consent.mode "builtin" needs a registered BetterAuthApp that provides a Better Auth instance',
+            status: 500,
+            title: "MCP OAuth is misconfigured",
+          });
+        }
+        addMcpOAuthConsentPage(app, {betterAuth, oauth: mcpOAuth, userModel: options.userModel});
+      }
     }
     mountMCPServer(app, {
       betterAuth,

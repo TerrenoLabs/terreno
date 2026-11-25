@@ -12,7 +12,15 @@ import mongoose from "mongoose";
 
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {authenticateMiddleware, type User, type UserModel} from "../auth";
-import {BadRequestError, ConflictError, NotFoundError, UnauthorizedError} from "../errors";
+import type {BetterAuthInstance} from "../betterAuthSetup";
+import {isBetterAuthTwoFactorEnabled} from "../betterAuthTwoFactor";
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../errors";
 import {logger} from "../logger";
 import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
@@ -25,6 +33,7 @@ import {
 } from "../models/mcpOAuthToken";
 import {MCP_SERVICE_TOKEN_PREFIX} from "../models/mcpServiceToken";
 import {createOpenApiBuilder} from "../openApiBuilder";
+import {createRouteRateLimitMiddleware} from "../rateLimit/routeRateLimit";
 import type {
   McpOAuthAuthorizationDocument,
   McpOAuthClientDocument,
@@ -33,13 +42,22 @@ import type {
 } from "../types/mcpOAuth";
 import {bearerFromHeaders, isCredentialEpochStale, userTokenEpoch} from "./auth";
 import {
+  ClientMetadataDocumentError,
+  type ClientMetadataDocumentResolver,
+  createClientMetadataDocumentResolver,
+} from "./oauthClientMetadataDocument";
+import {
   buildAuthorizationServerMetadata,
   buildProtectedResourceMetadata,
+  builtinConsentPath,
   LOOPBACK_HOSTS,
+  MAX_CLIENT_NAME_LENGTH,
+  MAX_REDIRECT_URIS,
   type McpOAuthGrant,
   PUBLIC_CLIENT_GRANT_TYPES,
   protectedResourceMetadataPath,
   type ResolvedMcpOAuthOptions,
+  redirectUriSchemeProblem,
   SUPPORTED_RESPONSE_TYPES,
   sendProtocolJson,
 } from "./oauthMetadata";
@@ -49,10 +67,10 @@ const USED_CODE_RETENTION_SECONDS = 60 * 60;
 
 const CODE_CHALLENGE_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const CODE_VERIFIER_PATTERN = /^[A-Za-z0-9._~-]{43,128}$/;
-const MAX_CLIENT_NAME_LENGTH = 200;
-const MAX_REDIRECT_URIS = 10;
 
 export interface McpOAuthRoutesOptions {
+  /** The app's Better Auth instance, for the two-factor approval policy and the built-in page. */
+  betterAuth?: BetterAuthInstance;
   oauth: ResolvedMcpOAuthOptions;
   openApi?: OpenApiMiddleware;
   userModel: UserModel;
@@ -121,23 +139,11 @@ const hostMatches = (hostname: string, pattern: string): boolean => {
 
 /** Returns why a redirect URI is not acceptable, or undefined when it is. */
 const redirectUriProblem = (uri: unknown, allowedHosts: string[]): string | undefined => {
-  if (typeof uri !== "string") {
-    return "redirect_uris must be strings";
+  const schemeProblem = redirectUriSchemeProblem(uri);
+  if (schemeProblem) {
+    return schemeProblem;
   }
-  let parsed: URL;
-  try {
-    parsed = new URL(uri);
-  } catch {
-    return `${uri} is not an absolute URL`;
-  }
-  if (parsed.hash) {
-    return `${uri} must not contain a fragment`;
-  }
-  const hostname = parsed.hostname.toLowerCase();
-  const isLoopback = LOOPBACK_HOSTS.has(hostname);
-  if (parsed.protocol !== "https:" && !(parsed.protocol === "http:" && isLoopback)) {
-    return `${uri} must use https (http is allowed only for loopback hosts)`;
-  }
+  const hostname = new URL(uri as string).hostname.toLowerCase();
   if (!allowedHosts.some((pattern) => hostMatches(hostname, pattern))) {
     return `${hostname} is not an allowed redirect host`;
   }
@@ -161,7 +167,7 @@ const splitScope = (scope: string | undefined | null): string[] => {
 };
 
 /** The consent-screen view of one grant. */
-interface McpOAuthConsentGrant {
+export interface McpOAuthConsentGrant {
   access: McpOAuthGrant["access"];
   description: string | null;
   label: string;
@@ -172,7 +178,7 @@ interface McpOAuthConsentGrant {
  * Describe each requested scope for the consent screen, in requested order. Without configured
  * grants a scope is shown by name and treated as full access, since nothing narrows it.
  */
-const consentGrantsFor = (
+export const consentGrantsFor = (
   scope: string | undefined | null,
   grants: McpOAuthGrant[] | undefined
 ): McpOAuthConsentGrant[] => {
@@ -257,6 +263,9 @@ const rejectDelegatedCredentials = (req: Request, _res: Response, next: NextFunc
 
 const consentGuards = [rejectDelegatedCredentials, authenticateMiddleware()];
 
+/** Per-IP limit on the approve endpoint, on top of the app-wide limiter. Per process. */
+const MCP_OAUTH_APPROVE_RATE_LIMIT = {max: 30, windowMs: 60_000};
+
 const requireUser = (req: Request): User => {
   const user = req.user as unknown as User | undefined;
   if (!user?._id) {
@@ -266,7 +275,7 @@ const requireUser = (req: Request): User => {
 };
 
 /** Load a pending request for the consent endpoints, or explain why it cannot be decided. */
-const loadPendingAuthorization = async (
+export const loadPendingAuthorization = async (
   requestId: string
 ): Promise<McpOAuthAuthorizationDocument> => {
   const authorization = await McpOAuthAuthorization.findOneOrNone({requestId});
@@ -286,6 +295,134 @@ const loadPendingAuthorization = async (
     });
   }
   return authorization;
+};
+
+/** The client of a pending request, refusing one that was revoked or removed after authorize. */
+export const loadActiveClient = async (clientId: string): Promise<McpOAuthClientDocument> => {
+  const client = await McpOAuthClient.findOneOrNone({clientId});
+  if (!client || client.revokedAt) {
+    throw new BadRequestError({
+      code: "mcp-oauth-client-revoked",
+      title: "The client was revoked",
+    });
+  }
+  return client;
+};
+
+/** Whether the user's linked Better Auth account has two-factor turned on. */
+const hasTwoFactorEnabled = async (
+  user: User,
+  betterAuth: BetterAuthInstance | undefined
+): Promise<boolean> => {
+  const betterAuthId = (user as {betterAuthId?: unknown}).betterAuthId;
+  if (!betterAuth || typeof betterAuthId !== "string") {
+    return false;
+  }
+  return isBetterAuthTwoFactorEnabled(betterAuth, betterAuthId);
+};
+
+/** Why `mcpOAuth.consent` refuses this user as an approver, or undefined when it allows them. */
+export const approvalPolicyProblem = async (
+  user: User,
+  oauth: ResolvedMcpOAuthOptions,
+  betterAuth: BetterAuthInstance | undefined
+): Promise<string | undefined> => {
+  if (oauth.consent.requireAdmin && (user as {admin?: unknown}).admin !== true) {
+    return "Only an admin can approve this connection";
+  }
+  if (oauth.consent.requireTwoFactor && !(await hasTwoFactorEnabled(user, betterAuth))) {
+    return "Turn on two-factor authentication to approve this connection";
+  }
+  return undefined;
+};
+
+/**
+ * Approve a pending request as `user` and return the client redirect carrying the code. Shared
+ * by the JSON approve endpoint and the built-in consent page, which check the approval policy
+ * first. Refuses a client revoked since authorize.
+ */
+export const approveAuthorization = async ({
+  oauth,
+  pending,
+  scope,
+  user,
+}: {
+  oauth: ResolvedMcpOAuthOptions;
+  pending: McpOAuthAuthorizationDocument;
+  scope: string | undefined;
+  user: User;
+}): Promise<string> => {
+  await loadActiveClient(pending.clientId);
+  const code = generateMcpOAuthSecret();
+  const now = DateTime.now();
+  const codeExpiresAt = now.plus({seconds: oauth.authorizationCodeTtlSeconds});
+  const expiresAt = DateTime.max(
+    DateTime.fromJSDate(pending.expiresAt),
+    codeExpiresAt.plus({seconds: USED_CODE_RETENTION_SECONDS})
+  );
+  const approved = await McpOAuthAuthorization.findOneAndUpdate(
+    {_id: pending._id, status: "pending"},
+    {
+      $set: {
+        codeExpiresAt: codeExpiresAt.toJSDate(),
+        codeHash: hashMcpOAuthSecret(code),
+        expiresAt: expiresAt.toJSDate(),
+        ...(scope === undefined ? {} : {scope}),
+        status: "approved",
+        tokenEpoch: userTokenEpoch(user),
+        userId: new mongoose.Types.ObjectId(String(user._id)),
+      },
+    },
+    {returnDocument: "after"}
+  );
+  if (!approved) {
+    throw new ConflictError({
+      code: "mcp-oauth-request-decided",
+      title: "Authorization request was already decided",
+    });
+  }
+  logger.info("[MCPOAuth] Authorization approved", {
+    clientId: approved.clientId,
+    userId: String(user._id),
+  });
+  return appendParams(approved.redirectUri, {code, iss: oauth.issuer, state: approved.state});
+};
+
+/**
+ * Deny a pending request and return the client redirect carrying `error=access_denied`. The
+ * built-in consent page denies without a signed-in user, so `userId` is optional.
+ */
+export const denyAuthorization = async ({
+  oauth,
+  pending,
+  userId,
+}: {
+  oauth: ResolvedMcpOAuthOptions;
+  pending: McpOAuthAuthorizationDocument;
+  userId?: string;
+}): Promise<string> => {
+  const denied = await McpOAuthAuthorization.findOneAndUpdate(
+    {_id: pending._id, status: "pending"},
+    {
+      $set: {
+        status: "denied",
+        ...(userId ? {userId: new mongoose.Types.ObjectId(userId)} : {}),
+      },
+    },
+    {returnDocument: "after"}
+  );
+  if (!denied) {
+    throw new ConflictError({
+      code: "mcp-oauth-request-decided",
+      title: "Authorization request was already decided",
+    });
+  }
+  return appendParams(denied.redirectUri, {
+    error: "access_denied",
+    error_description: "The user denied the request",
+    iss: oauth.issuer,
+    state: denied.state,
+  });
 };
 
 const addDiscoveryRoutes = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
@@ -417,7 +554,50 @@ const redirectUriMatchesRegistered = (requested: string, registered: string[]): 
   });
 };
 
-const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
+/**
+ * The client an authorization request names. An allowlisted metadata-document id is fetched (or
+ * served from cache) and stored as a public client; a revoked one is refused before any fetch.
+ * Every other id must already be a stored client.
+ */
+const resolveAuthorizeClient = async (
+  clientId: string,
+  metadataDocuments: ClientMetadataDocumentResolver | undefined
+): Promise<McpOAuthClientDocument> => {
+  const stored = await McpOAuthClient.findOneOrNone({clientId});
+  if (stored?.revokedAt) {
+    throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+  }
+  if (!metadataDocuments?.isAllowed(clientId)) {
+    if (!stored) {
+      throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+    }
+    return stored;
+  }
+  let document: Awaited<ReturnType<ClientMetadataDocumentResolver["load"]>>;
+  try {
+    document = await metadataDocuments.load(clientId);
+  } catch (error) {
+    if (error instanceof ClientMetadataDocumentError) {
+      logger.warn("[MCPOAuth] Refused a client metadata document", {
+        clientId,
+        reason: error.message,
+      });
+      throw new OAuthProtocolError("invalid_request", error.message);
+    }
+    throw error;
+  }
+  const client = await McpOAuthClient.upsertFromMetadataDocument(document);
+  if (!client) {
+    throw new OAuthProtocolError("invalid_request", "Unknown client_id");
+  }
+  return client;
+};
+
+const addAuthorizeRoute = (
+  app: Application,
+  oauth: ResolvedMcpOAuthOptions,
+  metadataDocuments: ClientMetadataDocumentResolver | undefined
+): void => {
   app.get(
     "/oauth/authorize",
     oauthHandler(async (req, res) => {
@@ -426,10 +606,7 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
       if (!clientId) {
         throw new OAuthProtocolError("invalid_request", "client_id is required");
       }
-      const client = await McpOAuthClient.findOneOrNone({clientId});
-      if (!client || client.revokedAt) {
-        throw new OAuthProtocolError("invalid_request", "Unknown client_id");
-      }
+      const client = await resolveAuthorizeClient(clientId, metadataDocuments);
       // RFC 6749 §4.1.2.1: never redirect to an unverified URI, so these two fail in place.
       const requestedRedirect = stringParam(query.redirect_uri);
       const redirectUri =
@@ -493,7 +670,12 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
         state,
         status: "pending",
       });
-      res.redirect(302, appendParams(oauth.consentUrl, {request: requestId}));
+      res.redirect(
+        302,
+        oauth.consent.mode === "builtin" || !oauth.consentUrl
+          ? `${oauth.issuer}${builtinConsentPath(requestId)}`
+          : appendParams(oauth.consentUrl, {request: requestId})
+      );
     })
   );
 };
@@ -501,7 +683,8 @@ const addAuthorizeRoute = (app: Application, oauth: ResolvedMcpOAuthOptions): vo
 const addConsentRoutes = (
   app: Application,
   oauth: ResolvedMcpOAuthOptions,
-  openApi?: OpenApiMiddleware
+  openApi: OpenApiMiddleware | undefined,
+  betterAuth: BetterAuthInstance | undefined
 ): void => {
   const openApiOptions = {openApi};
 
@@ -549,11 +732,11 @@ const addConsentRoutes = (
     asyncHandler(async (req, res) => {
       requireUser(req);
       const authorization = await loadPendingAuthorization(String(req.params.request));
-      const client = await McpOAuthClient.findOneOrNone({clientId: authorization.clientId});
+      const client = await loadActiveClient(authorization.clientId);
       return res.json({
         data: {
           clientId: authorization.clientId,
-          clientName: client?.clientName ?? null,
+          clientName: client.clientName ?? null,
           expiresAt: authorization.expiresAt.toISOString(),
           grants: consentGrantsFor(authorization.scope, oauth.grants),
           redirectHost: new URL(authorization.redirectUri).host,
@@ -591,6 +774,7 @@ const addConsentRoutes = (
   app.post(
     "/oauth/authorize/:request/approve",
     [
+      createRouteRateLimitMiddleware({name: "mcp-oauth-approve", ...MCP_OAUTH_APPROVE_RATE_LIMIT}),
       ...consentGuards,
       decisionOpenApiBuilder("approveMcpOAuthRequest", "Approve a pending MCP OAuth request")
         .withRequestBody<{scope: string}>(
@@ -607,49 +791,21 @@ const addConsentRoutes = (
     ],
     asyncHandler(async (req, res) => {
       const user = requireUser(req);
-      const pending = await loadPendingAuthorization(String(req.params.request));
-      const scope = approvedScope(req.body, pending.scope);
-      const code = generateMcpOAuthSecret();
-      const now = DateTime.now();
-      const codeExpiresAt = now.plus({seconds: oauth.authorizationCodeTtlSeconds});
-      const expiresAt = DateTime.max(
-        DateTime.fromJSDate(pending.expiresAt),
-        codeExpiresAt.plus({seconds: USED_CODE_RETENTION_SECONDS})
-      );
-      const approved = await McpOAuthAuthorization.findOneAndUpdate(
-        {_id: pending._id, status: "pending"},
-        {
-          $set: {
-            codeExpiresAt: codeExpiresAt.toJSDate(),
-            codeHash: hashMcpOAuthSecret(code),
-            expiresAt: expiresAt.toJSDate(),
-            ...(scope === undefined ? {} : {scope}),
-            status: "approved",
-            tokenEpoch: userTokenEpoch(user),
-            userId: new mongoose.Types.ObjectId(String(user._id)),
-          },
-        },
-        {returnDocument: "after"}
-      );
-      if (!approved) {
-        throw new ConflictError({
-          code: "mcp-oauth-request-decided",
-          title: "Authorization request was already decided",
+      // Builtin mode asks for a password and code on every approval; a session must not skip it.
+      if (oauth.consent.mode === "builtin") {
+        throw new ForbiddenError({
+          code: "mcp-oauth-builtin-consent",
+          title: "Approve on the built-in consent page",
         });
       }
-      logger.info("[MCPOAuth] Authorization approved", {
-        clientId: approved.clientId,
-        userId: String(user._id),
-      });
-      return res.json({
-        data: {
-          redirectUrl: appendParams(approved.redirectUri, {
-            code,
-            iss: oauth.issuer,
-            state: approved.state,
-          }),
-        },
-      });
+      const pending = await loadPendingAuthorization(String(req.params.request));
+      const scope = approvedScope(req.body, pending.scope);
+      const problem = await approvalPolicyProblem(user, oauth, betterAuth);
+      if (problem) {
+        throw new ForbiddenError({code: "mcp-oauth-approver-not-allowed", title: problem});
+      }
+      const redirectUrl = await approveAuthorization({oauth, pending, scope, user});
+      return res.json({data: {redirectUrl}});
     })
   );
 
@@ -659,32 +815,8 @@ const addConsentRoutes = (
     asyncHandler(async (req, res) => {
       const user = requireUser(req);
       const pending = await loadPendingAuthorization(String(req.params.request));
-      const denied = await McpOAuthAuthorization.findOneAndUpdate(
-        {_id: pending._id, status: "pending"},
-        {
-          $set: {
-            status: "denied",
-            userId: new mongoose.Types.ObjectId(String(user._id)),
-          },
-        },
-        {returnDocument: "after"}
-      );
-      if (!denied) {
-        throw new ConflictError({
-          code: "mcp-oauth-request-decided",
-          title: "Authorization request was already decided",
-        });
-      }
-      return res.json({
-        data: {
-          redirectUrl: appendParams(denied.redirectUri, {
-            error: "access_denied",
-            error_description: "The user denied the request",
-            iss: oauth.issuer,
-            state: denied.state,
-          }),
-        },
-      });
+      const redirectUrl = await denyAuthorization({oauth, pending, userId: String(user._id)});
+      return res.json({data: {redirectUrl}});
     })
   );
 };
@@ -1066,12 +1198,15 @@ const addTokenRoutes = (
  * `dynamicClientRegistration`), authorize + consent decision, token, and revocation endpoints.
  */
 export const addMcpOAuthRoutes = (app: Application, options: McpOAuthRoutesOptions): void => {
-  const {oauth, openApi, userModel} = options;
+  const {betterAuth, oauth, openApi, userModel} = options;
   addDiscoveryRoutes(app, oauth);
   if (oauth.dynamicClientRegistration) {
     addRegistrationRoute(app, oauth);
   }
-  addAuthorizeRoute(app, oauth);
-  addConsentRoutes(app, oauth, openApi);
+  const metadataDocuments = oauth.clientIdMetadataDocuments
+    ? createClientMetadataDocumentResolver(oauth.clientIdMetadataDocuments)
+    : undefined;
+  addAuthorizeRoute(app, oauth, metadataDocuments);
+  addConsentRoutes(app, oauth, openApi, betterAuth);
   addTokenRoutes(app, oauth, userModel);
 };

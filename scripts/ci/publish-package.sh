@@ -46,6 +46,14 @@ if [ "${TERRENO_PUBLISH_PREBUILT:-}" != "1" ]; then
     (cd "$package_directory" && bun run compile)
   fi
 
+  # A package with a web export (admin-spa) ships dist/ in its tarball; tsc alone leaves it empty.
+  if bun -e "
+    const pkg = await Bun.file('$package_directory/package.json').json();
+    process.exit(pkg.scripts?.['build:web'] ? 0 : 1);
+  "; then
+    (cd "$package_directory" && bun run build:web)
+  fi
+
   # Prefer test:ci. Several packages (notably @terreno/ui) define test as
   # `bun test --watch`, which finishes the suite then waits forever with no
   # output. CircleCI then kills the publish step (default 10m no_output_timeout).
@@ -60,6 +68,20 @@ if [ "${TERRENO_PUBLISH_PREBUILT:-}" != "1" ]; then
     process.exit(pkg.scripts?.test ? 0 : 1);
   "; then
     (cd "$package_directory" && bun run test)
+  fi
+fi
+
+# Never publish a web-export package without its export: @terreno/admin-spa@58.1.1 shipped with
+# no dist/, and every app serving /console answered 503. admin-spa exports in Expo "server"
+# output mode, so the export is dist/server (routes.json, which AdminSpaServeApp needs or it
+# answers 503) plus dist/client (static assets); there is no dist/index.html.
+if bun -e "
+  const pkg = await Bun.file('$package_directory/package.json').json();
+  process.exit(pkg.scripts?.['build:web'] ? 0 : 1);
+"; then
+  if [ ! -f "$package_directory/dist/server/_expo/routes.json" ] || [ ! -d "$package_directory/dist/client/_expo" ]; then
+    echo "Refusing to publish ${package_name}@${version}: $package_directory/dist/server/_expo/routes.json or dist/client/_expo is missing (run build:web first)" >&2
+    exit 1
   fi
 fi
 

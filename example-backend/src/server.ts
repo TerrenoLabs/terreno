@@ -213,7 +213,8 @@ export const start = async (
       },
       // Opt-in OAuth for remote MCP clients with the read/write grant presets. Consent runs on
       // MCP_OAUTH_CONSENT_URL (example-frontend's /oauth/consent in e2e), defaulting to the admin
-      // SPA's built-in screen.
+      // SPA's built-in screen. MCP_OAUTH_CIMD=true also accepts Claude's published identity and
+      // serves the API's own consent page (password + TOTP, admins only), which needs Better Auth.
       mcpOAuth:
         process.env.MCP_OAUTH_ENABLED === "true" && process.env.PUBLIC_API_URL
           ? {
@@ -225,6 +226,17 @@ export const start = async (
               enabled: true,
               grants: "readWrite",
               issuer: process.env.PUBLIC_API_URL,
+              ...(process.env.MCP_OAUTH_CIMD === "true"
+                ? {
+                    clientIdMetadataDocuments: {
+                      allowedClientIds: [
+                        "https://claude.ai/oauth/mcp-oauth-client-metadata",
+                        "https://claude.ai/oauth/claude-code-client-metadata",
+                      ],
+                    },
+                    consent: {mode: "builtin", requireAdmin: true},
+                  }
+                : {}),
             }
           : undefined,
       mcpRequestLog: {enabled: true, retentionDays: 30},

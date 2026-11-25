@@ -34,6 +34,13 @@ export interface McpOAuthClientDocument extends mongoose.Document {
   userId?: mongoose.Types.ObjectId;
 }
 
+/** A validated Client ID Metadata Document, as `McpOAuthClient.upsertFromMetadataDocument` takes it. */
+export interface McpOAuthMetadataDocumentClient {
+  clientId: string;
+  clientName?: string;
+  redirectUris: string[];
+}
+
 interface McpOAuthClientStatics
   extends FindExactlyOnePlugin<McpOAuthClientDocument>,
     FindOneOrNonePlugin<McpOAuthClientDocument> {
@@ -41,6 +48,14 @@ interface McpOAuthClientStatics
     this: McpOAuthClientModel,
     options: McpOAuthConfidentialClientOptions
   ) => Promise<{client: McpOAuthClientDocument; clientSecret: string}>;
+  /**
+   * Create or refresh the public client for a Client ID Metadata Document. Returns null when the
+   * client was revoked: a revoked CIMD client stays revoked.
+   */
+  upsertFromMetadataDocument: (
+    this: McpOAuthClientModel,
+    document: McpOAuthMetadataDocumentClient
+  ) => Promise<McpOAuthClientDocument | null>;
   /** Mark the client revoked and end every token it holds. */
   revoke: (this: McpOAuthClientModel, clientId: string) => Promise<McpOAuthClientDocument | null>;
 }
@@ -168,3 +183,25 @@ interface McpOAuthTokenStatics
 export interface McpOAuthTokenModel
   extends mongoose.Model<McpOAuthTokenDocument>,
     McpOAuthTokenStatics {}
+
+/** What a built-in consent page attempt record holds. */
+export type McpOAuthConsentAttemptKind = "failure" | "totpStep";
+
+/** A refused built-in consent attempt (for lockout) or a used TOTP step (for replay). */
+export interface McpOAuthConsentAttemptDocument extends mongoose.Document {
+  _id: mongoose.Types.ObjectId;
+  created: Date;
+  expiresAt: Date;
+  key: string;
+  kind: McpOAuthConsentAttemptKind;
+  step?: number;
+  updated: Date;
+}
+
+interface McpOAuthConsentAttemptStatics
+  extends FindExactlyOnePlugin<McpOAuthConsentAttemptDocument>,
+    FindOneOrNonePlugin<McpOAuthConsentAttemptDocument> {}
+
+export interface McpOAuthConsentAttemptModel
+  extends mongoose.Model<McpOAuthConsentAttemptDocument>,
+    McpOAuthConsentAttemptStatics {}

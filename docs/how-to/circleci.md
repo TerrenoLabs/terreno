@@ -428,9 +428,12 @@ Semver git tags (`57.3.0`, `57.3.0-beta.1`) automatically start
 `publish-release` first requires the tag to be on `master` with its assembled
 `CHANGELOG.md` section ([release automation](release-automation.md)), then
 compiles the lockstep packages once with
-`bun run --filter ... compile` (dependency order), then runs
+`bun run --filter ... compile` (dependency order), builds the admin-spa web
+export (`build:web`, since `compile` is tsc only and the package ships `dist/`), then runs
 `scripts/ci/publish-package.sh` for all of them in parallel with
-`TERRENO_PUBLISH_PREBUILT=1`. It does not rerun tests: the tagged commit
+`TERRENO_PUBLISH_PREBUILT=1`. `publish-package.sh` refuses to publish a package with a
+`build:web` script when `dist/server/_expo/routes.json` or `dist/client/_expo` is missing, so
+admin-spa can't ship without the export that `AdminSpaServeApp` serves. It does not rerun tests: the tagged commit
 already passed CI on master, and rerunning every suite per package made
 releases take 20+ minutes. The job has no Mongo sidecar. Each publish writes
 its own temporary npmrc (`NPM_CONFIG_USERCONFIG`) so parallel publishes do not

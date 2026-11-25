@@ -109,7 +109,7 @@ const AUTH_EXACT = new Set([
   "/oauth/revoke",
 ]);
 
-const AUTH_PREFIXES = ["/auth/github/"];
+const AUTH_PREFIXES = ["/auth/github/", "/oauth/consent/"];
 
 const betterAuthAuthPrefixes = (basePath: string): string[] => {
   const trimmed = basePath.endsWith("/") ? basePath.slice(0, -1) : basePath;

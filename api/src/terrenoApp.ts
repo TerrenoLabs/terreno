@@ -400,9 +400,12 @@ export class TerrenoApp {
     const options = this.options;
     // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
     // instance exists, so the app User guard and sync are installed with it.
-    findBetterAuthProvider(this.registrations)?.adoptUserModel?.(options.userModel);
+    const betterAuthProvider = findBetterAuthProvider(this.registrations);
+    betterAuthProvider?.adoptUserModel?.(options.userModel);
     // Resolve first so a misconfigured issuer or consent URL fails at boot.
-    const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth);
+    const mcpOAuth = resolveMcpOAuthOption(options.mcpOAuth, {
+      betterAuthTwoFactor: Boolean(betterAuthProvider?.getBetterAuthConfig?.()?.twoFactor),
+    });
 
     // Record mount paths on layers for Express 5 → OpenAPI compat
     patchAppUse(app);
@@ -568,7 +571,12 @@ export class TerrenoApp {
       });
     }
     if (mcpOAuth) {
-      addMcpOAuthRoutes(app, {oauth: mcpOAuth, openApi: oapi, userModel: options.userModel});
+      addMcpOAuthRoutes(app, {
+        betterAuth,
+        oauth: mcpOAuth,
+        openApi: oapi,
+        userModel: options.userModel,
+      });
     }
     mountMCPServer(app, {
       betterAuth,

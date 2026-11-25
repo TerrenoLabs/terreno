@@ -169,6 +169,24 @@ Props and error copy: [syncdb reference → MCP OAuth consent](../reference/sync
 
 If the backend serves `@terreno/admin-spa` (`AdminSpaServeApp`), it already has a consent page: set `consentUrl` to `${issuer}/console/oauth/consent` (use your `basePath` if it is not `/console`). It uses the Better Auth session cookie and approves every requested grant, with no checkboxes. See [admin-spa reference](../reference/admin-spa.md#mcp-oauth-consent-route).
 
+### Limit who can approve
+
+By default any signed-in user can approve a connection. For an app with one owner, or where connectors should need an admin, set `consent`:
+
+```typescript
+mcpOAuth: {
+  consent: {requireAdmin: true, requireTwoFactor: true},
+  consentUrl: "https://app.example.com/oauth/consent",
+  enabled: true,
+  issuer: "https://api.example.com",
+},
+```
+
+- `requireAdmin`: only users with `admin: true` can approve.
+- `requireTwoFactor`: only users whose Better Auth account has two-factor turned on can approve. It needs a registered `BetterAuthApp` whose config sets `twoFactor`, or the app throws at boot.
+
+A user who fails either check gets `403` from `POST /oauth/authorize/:request/approve`, and the request stays pending, so an approver who is allowed can still decide it. Anyone signed in can still deny. These checks look at who the user is. They do not ask for a second factor at approval time.
+
 ### Build your own consent page
 
 The client sends the user's browser to `/oauth/authorize`. Terreno checks the client, redirect URI, PKCE, and scope, stores a pending request, and redirects to `consentUrl?request=<id>`. Your page:

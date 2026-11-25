@@ -12,7 +12,14 @@ import mongoose from "mongoose";
 
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {authenticateMiddleware, type User, type UserModel} from "../auth";
-import {BadRequestError, ConflictError, NotFoundError, UnauthorizedError} from "../errors";
+import type {BetterAuthInstance} from "../betterAuthSetup";
+import {
+  BadRequestError,
+  ConflictError,
+  ForbiddenError,
+  NotFoundError,
+  UnauthorizedError,
+} from "../errors";
 import {logger} from "../logger";
 import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
@@ -58,6 +65,8 @@ const MAX_CLIENT_NAME_LENGTH = 200;
 const MAX_REDIRECT_URIS = 10;
 
 export interface McpOAuthRoutesOptions {
+  /** The app's Better Auth instance, for the two-factor approval policy and the built-in page. */
+  betterAuth?: BetterAuthInstance;
   oauth: ResolvedMcpOAuthOptions;
   openApi?: OpenApiMiddleware;
   userModel: UserModel;
@@ -303,6 +312,93 @@ const loadActiveClient = async (clientId: string): Promise<McpOAuthClientDocumen
     });
   }
   return client;
+};
+
+interface TwoFactorUserContext {
+  internalAdapter: {
+    findUserById: (userId: string) => Promise<{twoFactorEnabled?: boolean | null} | null>;
+  };
+}
+
+/** Whether the user's linked Better Auth account has two-factor turned on. */
+const hasTwoFactorEnabled = async (
+  user: User,
+  betterAuth: BetterAuthInstance | undefined
+): Promise<boolean> => {
+  const betterAuthId = (user as {betterAuthId?: unknown}).betterAuthId;
+  if (!betterAuth || typeof betterAuthId !== "string" || betterAuthId === "") {
+    return false;
+  }
+  const context = (await betterAuth.$context) as unknown as TwoFactorUserContext;
+  const betterAuthUser = await context.internalAdapter.findUserById(betterAuthId);
+  return betterAuthUser?.twoFactorEnabled === true;
+};
+
+/** Why `mcpOAuth.consent` refuses this user as an approver, or undefined when it allows them. */
+export const approvalPolicyProblem = async (
+  user: User,
+  oauth: ResolvedMcpOAuthOptions,
+  betterAuth: BetterAuthInstance | undefined
+): Promise<string | undefined> => {
+  if (oauth.consent.requireAdmin && (user as {admin?: unknown}).admin !== true) {
+    return "Only an admin can approve this connection";
+  }
+  if (oauth.consent.requireTwoFactor && !(await hasTwoFactorEnabled(user, betterAuth))) {
+    return "Turn on two-factor authentication to approve this connection";
+  }
+  return undefined;
+};
+
+/**
+ * Approve a pending request as `user` and return the client redirect carrying the code. Shared
+ * by the JSON approve endpoint and the built-in consent page, which check the approval policy
+ * first. Refuses a client revoked since authorize.
+ */
+export const approveAuthorization = async ({
+  oauth,
+  pending,
+  scope,
+  user,
+}: {
+  oauth: ResolvedMcpOAuthOptions;
+  pending: McpOAuthAuthorizationDocument;
+  scope: string | undefined;
+  user: User;
+}): Promise<string> => {
+  await loadActiveClient(pending.clientId);
+  const code = generateMcpOAuthSecret();
+  const now = DateTime.now();
+  const codeExpiresAt = now.plus({seconds: oauth.authorizationCodeTtlSeconds});
+  const expiresAt = DateTime.max(
+    DateTime.fromJSDate(pending.expiresAt),
+    codeExpiresAt.plus({seconds: USED_CODE_RETENTION_SECONDS})
+  );
+  const approved = await McpOAuthAuthorization.findOneAndUpdate(
+    {_id: pending._id, status: "pending"},
+    {
+      $set: {
+        codeExpiresAt: codeExpiresAt.toJSDate(),
+        codeHash: hashMcpOAuthSecret(code),
+        expiresAt: expiresAt.toJSDate(),
+        ...(scope === undefined ? {} : {scope}),
+        status: "approved",
+        tokenEpoch: userTokenEpoch(user),
+        userId: new mongoose.Types.ObjectId(String(user._id)),
+      },
+    },
+    {returnDocument: "after"}
+  );
+  if (!approved) {
+    throw new ConflictError({
+      code: "mcp-oauth-request-decided",
+      title: "Authorization request was already decided",
+    });
+  }
+  logger.info("[MCPOAuth] Authorization approved", {
+    clientId: approved.clientId,
+    userId: String(user._id),
+  });
+  return appendParams(approved.redirectUri, {code, iss: oauth.issuer, state: approved.state});
 };
 
 const addDiscoveryRoutes = (app: Application, oauth: ResolvedMcpOAuthOptions): void => {
@@ -558,7 +654,8 @@ const addAuthorizeRoute = (
 const addConsentRoutes = (
   app: Application,
   oauth: ResolvedMcpOAuthOptions,
-  openApi?: OpenApiMiddleware
+  openApi: OpenApiMiddleware | undefined,
+  betterAuth: BetterAuthInstance | undefined
 ): void => {
   const openApiOptions = {openApi};
 
@@ -666,47 +763,12 @@ const addConsentRoutes = (
       const user = requireUser(req);
       const pending = await loadPendingAuthorization(String(req.params.request));
       const scope = approvedScope(req.body, pending.scope);
-      const code = generateMcpOAuthSecret();
-      const now = DateTime.now();
-      const codeExpiresAt = now.plus({seconds: oauth.authorizationCodeTtlSeconds});
-      const expiresAt = DateTime.max(
-        DateTime.fromJSDate(pending.expiresAt),
-        codeExpiresAt.plus({seconds: USED_CODE_RETENTION_SECONDS})
-      );
-      const approved = await McpOAuthAuthorization.findOneAndUpdate(
-        {_id: pending._id, status: "pending"},
-        {
-          $set: {
-            codeExpiresAt: codeExpiresAt.toJSDate(),
-            codeHash: hashMcpOAuthSecret(code),
-            expiresAt: expiresAt.toJSDate(),
-            ...(scope === undefined ? {} : {scope}),
-            status: "approved",
-            tokenEpoch: userTokenEpoch(user),
-            userId: new mongoose.Types.ObjectId(String(user._id)),
-          },
-        },
-        {returnDocument: "after"}
-      );
-      if (!approved) {
-        throw new ConflictError({
-          code: "mcp-oauth-request-decided",
-          title: "Authorization request was already decided",
-        });
+      const problem = await approvalPolicyProblem(user, oauth, betterAuth);
+      if (problem) {
+        throw new ForbiddenError({code: "mcp-oauth-approver-not-allowed", title: problem});
       }
-      logger.info("[MCPOAuth] Authorization approved", {
-        clientId: approved.clientId,
-        userId: String(user._id),
-      });
-      return res.json({
-        data: {
-          redirectUrl: appendParams(approved.redirectUri, {
-            code,
-            iss: oauth.issuer,
-            state: approved.state,
-          }),
-        },
-      });
+      const redirectUrl = await approveAuthorization({oauth, pending, scope, user});
+      return res.json({data: {redirectUrl}});
     })
   );
 
@@ -1123,7 +1185,7 @@ const addTokenRoutes = (
  * `dynamicClientRegistration`), authorize + consent decision, token, and revocation endpoints.
  */
 export const addMcpOAuthRoutes = (app: Application, options: McpOAuthRoutesOptions): void => {
-  const {oauth, openApi, userModel} = options;
+  const {betterAuth, oauth, openApi, userModel} = options;
   addDiscoveryRoutes(app, oauth);
   if (oauth.dynamicClientRegistration) {
     addRegistrationRoute(app, oauth);
@@ -1132,6 +1194,6 @@ export const addMcpOAuthRoutes = (app: Application, options: McpOAuthRoutesOptio
     ? createClientMetadataDocumentResolver(oauth.clientIdMetadataDocuments)
     : undefined;
   addAuthorizeRoute(app, oauth, metadataDocuments);
-  addConsentRoutes(app, oauth, openApi);
+  addConsentRoutes(app, oauth, openApi, betterAuth);
   addTokenRoutes(app, oauth, userModel);
 };

@@ -9,6 +9,7 @@ import type TestAgent from "supertest/lib/agent";
 import {modelRouter} from "../api";
 import type {UserModel as UserModelType} from "../auth";
 import {AuthToken} from "../authTokens";
+import {BetterAuthApp} from "../betterAuthApp";
 import {McpOAuthAuthorization} from "../models/mcpOAuthAuthorization";
 import {McpOAuthClient} from "../models/mcpOAuthClient";
 import {McpOAuthToken} from "../models/mcpOAuthToken";
@@ -17,6 +18,13 @@ import {Permissions, requireOAuthScope} from "../permissions";
 import {getCurrentRequestContext} from "../requestContext";
 import {TerrenoApp} from "../terrenoApp";
 import {authAsUser, setupDb, UserModel} from "../tests";
+import {
+  resetAccountSecurityState,
+  SecurityUser,
+  securityUserModel,
+  testBetterAuthConfig,
+} from "../tests/accountSecurityTestApp";
+import {enrollTwoFactor, PASSWORD, uniqueEmail} from "../tests/betterAuthStubs";
 import {type McpOAuthOptions, resolveMcpOAuthOption} from "./oauthMetadata";
 import {clearMCPRegistry} from "./registry";
 
@@ -2229,6 +2237,175 @@ describe("MCP OAuth client ID metadata documents", () => {
         clientIdMetadataDocuments: {allowedClientIds: []},
       });
       expect(resolved?.clientIdMetadataDocuments).toBeUndefined();
+    });
+  });
+});
+
+describe("MCP OAuth approval policy", () => {
+  const pendingRequest = async (app: express.Application): Promise<string> => {
+    const clientId = await registerClient(app);
+    const authorize = await startAuthorization(app, {
+      client_id: clientId,
+      code_challenge: createPkce().challenge,
+      code_challenge_method: "S256",
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+    });
+    expect(authorize.status).toBe(302);
+    return requestIdFrom(authorize.headers.location);
+  };
+
+  describe("requireAdmin", () => {
+    let app: express.Application;
+
+    beforeEach(async () => {
+      await setupDb();
+      await Promise.all([
+        McpOAuthAuthorization.deleteMany({}),
+        McpOAuthClient.deleteMany({}),
+        McpOAuthToken.deleteMany({}),
+      ]);
+      clearMCPRegistry();
+      app = buildApp({mcpOAuth: {...oauthOptions, consent: {requireAdmin: true}}});
+    });
+
+    it("refuses a non-admin with 403 and leaves the request pending for an admin", async () => {
+      const requestId = await pendingRequest(app);
+      const notAdmin = await authAsUser(app, "notAdmin");
+      const admin = await authAsUser(app, "admin");
+
+      const refused = await notAdmin.post(`/oauth/authorize/${requestId}/approve`);
+      const stillPending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      const approved = await admin.post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(refused.status).toBe(403);
+      expect(refused.body.title).toBe("Only an admin can approve this connection");
+      expect(stillPending?.status).toBe("pending");
+      expect(stillPending?.codeHash).toBeUndefined();
+      expect(approved.status).toBe(200);
+      expect(new URL(approved.body.data.redirectUrl).searchParams.get("code")).toBeString();
+    });
+
+    it("still lets a non-admin deny", async () => {
+      const requestId = await pendingRequest(app);
+      const notAdmin = await authAsUser(app, "notAdmin");
+
+      const denied = await notAdmin.post(`/oauth/authorize/${requestId}/deny`);
+
+      expect(denied.status).toBe(200);
+      expect(new URL(denied.body.data.redirectUrl).searchParams.get("error")).toBe("access_denied");
+    });
+  });
+
+  describe("requireTwoFactor", () => {
+    // The consent routes trust req.user when middleware already set it (see "approves consent
+    // when middleware already set req.user"); this stands in for a signed-in session.
+    let actingEmail: string | undefined;
+
+    const twoFactorApp = (consent: McpOAuthOptions["consent"]): express.Application =>
+      new TerrenoApp({
+        mcpOAuth: {...oauthOptions, consent},
+        skipListen: true,
+        userModel: securityUserModel,
+      })
+        .addMiddleware(async (req, _res, next) => {
+          if (actingEmail && req.path.startsWith("/oauth/authorize/")) {
+            req.user = (await SecurityUser.findOne({
+              email: actingEmail,
+            })) as unknown as typeof req.user;
+          }
+          next();
+        })
+        .register(new BetterAuthApp({config: testBetterAuthConfig(), userModel: securityUserModel}))
+        .register(noteRouter())
+        .build();
+
+    const signUpWithoutTwoFactor = async (app: express.Application): Promise<string> => {
+      const email = uniqueEmail("no-2fa");
+      const res = await supertest(app)
+        .post("/api/auth/sign-up/email")
+        .set("content-type", "application/json")
+        .send({email, name: "No 2FA", password: PASSWORD});
+      expect(res.status).toBe(200);
+      return email;
+    };
+
+    beforeEach(async () => {
+      await resetAccountSecurityState();
+      await Promise.all([
+        McpOAuthAuthorization.deleteMany({}),
+        McpOAuthClient.deleteMany({}),
+        McpOAuthToken.deleteMany({}),
+      ]);
+      actingEmail = undefined;
+    });
+
+    it("refuses a user without two-factor with 403 and approves one with it", async () => {
+      const app = twoFactorApp({requireTwoFactor: true});
+      const withoutEmail = await signUpWithoutTwoFactor(app);
+      const withEmail = uniqueEmail("with-2fa");
+      await enrollTwoFactor(app, withEmail);
+      const requestId = await pendingRequest(app);
+
+      actingEmail = withoutEmail;
+      const refused = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+      const stillPending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      actingEmail = withEmail;
+      const approved = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(refused.status).toBe(403);
+      expect(refused.body.title).toBe(
+        "Turn on two-factor authentication to approve this connection"
+      );
+      expect(stillPending?.status).toBe("pending");
+      expect(approved.status).toBe(200);
+    });
+
+    it("needs both when requireAdmin and requireTwoFactor are set", async () => {
+      const app = twoFactorApp({requireAdmin: true, requireTwoFactor: true});
+      const email = uniqueEmail("owner");
+      await enrollTwoFactor(app, email);
+      const requestId = await pendingRequest(app);
+      actingEmail = email;
+
+      const notYetAdmin = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+      await SecurityUser.updateOne({email}, {$set: {admin: true}});
+      const owner = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(notYetAdmin.status).toBe(403);
+      expect(owner.status).toBe(200);
+    });
+
+    it("lets any signed-in user approve when neither is set", async () => {
+      const app = twoFactorApp(undefined);
+      actingEmail = await signUpWithoutTwoFactor(app);
+      const requestId = await pendingRequest(app);
+
+      const approved = await supertest(app).post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(approved.status).toBe(200);
+    });
+
+    it("throws at boot without a Better Auth twoFactor config", () => {
+      const build = (betterAuth: boolean): express.Application => {
+        const terrenoApp = new TerrenoApp({
+          mcpOAuth: {...oauthOptions, consent: {requireTwoFactor: true}},
+          skipListen: true,
+          userModel: securityUserModel,
+        });
+        if (betterAuth) {
+          terrenoApp.register(
+            new BetterAuthApp({
+              config: testBetterAuthConfig({twoFactor: undefined}),
+              userModel: securityUserModel,
+            })
+          );
+        }
+        return terrenoApp.build();
+      };
+
+      expect(() => build(false)).toThrow("MCP OAuth is misconfigured");
+      expect(() => build(true)).toThrow("MCP OAuth is misconfigured");
     });
   });
 });

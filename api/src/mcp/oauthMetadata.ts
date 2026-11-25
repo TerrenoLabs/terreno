@@ -82,6 +82,23 @@ export interface McpOAuthClientIdMetadataDocumentsOption {
   fetch?: McpOAuthMetadataFetch;
 }
 
+/** `mcpOAuth.consent`: who may approve a connection. */
+export interface McpOAuthConsentOption {
+  /** Only users with `admin: true` may approve. Default false. */
+  requireAdmin?: boolean;
+  /**
+   * Only users with Better Auth two-factor enabled may approve. Default false. Needs a registered
+   * `BetterAuthApp` whose config sets `twoFactor`, or the app throws at boot.
+   */
+  requireTwoFactor?: boolean;
+}
+
+/** What the app around `mcpOAuth` provides, for boot checks that depend on it. */
+export interface McpOAuthBootContext {
+  /** Whether a Better Auth instance with the `twoFactor` plugin is registered. */
+  betterAuthTwoFactor?: boolean;
+}
+
 export interface McpOAuthOptions {
   /** Turns the authorization server on. Every other field is ignored while false. */
   enabled: boolean;
@@ -139,6 +156,8 @@ export interface McpOAuthOptions {
    * `McpOAuthClient`. Off when absent or empty.
    */
   clientIdMetadataDocuments?: McpOAuthClientIdMetadataDocumentsOption;
+  /** Who may approve a connection. Unset, any signed-in user may. */
+  consent?: McpOAuthConsentOption;
 }
 
 export type McpOAuthAppOption = McpOAuthOptions;
@@ -150,6 +169,8 @@ export interface ResolvedMcpOAuthOptions {
   authorizationRequestTtlSeconds: number;
   /** Allowlisted CIMD client ids and the fetch to load them, or undefined while off. */
   clientIdMetadataDocuments: {allowedClientIds: string[]; fetch: McpOAuthMetadataFetch} | undefined;
+  /** Approval policy, enforced on the consent endpoints. */
+  consent: {requireAdmin: boolean; requireTwoFactor: boolean};
   consentUrl: string;
   dynamicClientRegistration: boolean;
   issuer: string;
@@ -263,10 +284,20 @@ export const protectedResourceMetadataPath = (resource: string): string => {
  * Misconfiguration throws at boot rather than failing the first client's flow.
  */
 export const resolveMcpOAuthOption = (
-  option: McpOAuthAppOption | undefined
+  option: McpOAuthAppOption | undefined,
+  context: McpOAuthBootContext = {}
 ): ResolvedMcpOAuthOptions | undefined => {
   if (!option?.enabled) {
     return undefined;
+  }
+  const consent = {
+    requireAdmin: option.consent?.requireAdmin === true,
+    requireTwoFactor: option.consent?.requireTwoFactor === true,
+  };
+  if (consent.requireTwoFactor && !context.betterAuthTwoFactor) {
+    throw misconfigured(
+      "mcpOAuth.consent.requireTwoFactor needs a BetterAuthApp whose config sets twoFactor"
+    );
   }
   const issuerUrl = parseAbsoluteUrl(option.issuer, "issuer");
   if (issuerUrl.pathname !== "/" || issuerUrl.search || issuerUrl.hash) {
@@ -313,6 +344,7 @@ export const resolveMcpOAuthOption = (
       "authorizationRequestTtlSeconds"
     ),
     clientIdMetadataDocuments: resolveClientIdMetadataDocuments(option.clientIdMetadataDocuments),
+    consent,
     consentUrl: option.consentUrl,
     dynamicClientRegistration,
     grants,

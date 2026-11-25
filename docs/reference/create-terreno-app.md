@@ -41,6 +41,8 @@ The generated Profile tab uses `@terreno/ui` `TapToEdit` with `PATCH /auth/me` f
 
 Generated apps turn on the auth suite: account linking, two-factor, passkeys, last sign-in method, multi-session, and native apps in `backend/src/utils/betterAuthConfig.ts`, plus `AuditApp` and `AccountSecurityApp` in `server.ts`. `app/login.tsx` renders `TerrenoLoginScreen` (remembering only the sign-in method), and `app/settings/security.tsx` renders `TerrenoAccountSecurityScreen`, opened from the Profile tab. Generated apps set no `sendMail`, so forgot-password, recovery emails, and security notifications do nothing until the app wires `@terreno/comms`. Env vars and details: [Auth features in generated apps](../how-to/configure-better-auth.md#auth-features-in-generated-apps).
 
+The generated backend has no `as unknown as` cast. `backend/src/types/terrenoRegister.ts` augments `TerrenoRegister` with `user: UserDocument`, so `@terreno/api` callbacks and Better Auth helpers see the app's user type, and `User` is passed to `modelRouter` and `userModel` options as is.
+
 ## Library
 
 `generateAllFiles` returns the file list; `writeScaffold` writes it to disk. The CLI is the only supported way to scaffold an app. MCP `terreno_bootstrap_ai_rules` can add editor rules after the CLI runs.

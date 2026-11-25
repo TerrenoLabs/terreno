@@ -513,7 +513,6 @@ const generateBackendAccess = (): string => {
   return `import {
   createAccess,
   terrenoStatements,
-  type UserModel as TerrenoAuthUserModel,
 } from "@terreno/api";
 import mongoose from "mongoose";
 
@@ -523,7 +522,7 @@ export const access = createAccess({
   connection: mongoose.connection,
   organizations: true,
   statements: terrenoStatements,
-  userModel: User as unknown as TerrenoAuthUserModel,
+  userModel: User,
 });
 `;
 };
@@ -542,7 +541,6 @@ import {
   RealtimeApp,
   SyncApp,
   TerrenoApp,
-  type UserModel as TerrenoAuthUserModel,
 } from "@terreno/api";
 import type express from "express";
 import mongoose from "mongoose";
@@ -592,7 +590,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     terraApp.register(
       new BetterAuthApp({
         config: betterAuthConfig,
-        userModel: User as unknown as TerrenoAuthUserModel,
+        userModel: User,
       })
     );
   }
@@ -702,7 +700,6 @@ const generateBackendSeed = (args: BootstrapArgs): string => {
   runSeedCli,
   seedBetterAuthUser,
   type SeedStep,
-  type UserModel as TerrenoAuthUserModel,
 } from "@terreno/api";
 import mongoose from "mongoose";
 
@@ -755,24 +752,20 @@ const seedSteps: SeedStep[] = [
       const auth = createBetterAuth({
         config: {...config, signUp: undefined},
         mongoClient: getMongoClientFromMongoose(),
-        userModel: User as unknown as TerrenoAuthUserModel,
+        userModel: User,
       });
       for (const definition of SEED_USERS) {
         const user = await seedBetterAuthUser({
           auth,
           user: definition,
-          userModel: User as unknown as TerrenoAuthUserModel,
+          userModel: User,
         });
-        const appUser = user as unknown as {
-          admin: boolean;
-          save: () => Promise<unknown>;
-        };
-        appUser.admin = definition.admin;
-        const roles = (appUser as unknown as {roles?: string[]}).roles ?? [];
+        user.admin = definition.admin;
+        const roles = user.roles ?? [];
         if (definition.admin && !roles.includes("operator")) {
-          (appUser as unknown as {roles: string[]}).roles = [...roles, "operator"];
+          user.roles = [...roles, "operator"];
         }
-        await appUser.save();
+        await user.save();
       }
     },
   },
@@ -1200,11 +1193,9 @@ export * from "./user";
 
 const generateBackendUserRoutes = (): string => {
   return `import {Permissions, modelRouter} from "@terreno/api";
-import type {Model} from "mongoose";
 import {User} from "../models/user";
-import type {UserDocument} from "../types";
 
-export const userRouter = modelRouter("/users", User as unknown as Model<UserDocument>, {
+export const userRouter = modelRouter("/users", User, {
   permissions: {
     create: [Permissions.IsAdmin],
     delete: [Permissions.IsAdmin],
@@ -1278,6 +1269,7 @@ export type UserSchema = mongoose.Schema<UserDocument, UserModel, UserMethods>;
 export type UserDocument = DefaultDoc &
   UserMethods &
   PassportLocalMongooseDocument & {
+    __v: number;
     admin: boolean;
     betterAuthId?: string;
     email: string;
@@ -1285,6 +1277,19 @@ export type UserDocument = DefaultDoc &
     /** RBAC role names, from rbacUserPlugin. */
     roles: string[];
   };
+`;
+};
+
+const generateBackendTerrenoRegister = (): string => {
+  return `import type {UserDocument} from "./models/userTypes";
+
+// Tells @terreno/api the app's user type, so \`user\` in actions, permissions and query
+// filters is a UserDocument without a cast.
+declare module "@terreno/api" {
+  interface TerrenoRegister {
+    user: UserDocument;
+  }
+}
 `;
 };
 
@@ -2649,6 +2654,7 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateBackendModelsIndex(), path: `${backendDir}/src/models/index.ts`},
     {content: generateBackendUserRoutes(), path: `${backendDir}/src/api/users.ts`},
     {content: generateBackendTypes(), path: `${backendDir}/src/types/index.ts`},
+    {content: generateBackendTerrenoRegister(), path: `${backendDir}/src/types/terrenoRegister.ts`},
     {content: generateBackendTypesModels(), path: `${backendDir}/src/types/models/index.ts`},
     {content: generateBackendUserTypes(), path: `${backendDir}/src/types/models/userTypes.ts`},
     {

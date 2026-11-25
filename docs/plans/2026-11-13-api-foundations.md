@@ -190,7 +190,7 @@ None — no canvas.
   - Docs: docs/reference/syncdb.md
   - Skills: terreno-backend-api, update-docs
 
-- [ ] **T6** — Delete the user casts from the scaffold
+- [x] **T6** — Delete the user casts from the scaffold
   - Depends on: T4
   - Files: create-terreno-app/src/generate.ts, create-terreno-app/src/__tests__/generate.test.ts, create-terreno-app/src/__tests__/generatedApp.compile.test.ts, docs/reference/create-terreno-app.md
   - Criteria:

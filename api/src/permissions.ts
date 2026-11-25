@@ -68,20 +68,26 @@ export const getUserOrganizationIds = (user?: User): string[] => {
  */
 export const OrganizationQueryFilter = OrgQueryFilter;
 
+/**
+ * The user fields the built-in permissions read. Typed structurally, so the app's registered
+ * user type (`TerrenoRegister`) can pass through them without having to match `User` exactly.
+ */
+type PermissionUser = Partial<Pick<User, "admin" | "id" | "isAnonymous">>;
+
 export const Permissions = {
-  IsAdmin: (_method: RESTMethod, user?: User) => {
+  IsAdmin: (_method: RESTMethod, user?: PermissionUser) => {
     return Boolean(user?.admin);
   },
   IsAny: () => {
     return true;
   },
-  IsAuthenticated: (_method: RESTMethod, user?: User) => {
+  IsAuthenticated: (_method: RESTMethod, user?: PermissionUser) => {
     if (!user) {
       return false;
     }
     return Boolean(user.id);
   },
-  IsAuthenticatedOrReadOnly: (method: RESTMethod, user?: User) => {
+  IsAuthenticatedOrReadOnly: (method: RESTMethod, user?: PermissionUser) => {
     if (user?.id && !user?.isAnonymous) {
       return true;
     }
@@ -93,7 +99,7 @@ export const Permissions = {
    * it returns true and defers to {@link OrganizationQueryFilter}.
    */
   IsOrganizationMember: isOrgMemberPermission,
-  IsOwner: (_method: RESTMethod, user?: User, obj?: unknown) => {
+  IsOwner: (_method: RESTMethod, user?: PermissionUser, obj?: unknown) => {
     // When checking if we can possibly perform the action, return true.
     if (!obj) {
       return true;
@@ -109,7 +115,7 @@ export const Permissions = {
     const ownerId = ownerObj?._id ?? withOwner.ownerId;
     return Boolean(user?.id && ownerId && String(ownerId) === String(user?.id));
   },
-  IsOwnerOrReadOnly: (method: RESTMethod, user?: User, obj?: unknown) => {
+  IsOwnerOrReadOnly: (method: RESTMethod, user?: PermissionUser, obj?: unknown) => {
     // When checking if we can possibly perform the action, return true.
     if (!obj) {
       return true;

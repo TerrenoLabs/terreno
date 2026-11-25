@@ -335,7 +335,7 @@ const hasTwoFactorEnabled = async (
 };
 
 /** Why `mcpOAuth.consent` refuses this user as an approver, or undefined when it allows them. */
-export const approvalPolicyProblem = async (
+const approvalPolicyProblem = async (
   user: User,
   oauth: ResolvedMcpOAuthOptions,
   betterAuth: BetterAuthInstance | undefined
@@ -354,7 +354,7 @@ export const approvalPolicyProblem = async (
  * by the JSON approve endpoint and the built-in consent page, which check the approval policy
  * first. Refuses a client revoked since authorize.
  */
-export const approveAuthorization = async ({
+const approveAuthorization = async ({
   oauth,
   pending,
   scope,

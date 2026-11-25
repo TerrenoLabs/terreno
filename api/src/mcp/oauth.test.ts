@@ -2286,6 +2286,19 @@ describe("MCP OAuth approval policy", () => {
       expect(new URL(approved.body.data.redirectUrl).searchParams.get("code")).toBeString();
     });
 
+    it("refuses to approve once the client is revoked, without issuing a code", async () => {
+      const requestId = await pendingRequest(app);
+      const pending = await McpOAuthAuthorization.findOneOrNone({requestId});
+      await McpOAuthClient.revoke(pending?.clientId as string);
+      const admin = await authAsUser(app, "admin");
+
+      const res = await admin.post(`/oauth/authorize/${requestId}/approve`);
+
+      expect(res.status).toBe(400);
+      expect(res.body.title).toBe("The client was revoked");
+      expect((await McpOAuthAuthorization.findOneOrNone({requestId}))?.codeHash).toBeUndefined();
+    });
+
     it("still lets a non-admin deny", async () => {
       const requestId = await pendingRequest(app);
       const notAdmin = await authAsUser(app, "notAdmin");

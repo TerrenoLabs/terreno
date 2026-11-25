@@ -100,6 +100,7 @@ export {
   MCP_OAUTH_GRANT_PRESETS,
   type McpOAuthAppOption,
   type McpOAuthClientIdMetadataDocumentsOption,
+  type McpOAuthConsentOption,
   type McpOAuthGrant,
   type McpOAuthGrantAccess,
   type McpOAuthGrantPreset,

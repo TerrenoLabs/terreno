@@ -2,6 +2,7 @@ import {randomUUID} from "node:crypto";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
+import {APIError} from "../errors";
 import {createdUpdatedPlugin, findExactlyOne, findOneOrNone} from "../plugins";
 import type {
   McpOAuthClientDocument,
@@ -105,6 +106,8 @@ mcpOAuthClientSchema.pre("deleteMany", async function () {
   }
 });
 
+const UPSERT_ATTEMPTS = 3;
+
 mcpOAuthClientSchema.statics = {
   ...mcpOAuthClientSchema.statics,
   async issueConfidential(
@@ -141,10 +144,10 @@ mcpOAuthClientSchema.statics = {
     document: McpOAuthMetadataDocumentClient
   ): Promise<McpOAuthClientDocument | null> {
     const now = DateTime.now().toJSDate();
-    try {
-      // The filter excludes a revoked row, so the upsert's insert collides with it on the unique
-      // clientId instead of reviving it.
-      return await this.findOneAndUpdate(
+    const upsert = (): Promise<McpOAuthClientDocument | null> =>
+      // The filter excludes a revoked row, so an insert collides with it on the unique clientId
+      // instead of reviving it.
+      this.findOneAndUpdate(
         {clientId: document.clientId, revokedAt: {$exists: false}},
         {
           $set: {
@@ -164,12 +167,27 @@ mcpOAuthClientSchema.statics = {
         },
         {returnDocument: "after", upsert: true}
       );
-    } catch (error) {
-      if ((error as {code?: number}).code === 11000) {
+    // A duplicate key means another row holds this clientId: either a revoked client, which is
+    // refused, or a live one a concurrent first-time upsert just inserted, which the retry then
+    // matches and updates.
+    for (let attempt = 0; attempt < UPSERT_ATTEMPTS; attempt += 1) {
+      try {
+        return await upsert();
+      } catch (error) {
+        if ((error as {code?: number}).code !== 11000) {
+          throw error;
+        }
+      }
+      const existing = await this.findOneOrNone({clientId: document.clientId});
+      if (existing?.revokedAt) {
         return null;
       }
-      throw error;
     }
+    throw new APIError({
+      detail: `Could not store the client metadata document for ${document.clientId}`,
+      status: 503,
+      title: "Client registration is busy, try again",
+    });
   },
 };
 

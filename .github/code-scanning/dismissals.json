@@ -580,6 +580,13 @@
       "path": "api/src/mcp/oauth.ts",
       "reason": "false positive",
       "comment": "Route has createRouteRateLimitMiddleware (per-IP) and TerrenoApp mounts createRateLimitMiddleware app-wide before it (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
+    },
+    {
+      "alert": 345,
+      "rule": "js/missing-rate-limiting",
+      "path": "api/src/mcp/oauthConsentPage.ts",
+      "reason": "false positive",
+      "comment": "Route has createRouteRateLimitMiddleware (per-IP) and TerrenoApp mounts createRateLimitMiddleware app-wide before it (api/src/terrenoApp.ts); CodeQL does not model custom limiters."
     }
   ]
 }

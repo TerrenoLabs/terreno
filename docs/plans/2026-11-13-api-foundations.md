@@ -80,7 +80,7 @@ None — no canvas.
 
 ## Tasks
 
-- [ ] **T1** — Add the TerrenoRegister user registry and prove it with a consumer type fixture
+- [x] **T1** — Add the TerrenoRegister user registry and prove it with a consumer type fixture
   - Depends on: none
   - Files: api/src/types/register.ts, api/src/index.ts, api/typeFixtures/registeredUser/tsconfig.json, api/typeFixtures/registeredUser/augmented.ts, api/typeFixtures/unregisteredUser/tsconfig.json, api/typeFixtures/unregisteredUser/plain.ts, api/src/types/register.test.ts
   - Criteria:

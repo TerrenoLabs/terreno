@@ -20,6 +20,23 @@ Upgrade notes for consumer action live in [`mcp-server/src/docs/upgrades/`](mcp-
 
 Unreleased changes live in [`changelog/unreleased/`](changelog/unreleased/). Add one Markdown file per feature (see that directory's README) instead of editing this section.
 
+## [58.2.0] - 2026-11-24
+
+### Added
+
+- `@terreno/api` MCP OAuth accepts Client ID Metadata Documents, so a Claude.ai connector can use "Use Claude's published identity" with no client to create. List the accepted ids in `mcpOAuth.clientIdMetadataDocuments.allowedClientIds` (for example `https://claude.ai/oauth/mcp-oauth-client-metadata`). `/oauth/authorize` fetches an allowlisted id's document with no redirects, a 5 second timeout, and a 16 KiB cap, caches it for 10 minutes, and stores it as a public `McpOAuthClient` (`McpOAuthClient.upsertFromMetadataDocument`). The metadata then has `client_id_metadata_document_supported: true`. A revoked metadata-document client stays revoked, and no other URL is ever fetched.
+- `mcpOAuth.consent.mode: "builtin"` serves a consent page from the API at `/oauth/consent/:request`. It asks for email, password, and an authenticator code on every approval, checks them against Better Auth in-process without creating a session, refuses a reused code, and locks consent for an email after five failures in 15 minutes (`McpOAuthConsentAttempt`). `consentUrl` is optional in this mode. It needs a `BetterAuthApp` whose config sets `twoFactor`.
+- `mcpOAuth.consent.requireAdmin` and `requireTwoFactor` limit who may approve a connection. The JSON approve endpoint answers 403 to anyone else and leaves the request pending; the built-in page shows an error.
+- `GET /oauth/authorize/:request` and the approve endpoint now refuse a client revoked after authorize with 400 `The client was revoked`.
+
+### Changed
+
+- `@terreno/ui` default `primary500` is `#0C80A7`. `primary300` stays `#40B8E0` and `primary400` stays `#0E9DCD`. Light-mode `surface.primary` still maps to `primary400`. New `surface.primaryDark` maps to `primary500` in light mode and `primary300` in dark mode. Primary `Button` fills use `surface.primaryDark` (`#0C80A7` in light mode, `#40B8E0` in dark mode), including the active fill for variants other than primary and destructive. Dark-mode `border.ai` follows `primary500`, so it is `#0C80A7`. `IconButton`, `Slider`, and `DataTable` still use `surface.primary`. Custom theme configs may omit `surface.primaryDark`. Theme resolution copies `surface.primary` into that role, and `Button` uses `surface.primary` when a computed theme has no `primaryDark`, so older custom themes keep a primary fill.
+
+### Fixed
+
+- `@terreno/admin-spa` publishes with its web export again. 58.1.1 shipped without `dist/`, so `AdminSpaServeApp` answered `/console` with 503. Both release paths (CircleCI `publish-release` and the GitHub `publish-on-tag` fallback) now run `build:web` before `npm publish`, and refuse to publish when `dist/server/_expo/routes.json` or `dist/client/_expo` is missing.
+
 ## [58.1.1] - 2026-11-21
 
 ### Added

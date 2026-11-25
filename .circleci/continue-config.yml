@@ -2555,6 +2555,16 @@ jobs:
             done
             # bun --filter runs compile in workspace dependency order.
             TERRENO_SKIP_WORKSPACE_DEPS=1 bun run "${filters[@]}" compile
+      # compile is tsc only. admin-spa also ships its static web export (files: dist/**), which
+      # publish-package.sh refuses to publish without. Build it before the publish step pins
+      # workspace dependencies, so metro resolves the local workspace sources.
+      - run:
+          name: Build admin-spa web export
+          command: |
+            set -euo pipefail
+            (cd admin-spa && bun run build:web)
+            test -f admin-spa/dist/server/_expo/routes.json
+            test -d admin-spa/dist/client/_expo
       - run:
           name: Publish packages
           no_output_timeout: 10m

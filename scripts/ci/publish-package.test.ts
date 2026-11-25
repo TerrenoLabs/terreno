@@ -14,6 +14,15 @@ const publishReleaseJob = circleConfig.slice(
   circleConfig.indexOf("\nworkflows:\n")
 );
 
+const publishOnTag = readFileSync(
+  join(import.meta.dir, "../../.github/workflows/publish-on-tag.yml"),
+  "utf8"
+);
+const adminSpaGithubJob = publishOnTag.slice(
+  publishOnTag.indexOf("\n  publish-admin-spa:\n"),
+  publishOnTag.indexOf("\n  publish-blocks:\n")
+);
+
 describe("publish-package.sh", () => {
   it("does not bun install after pinning workspace versions to the unpublished tag", () => {
     const prepareMarker = "prepare-package-publish.mjs";
@@ -57,6 +66,35 @@ describe("publish-package.sh", () => {
     assert.notEqual(gate, -1, "expected TERRENO_PUBLISH_PREBUILT gate");
     assert.ok(gate < script.indexOf("compile-workspace-deps.js"));
     assert.ok(gate < script.indexOf("bun run test:ci"));
+  });
+
+  it("refuses to publish a build:web package without its server export", () => {
+    const guard = script.indexOf('if [ ! -f "$package_directory/dist/server/_expo/routes.json" ]');
+    assert.notEqual(guard, -1, "expected a dist/server/_expo/routes.json guard");
+    assert.ok(guard < script.indexOf("npm publish"), "the guard must run before npm publish");
+    assert.match(script, /pkg\.scripts\?\.\['build:web'\]/, "expected build:web detection");
+  });
+
+  it("runs build:web when it compiles the package itself", () => {
+    const gate = script.indexOf('if [ "${TERRENO_PUBLISH_PREBUILT:-}" != "1" ]; then');
+    const build = script.indexOf("bun run build:web");
+    assert.ok(gate !== -1 && build > gate, "build:web belongs in the non-prebuilt path");
+    assert.ok(build < script.indexOf("npm publish"));
+  });
+
+  it("builds the admin-spa web export in publish-release before publishing", () => {
+    const build = publishReleaseJob.indexOf("(cd admin-spa && bun run build:web)");
+    const publish = publishReleaseJob.indexOf("name: Publish packages");
+    assert.notEqual(build, -1, "publish-release must run admin-spa build:web");
+    assert.ok(build < publish, "build:web must run before the publish step");
+  });
+
+  it("checks the server export before npm publish in the GitHub admin-spa job", () => {
+    const build = adminSpaGithubJob.indexOf("run: bun run build:web");
+    const check = adminSpaGithubJob.indexOf("test -f dist/server/_expo/routes.json");
+    const publish = adminSpaGithubJob.indexOf("npm publish");
+    assert.ok(build !== -1 && check !== -1 && publish !== -1);
+    assert.ok(build < check && check < publish);
   });
 
   it("writes a per-invocation npmrc so parallel publishes keep their token", () => {

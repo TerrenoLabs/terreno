@@ -1,4 +1,4 @@
-import {type FC, useCallback} from "react";
+import {type FC, memo, useCallback} from "react";
 import {TouchableOpacity, View} from "react-native";
 
 import {CheckBox} from "./CheckBox";
@@ -9,16 +9,24 @@ import {Heading} from "./Heading";
 import {isNarrowViewport} from "./MediaQuery";
 import {Text} from "./Text";
 import {resolveFieldTestIDsFromProps} from "./testing/resolveTestId";
+import {useStableCallback} from "./useStableCallback";
+
+const OPTION_HIT_SLOP = {bottom: 10, left: 10, right: 10, top: 10} as const;
 
 interface OptionProps {
   isDefault: boolean;
   value: string;
   label?: string;
   selected: boolean;
-  onSelect: () => void;
+  onSelect: (value: string) => void;
 }
 
-const Option: FC<OptionProps> = ({value, label, isDefault, selected, onSelect}) => {
+// Memoized so toggling one option re-renders that option, not the whole list.
+const Option: FC<OptionProps> = memo(({value, label, isDefault, selected, onSelect}) => {
+  const handlePress = useCallback((): void => {
+    onSelect(value);
+  }, [onSelect, value]);
+
   return (
     <View
       style={{
@@ -34,9 +42,9 @@ const Option: FC<OptionProps> = ({value, label, isDefault, selected, onSelect}) 
         accessibilityHint={`Select ${label ?? value} from list of options`}
         aria-label={label ?? value}
         aria-role="checkbox"
-        hitSlop={{bottom: 10, left: 10, right: 10, top: 10}}
+        hitSlop={OPTION_HIT_SLOP}
         key={value}
-        onPress={onSelect}
+        onPress={handlePress}
         style={{
           justifyContent: "center",
         }}
@@ -52,7 +60,8 @@ const Option: FC<OptionProps> = ({value, label, isDefault, selected, onSelect}) 
       </TouchableOpacity>
     </View>
   );
-};
+});
+Option.displayName = "Option";
 
 export const MultiselectField: FC<MultiselectFieldProps> = ({
   options,
@@ -71,15 +80,12 @@ export const MultiselectField: FC<MultiselectFieldProps> = ({
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
   const selectedItems = value ?? [];
 
-  const toggleItem = useCallback(
-    (item: string): void => {
-      const newSelectedItems = selectedItems.includes(item)
-        ? selectedItems.filter((selected) => selected !== item)
-        : [...selectedItems, item];
-      onChange(newSelectedItems);
-    },
-    [onChange, selectedItems]
-  );
+  const toggleItem = useStableCallback((item: string): void => {
+    const newSelectedItems = selectedItems.includes(item)
+      ? selectedItems.filter((selected) => selected !== item)
+      : [...selectedItems, item];
+    onChange(newSelectedItems);
+  });
   return (
     <View
       accessibilityHint="Contains a prompt and list of options to select"
@@ -104,7 +110,7 @@ export const MultiselectField: FC<MultiselectFieldProps> = ({
             isDefault={isDefault}
             key={option.key ?? option.value}
             label={option.label}
-            onSelect={() => toggleItem(option.value)}
+            onSelect={toggleItem}
             selected={selectedItems.includes(option.value)}
             value={option.value}
           />

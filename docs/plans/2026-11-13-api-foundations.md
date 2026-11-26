@@ -267,7 +267,7 @@ None — no canvas.
   - Docs: docs/explanation/authentication.md (what `legacyAuth: false` turns off, per transport)
   - Skills: terreno-backend-api, terreno-backend-tests, update-docs
 
-- [ ] **T9** — Scaffold a Better Auth-only backend
+- [x] **T9** — Scaffold a Better Auth-only backend
   - Depends on: T6, T7
   - Files: create-terreno-app/src/generate.ts, create-terreno-app/src/__tests__/generate.test.ts, create-terreno-app/src/__tests__/generatedBetterAuthConfig.test.ts, create-terreno-app/e2e/smoke.ts, docs/reference/create-terreno-app.md, docs/how-to/deploy-backend-to-cloud-run.md
   - Criteria:

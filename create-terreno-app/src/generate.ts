@@ -374,7 +374,6 @@ const generateBackendPackageJson = (args: BootstrapArgs): string => {
         luxon: "^3.7.2",
         mongodb: MONGODB_VERSION,
         mongoose: MONGOOSE_VERSION,
-        "passport-local-mongoose": "^9.0.1",
       },
       devDependencies: {
         "@biomejs/biome": "^2.3.6",
@@ -580,6 +579,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       settingsSchema: organizationSettingsSchema,
     },
     rateLimit: isDeployed ? {trustProxy: 1} : false,
+    legacyAuth: false,
     skipListen,
     // noExplicitAny: User model type mismatch
     // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
@@ -1039,7 +1039,6 @@ export function addDefaultPlugins(schema: mongoose.Schema<any, any, any, any>): 
 const generateBackendUserModel = (): string => {
   return `import {rbacUserPlugin} from "@terreno/api";
 import mongoose from "mongoose";
-import passportLocalMongoose from "passport-local-mongoose";
 import type {UserDocument, UserModel} from "../types";
 import {addDefaultPlugins} from "./modelPlugins";
 
@@ -1074,9 +1073,6 @@ const userSchema = new mongoose.Schema<UserDocument, UserModel>(
   {strict: "throw", toJSON: {virtuals: true}, toObject: {virtuals: true}}
 );
 
-userSchema.plugin(passportLocalMongoose, {
-  usernameField: "email",
-});
 // \`roles\` holds the user's RBAC role names (access.ts). New users get Terreno's \`member\` role;
 // the seed adds \`operator\` to the admin, which grants the /users/:id/security recovery routes.
 userSchema.plugin(rbacUserPlugin, {defaultRoles: ["member"]});
@@ -1224,10 +1220,6 @@ const generateBackendUserTypes = (): string => {
   return `import type {APIErrorConstructor} from "@terreno/api";
 import type mongoose from "mongoose";
 import type {Document, Model} from "mongoose";
-import type {
-  PassportLocalMongooseDocument,
-  PassportLocalMongooseModel,
-} from "passport-local-mongoose";
 
 type ModelQuery<T> = Partial<Record<keyof T, unknown>> & Record<string, unknown>;
 
@@ -1260,15 +1252,12 @@ export type UserStatics = DefaultStatics<UserDocument> & {
   findByEmail: (this: UserModel, email: string) => Promise<UserDocument | null>;
 };
 
-export type UserModel = DefaultModel<UserDocument> &
-  UserStatics &
-  PassportLocalMongooseModel<UserDocument>;
+export type UserModel = DefaultModel<UserDocument> & UserStatics;
 
 export type UserSchema = mongoose.Schema<UserDocument, UserModel, UserMethods>;
 
 export type UserDocument = DefaultDoc &
-  UserMethods &
-  PassportLocalMongooseDocument & {
+  UserMethods & {
     __v: number;
     admin: boolean;
     betterAuthId?: string;
@@ -2337,10 +2326,6 @@ PASSKEY_RP_ID=
 AUTH_ACCOUNT_LINKING=verified-email
 # open (default) or closed.
 AUTH_SIGN_UP=open
-TOKEN_SECRET=
-TOKEN_ISSUER=
-REFRESH_TOKEN_SECRET=
-SESSION_SECRET=
 PORT=8080
 NODE_ENV=production
 `;
@@ -2362,10 +2347,6 @@ AUTH_PROVIDER=better-auth
 BETTER_AUTH_SECRET=${appName}-better-auth-secret-dev-only-32chars
 BETTER_AUTH_URL=http://localhost:4000
 FRONTEND_URL=http://localhost:8082
-TOKEN_SECRET=dev-token-secret
-TOKEN_ISSUER=${appName}-dev
-REFRESH_TOKEN_SECRET=dev-refresh-secret
-SESSION_SECRET=dev-session-secret
 PORT=4000
 # TerrenoApp registers POST /__terreno/browser-logs (terreno-mcp-local read_logs) only in development.
 NODE_ENV=development

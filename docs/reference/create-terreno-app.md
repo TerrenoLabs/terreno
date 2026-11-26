@@ -48,3 +48,7 @@ The generated backend has no `as unknown as` cast. `backend/src/types/terrenoReg
 `generateAllFiles` returns the file list; `writeScaffold` writes it to disk. The CLI is the only supported way to scaffold an app. MCP `terreno_bootstrap_ai_rules` can add editor rules after the CLI runs.
 
 The repo's [bootstrap loop](bootstrap-loop.md) scaffolds with this CLI for every released version and scores the app that results.
+
+## Better Auth only
+
+The generated backend passes `legacyAuth: false` to `TerrenoApp`, so it mounts no Passport strategies or legacy `/auth/*` routes. Its user model has no `passport-local-mongoose` plugin, `backend/package.json` does not list it, and `.env` / `.env.example` carry no `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET` or `SESSION_SECRET`. The seed creates the admin through Better Auth.

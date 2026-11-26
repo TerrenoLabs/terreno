@@ -444,15 +444,15 @@ describe("generateAllFiles", () => {
     assert.notInclude(config, "secret-app-better-auth-secret-dev-only-32chars");
   });
 
-  test("generated userTypes import passport-local-mongoose model types", () => {
+  test("generated userTypes carry no passport-local-mongoose model types", () => {
     const userTypes = generateAllFiles({
       appDisplayName: "Types App",
       appName: "types-app",
     }).find((file) => file.path === "backend/src/types/models/userTypes.ts")?.content;
 
-    assert.include(userTypes, 'from "passport-local-mongoose"');
-    assert.include(userTypes, "PassportLocalMongooseModel<UserDocument>");
-    assert.include(userTypes, "PassportLocalMongooseDocument");
+    assert.notInclude(userTypes, "passport-local-mongoose");
+    assert.notInclude(userTypes, "PassportLocalMongooseModel");
+    assert.notInclude(userTypes, "PassportLocalMongooseDocument");
     assert.notInclude(userTypes, "mongoose.PassportLocalModel");
     assert.notInclude(userTypes, "mongoose.PassportLocalDocument");
   });

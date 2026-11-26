@@ -145,6 +145,12 @@ continues anonymously when allowed) and a legacy JWT is not accepted. `githubAut
 with `legacyAuth: false` throws at `build()`. `legacyAuth: false` with no `BetterAuthApp`
 logs one warning and still builds.
 
+Sockets and MCP follow the same switch. A `RealtimeApp` registered on a
+`legacyAuth: false` app builds its validator chain without the legacy JWT validator, even
+when `TOKEN_SECRET` is set, and an explicit `RealtimeApp` `tokenSecret` option throws at
+start (`RealtimeApp tokenSecret requires legacyAuth`). `POST /mcp` does not verify a
+`TOKEN_SECRET` JWT; Better Auth sessions, MCP OAuth tokens, and service tokens still work.
+
 ### GitHub OAuth Strategy (JWT — legacy)
 
 OAuth 2.0 authentication with GitHub.

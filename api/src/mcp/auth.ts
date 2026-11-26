@@ -13,6 +13,8 @@ export interface MCPAuthContext {
   userModel: TerrenoUserModel;
   betterAuth?: BetterAuthInstance;
   mcpServiceTokens?: boolean;
+  /** When false, a `TOKEN_SECRET` JWT is never verified. Omitted means legacy JWTs stay on. */
+  legacyAuth?: boolean;
   /** Accept `mcpat_` OAuth access tokens issued by the MCP OAuth server. */
   mcpOAuth?: boolean;
 }
@@ -183,6 +185,10 @@ export const extractAuthFromHeaders = async (
   }
 
   if (!authorization || !token) {
+    return undefined;
+  }
+
+  if (context.legacyAuth === false) {
     return undefined;
   }
 

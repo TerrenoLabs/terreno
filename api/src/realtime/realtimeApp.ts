@@ -196,7 +196,13 @@ export class RealtimeApp implements TerrenoPlugin {
       });
 
       // Authentication middleware: legacy JWT first when configured, optionally Better Auth sessions.
-      const tokenSecret = this.config.tokenSecret ?? process.env.TOKEN_SECRET;
+      const legacyAuthOff = this.terrenoApp?.isLegacyAuthEnabled?.() === false;
+      if (legacyAuthOff && this.config.tokenSecret) {
+        throw new APIError({status: 500, title: "RealtimeApp tokenSecret requires legacyAuth"});
+      }
+      const tokenSecret = legacyAuthOff
+        ? undefined
+        : (this.config.tokenSecret ?? process.env.TOKEN_SECRET);
       const userModel = this.resolveUserModel();
       const betterAuth = this.resolveBetterAuth();
       if (!tokenSecret && !betterAuth) {

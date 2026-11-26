@@ -245,7 +245,7 @@ None — no canvas.
   - Docs: docs/explanation/authentication.md (opt-in section, route table, the 60 default), docs/reference/environment-variables.md (which secrets each mode needs); the `legacyAuth` reference entry is written in T12
   - Skills: terreno-backend-api, terreno-backend-tests, update-docs
 
-- [ ] **T8** — Refuse legacy JWTs on sockets and MCP when `legacyAuth` is `false`
+- [x] **T8** — Refuse legacy JWTs on sockets and MCP when `legacyAuth` is `false`
   - Depends on: T7
   - Files: api/src/realtime/realtimeApp.ts, api/src/realtime/socketAuth.ts, api/src/mcp/auth.ts, api/src/terrenoApp.ts, api/src/realtime/socketAuth.legacyAuth.test.ts, api/src/mcp/auth.legacyAuth.test.ts, docs/explanation/authentication.md
   - Criteria:

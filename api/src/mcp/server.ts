@@ -20,6 +20,8 @@ import {type ResolvedMcpOAuthOptions, sendMcpOAuthChallenge} from "./oauthMetada
 import {getAllMCPTools, type MCPToolDefinition} from "./toolGenerator";
 
 export interface MCPServerOptions {
+  /** When false, MCP refuses `TOKEN_SECRET` JWTs. */
+  legacyAuth?: boolean;
   userModel: TerrenoUserModel;
   betterAuth?: BetterAuthInstance;
   mcpServiceTokens?: boolean;
@@ -48,6 +50,7 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
   }
   const authContext: MCPAuthContext = {
     betterAuth: options.betterAuth,
+    legacyAuth: options.legacyAuth,
     mcpOAuth: Boolean(options.mcpOAuth),
     mcpServiceTokens: options.mcpServiceTokens,
     userModel: options.userModel,

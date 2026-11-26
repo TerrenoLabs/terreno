@@ -316,6 +316,14 @@ export class TerrenoApp {
   }
 
   /**
+   * Whether legacy Passport/JWT auth is on. False only when `legacyAuth: false` was set;
+   * sockets and MCP use it to refuse `TOKEN_SECRET` JWTs.
+   */
+  isLegacyAuthEnabled(): boolean {
+    return this.options.legacyAuth !== false;
+  }
+
+  /**
    * The application user model this app authenticates against.
    */
   getUserModel(): TerrenoAppOptions["userModel"] {
@@ -642,6 +650,7 @@ export class TerrenoApp {
     }
     mountMCPServer(app, {
       betterAuth,
+      legacyAuth,
       mcpOAuth,
       mcpServiceTokens: mcpServiceTokens.enabled,
       requestLog: resolveMcpRequestLogOption(options.mcpRequestLog),

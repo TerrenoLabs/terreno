@@ -113,23 +113,78 @@ describe("@terreno/api packed file list", () => {
   });
 });
 
-describe("workspace packages that import the test helpers", () => {
-  const workspaces = (readManifest(repoRoot).workspaces ?? []).filter((dir) =>
+interface WorkspacePackage {
+  dir: string;
+  name: string;
+  workspaceDeps: string[];
+}
+
+const readWorkspacePackages = (): WorkspacePackage[] => {
+  const dirs = (readManifest(repoRoot).workspaces ?? []).filter((dir) =>
     existsSync(path.join(repoRoot, dir, "package.json"))
   );
+  const manifests = dirs.map((dir) => ({
+    dir,
+    manifest: readManifest(path.join(repoRoot, dir)) as Manifest & {name?: string},
+  }));
+  const names = new Set(manifests.map(({manifest}) => manifest.name));
+  return manifests.map(({dir, manifest}) => ({
+    dir,
+    name: manifest.name ?? dir,
+    workspaceDeps: Object.keys({
+      ...manifest.dependencies,
+      ...manifest.devDependencies,
+      ...manifest.peerDependencies,
+    }).filter((dep) => names.has(dep)),
+  }));
+};
+
+// Every workspace package a package depends on, directly or through other workspace packages.
+const workspaceClosure = (packages: WorkspacePackage[], start: string): Set<string> => {
+  const byName = new Map(packages.map((pkg) => [pkg.name, pkg]));
+  const seen = new Set<string>();
+  const pending = [...(byName.get(start)?.workspaceDeps ?? [])];
+  while (pending.length > 0) {
+    const next = pending.pop() as string;
+    if (seen.has(next)) {
+      continue;
+    }
+    seen.add(next);
+    pending.push(...(byName.get(next)?.workspaceDeps ?? []));
+  }
+  return seen;
+};
+
+describe("workspace packages that import the test helpers", () => {
+  const packages = readWorkspacePackages();
+  // `@terreno/test` depends on these, so they cannot declare it back without a dependency
+  // cycle. They resolve it through the workspace link instead.
+  const testDependencies = workspaceClosure(packages, "@terreno/test");
 
   it("finds importers to check", () => {
-    const importers = workspaces.filter((dir) => importsTestHelpers(path.join(repoRoot, dir)));
-    expect(importers).toContain("api");
+    const importers = packages.filter(({dir}) => importsTestHelpers(path.join(repoRoot, dir)));
+    expect(importers.map(({dir}) => dir)).toContain("api");
   });
 
-  for (const dir of workspaces) {
+  for (const {dir, name} of packages) {
     it(`${dir} declares @terreno/test when it imports it`, () => {
-      if (dir === "test" || !importsTestHelpers(path.join(repoRoot, dir))) {
+      if (
+        dir === "test" ||
+        testDependencies.has(name) ||
+        !importsTestHelpers(path.join(repoRoot, dir))
+      ) {
         return;
       }
       const manifest = readManifest(path.join(repoRoot, dir));
       expect(manifest.devDependencies?.["@terreno/test"]).toBeDefined();
     });
   }
+
+  // A cycle breaks `bun run --filter '*' compile`: packages start before their dependencies build.
+  it("has no workspace dependency cycles", () => {
+    const cyclic = packages
+      .filter(({name}) => workspaceClosure(packages, name).has(name))
+      .map(({name}) => name);
+    expect(cyclic).toEqual([]);
+  });
 });

@@ -570,9 +570,9 @@ export type YourModelDocument = DefaultDoc & YourModelMethods & {
 
 ### User Type Casting
 
-- In routes: `req.user` is `UserDocument | undefined`
-- In @terreno/api callbacks: `const user = u as unknown as UserDocument`
-- Never use `as any as UserDocument`
+- Register the app user once: `declare module "@terreno/api" {interface TerrenoRegister {user: UserDocument}}`. `user` in actions, `queryFilter`, permissions, and hooks is then typed with no cast.
+- In routes: `import type {} from "@terreno/api/expressUser"` once so `req.user` is the registered user.
+- Never cast the user to `UserDocument` (neither through `unknown` nor through `any`)
 
 ## setupServer
 

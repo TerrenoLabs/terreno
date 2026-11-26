@@ -336,7 +336,7 @@ None — no canvas.
   - Docs: the deprecations are listed in the api reference in T12
   - Skills: terreno-backend-api
 
-- [ ] **T12** — Write the API reference, upgrade note, changelog fragments and agent rule updates
+- [x] **T12** — Write the API reference, upgrade note, changelog fragments and agent rule updates
   - Depends on: T5, T8, T9, T10, T11
   - Files: docs/reference/api.md, mcp-server/src/docs/upgrades/58.1.0.md, changelog/unreleased/typed-user-registry.md, changelog/unreleased/legacy-auth-opt-in.md, changelog/unreleased/api-test-optional-peer.md, changelog/unreleased/deprecate-legacy-api-exports.md, docs/how-to/upgrade-terreno.md, .rulesync/rules/api/00-api.md, .rulesync/rules/example-backend/00-example-backend.md, .rulesync/rules/00-root.md, generated rule copies (regenerated, not hand-edited)
   - Criteria:

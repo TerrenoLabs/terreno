@@ -25,6 +25,7 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 ## Key exports
 
 - `TerrenoApp`, `setupServer`, `modelRouter`, `Permissions`, `OwnerQueryFilter`
+- User typing: `TerrenoRegister`, `RegisteredUser`, `TerrenoUserModel`, `PassportUserModel` (and the `@terreno/api/expressUser` entry)
 - Organizations: `Organization`, `Membership`, `OrgsApp`, `orgScopedPlugin`,
   `orgContextMiddleware`, `getOrgContext`, `OrgQueryFilter`,
   `Permissions.IsOrganizationMember`, `organizationSlugFromName`
@@ -45,6 +46,63 @@ REST API framework built on Express and Mongoose. Provides modelRouter (CRUD end
 - Extensibility: `TerrenoPlugin` interface
 - Notifiers: `sendToSlack`, `formatSlackUserMention`, `lookupSlackUserIdByEmail`, `createSlackPrivateChannel`, `inviteSlackUsersToChannel`, `postSlackMessage`, `findSlackChannelByName`, `sendToGoogleChat`, `sendToZoom`
 - HTTP client: `createAuthenticatedClient`, `withApiErrorHandling`, `normalizeApiError`, `markRetryUnsafe`
+
+## Registering your user type
+
+`@terreno/api` types `user` in modelRouter actions, `queryFilter`, permission functions, and the lifecycle hooks as `RegisteredUser`. Without registration that is the framework `User`. Register your own type once and every callback sees it, with no cast:
+
+```typescript
+// types/terreno.d.ts
+import type {UserDocument} from "../models/user";
+
+declare module "@terreno/api" {
+  interface TerrenoRegister {
+    user: UserDocument;
+  }
+}
+```
+
+To type `req.user` in plain Express handlers too, import the opt-in entry once for its side effect:
+
+```typescript
+import type {} from "@terreno/api/expressUser";
+```
+
+It extends `Express.User` with `RegisteredUser`, so it agrees with `@types/passport` whether or not that is installed. It is opt-in so it cannot collide with an app's own `Express.Request.user` declaration.
+
+| Export | Meaning |
+| --- | --- |
+| `TerrenoRegister` | Empty interface an app augments. The only key read is `user`. |
+| `RegisteredUser` | `TerrenoRegister["user"]` when registered, otherwise `User`. |
+| `TerrenoUserModel` | Any Mongoose model whose document has `_id`, `admin`, and optional `email`. Every `userModel` option takes it (`TerrenoApp`, `BetterAuthApp`, `createAccess`, `rbacRouter`, `AccountSecurityApp`, `RealtimeApp`, `CommsApp`). |
+| `PassportUserModel` | `TerrenoUserModel` plus the `passport-local-mongoose` methods. Only the legacy Passport helpers need it (`setupAuth`, `addAuthRoutes`, `setupGitHubAuth`, `addGitHubAuthRoutes`). |
+
+Callback signatures that use `RegisteredUser`:
+
+```typescript
+handler: async ({user}: ActionContext<T, B, Q>) => unknown        // user?: RegisteredUser
+queryFilter: (user?: RegisteredUser, query?: Record<string, unknown>) => Record<string, unknown> | null
+permission: (method: RESTMethod, user?: PermissionUser, obj?: T) => boolean // PermissionUser: admin, id, isAnonymous
+```
+
+Built-in permissions take the structural `PermissionUser`, so the registered user passes through unchanged.
+
+## Deprecated exports
+
+| Export | Replacement | Removed |
+| --- | --- | --- |
+| `UserModel` (type) | `PassportUserModel` or `TerrenoUserModel` | 59.0.0, or three minors after deprecation, whichever is later |
+| `createRouterWithAuth` | `createRouter` with `authenticateMiddleware()`, or `modelRouter` actions | same |
+| `setupEnvironment` | `TerrenoApp`, which validates its own environment | same |
+| `gooseRestRouter` | `modelRouter` | same |
+| `GooseRESTOptions` | `ModelRouterOptions` | same |
+| Omitting `legacyAuth` | Set `legacyAuth: true` or `false` | Default becomes `false` in 60.0.0 |
+
+All stay exported and behave as before until removal.
+
+## `@terreno/api/testing`
+
+`@terreno/api/testing` imports `@terreno/test`, which is an optional peer dependency of `@terreno/api`. An app that imports the testing entry installs it: `bun add -d @terreno/test`. Test files no longer ship in the `@terreno/api` tarball.
 
 ## Server Setup
 
@@ -102,6 +160,14 @@ new TerrenoApp({
   migrations: {dir: "./migrations", runOnStart: true},
 });
 ```
+
+### `legacyAuth`
+
+```typescript
+new TerrenoApp({userModel: User, legacyAuth: false}).register(new BetterAuthApp({config, userModel: User}));
+```
+
+`legacyAuth` is a boolean. `true` mounts Passport, the JWT strategies, and the legacy auth routes. `false` mounts none of them: the user model needs no Passport plugin, `TOKEN_SECRET` and `REFRESH_TOKEN_SECRET` are not read, `githubAuth` throws at `build()`, and sockets and `POST /mcp` refuse legacy JWTs. Omitted means `true` and logs one warning; the default becomes `false` in Terreno 60. Route table and details: [authentication](../explanation/authentication.md#turning-legacy-auth-off-legacyauth-false).
 
 ### HTTP rate limiting
 

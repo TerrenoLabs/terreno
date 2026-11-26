@@ -94,5 +94,5 @@ export const seed = async (): Promise<void> => {
   await synced.save();
 
   // @ts-expect-error missingField is not on the registered user
-  seeded.missingField;
+  void seeded.missingField;
 };

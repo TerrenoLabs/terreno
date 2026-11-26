@@ -56,7 +56,7 @@ export interface User {
  */
 // noExplicitAny: Mongoose model generics are invariant; an app's own document, statics and methods types must all be accepted
 // biome-ignore lint/suspicious/noExplicitAny: Mongoose model generics are invariant; an app's own document, statics and methods types must all be accepted
-export type TerrenoUserModel = Model<any, any, any, any, any, any, any>;
+export type TerrenoUserModel = Model<any>;
 
 export interface PassportUserModel extends TerrenoUserModel {
   createAnonymousUser?: (id?: string) => Promise<User>;

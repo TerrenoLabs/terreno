@@ -581,9 +581,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     rateLimit: isDeployed ? {trustProxy: 1} : false,
     legacyAuth: false,
     skipListen,
-    // noExplicitAny: User model type mismatch
-    // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-    userModel: User as any,
+    userModel: User,
   }).configure(AppConfiguration);
 
   if (betterAuthConfig) {
@@ -621,9 +619,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           {
             displayName: "Users",
             listFields: ["email", "name", "admin", "created"],
-            // noExplicitAny: User model type mismatch
-            // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-            model: User as any,
+            model: User,
             routePath: "/users",
           },
         ],
@@ -640,9 +636,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     )
     .register(
       new RealtimeApp({
-        // noExplicitAny: User model type mismatch
-        // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-        userModel: User as any,
+        userModel: User,
       })
     )
     .start();

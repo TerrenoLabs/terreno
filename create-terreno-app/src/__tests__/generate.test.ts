@@ -109,6 +109,16 @@ describe("generateAllFiles", () => {
     assert.deepEqual(offenders, []);
   });
 
+  test("generated backend passes the user model with no `as any` cast", () => {
+    const files = generateAllFiles({appDisplayName: "My App", appName: "my-app"});
+    const offenders = files
+      .filter((file) => file.path.startsWith("backend/"))
+      .filter((file) => /\bUser\s+as\s+any\b/.test(file.content))
+      .map((file) => file.path);
+
+    assert.deepEqual(offenders, []);
+  });
+
   test("one backend file augments TerrenoRegister with user: UserDocument", () => {
     const files = generateAllFiles({appDisplayName: "My App", appName: "my-app"});
     const matches = files.filter(

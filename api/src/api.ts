@@ -1729,7 +1729,12 @@ export const asyncHandler = (fn: AsyncHandlerFn, options?: AsyncHandlerOptions) 
   };
 };
 
-// For backwards compatibility with the old names.
+/**
+ * @deprecated Removed in 59.0.0. Use `modelRouter`.
+ */
 export const gooseRestRouter = modelRouter;
+/**
+ * @deprecated Removed in 59.0.0. Use `ModelRouterOptions`.
+ */
 export type GooseRESTOptions<T> = ModelRouterOptions<T>;
 export type {ModelRouterBuildContext} from "./adminModelRouter";

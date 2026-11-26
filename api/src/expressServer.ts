@@ -108,6 +108,9 @@ export const redactSensitiveRequestUrl = (url: string | undefined): string => {
   return `${parsed.pathname}${parsed.search}${parsed.hash}`;
 };
 
+/**
+ * @deprecated Removed in 59.0.0. Use `TerrenoApp`, which validates its environment at startup.
+ */
 export const setupEnvironment = (): void => {
   if (!process.env.TOKEN_ISSUER) {
     throw new APIError({status: 500, title: "TOKEN_ISSUER must be set in env."});
@@ -248,6 +251,10 @@ export const createRouter = (
   return [rootPath, ...middleware, router];
 };
 
+/**
+ * @deprecated Removed in 59.0.0. It authenticates with the `firebase-jwt` strategy, which
+ * `TerrenoApp` does not set up. Use `createRouter` with `authenticateMiddleware()` instead.
+ */
 export const createRouterWithAuth = (
   rootPath: string,
   addRoutes: (router: Router) => void,

@@ -316,7 +316,7 @@ None — no canvas.
   - Docs: docs/reference/test.md (install line); the `@terreno/api/testing` note in the api reference is written in T12
   - Skills: update-dependencies, update-docs
 
-- [ ] **T11** — Deprecate `createRouterWithAuth`, `setupEnvironment` and the `gooseRest*` aliases
+- [x] **T11** — Deprecate `createRouterWithAuth`, `setupEnvironment` and the `gooseRest*` aliases
   - Depends on: T4
   - Files: api/src/expressServer.ts, api/src/api.ts, api/src/publicExports.test.ts
   - Criteria:

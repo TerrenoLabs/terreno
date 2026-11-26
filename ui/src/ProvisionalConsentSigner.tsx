@@ -1,6 +1,6 @@
 import {DateTime} from "luxon";
 import type React from "react";
-import {useCallback, useState} from "react";
+import {memo, useCallback, useState} from "react";
 
 import {Badge} from "./Badge";
 import {Box} from "./Box";
@@ -22,6 +22,7 @@ import {
   provisionalSignerName,
   useProvisionalConsent,
 } from "./useProvisionalConsent";
+import {useStableCallback} from "./useStableCallback";
 
 export interface ProvisionalConsentSignerProps {
   baseUrl?: string;
@@ -137,6 +138,70 @@ const printRow = async (
 
 const rowFormId = (row: ProvisionalConsentStatusRow): string => row.form.id ?? row.form._id ?? "";
 
+interface ConsentStatusRowProps {
+  onOpen: (formId: string) => void;
+  onOpenVoid: (row: ProvisionalConsentStatusRow) => void;
+  onPrint: (row: ProvisionalConsentStatusRow) => Promise<void>;
+  row: ProvisionalConsentStatusRow;
+}
+
+// Memoized so typing a void reason re-renders the dialog, not every form in the list.
+const ConsentStatusRow: React.FC<ConsentStatusRowProps> = memo(
+  ({onOpen, onOpenVoid, onPrint, row}) => {
+    const formId = rowFormId(row);
+    const handleOpen = useCallback((): void => {
+      onOpen(formId);
+    }, [formId, onOpen]);
+    const handlePrint = useCallback((): Promise<void> => onPrint(row), [onPrint, row]);
+    const handleOpenVoid = useCallback((): void => {
+      onOpenVoid(row);
+    }, [onOpenVoid, row]);
+
+    return (
+      <Card testID={`provisional-consent-row-${formId}`}>
+        <Box gap={2}>
+          <Heading size="sm">{row.form.title}</Heading>
+          <Box alignSelf="start">
+            <Badge
+              status={STATUS_BADGE[row.status]}
+              testID={`provisional-consent-status-${formId}`}
+              value={provisionalConsentStatusLabel(row)}
+            />
+          </Box>
+          <Box direction="row" gap={2} wrap>
+            {CAN_SIGN_STATUSES.has(row.status) && (
+              <Button
+                onClick={handleOpen}
+                testID={`provisional-consent-open-${formId}`}
+                text="Sign on behalf"
+                variant="outline"
+              />
+            )}
+            {row.status !== "pending" && (
+              <Button
+                iconName="print"
+                onClick={handlePrint}
+                testID={`provisional-consent-print-${formId}`}
+                text="Print"
+                variant="outline"
+              />
+            )}
+            {row.status === "provisional" && (
+              <Button
+                onClick={handleOpenVoid}
+                testID={`provisional-consent-void-${formId}`}
+                text="Void"
+                variant="destructive"
+              />
+            )}
+          </Box>
+        </Box>
+      </Card>
+    );
+  }
+);
+ConsentStatusRow.displayName = "ConsentStatusRow";
+
 /**
  * Lists a user's consent forms with their status so staff can record consent on the user's
  * behalf. Requires `consentResponse:signOnBehalf` (or `user.admin` without RBAC) on the server.
@@ -245,6 +310,10 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
     await refetch();
   }, [onError, refetch, voidReason, voidRow, voidSignature]);
 
+  const handlePrintRow = useStableCallback(
+    (row: ProvisionalConsentStatusRow): Promise<void> => printRow(row, variables)
+  );
+
   if (isLoading) {
     return (
       <Box alignItems="center" padding={4} testID="provisional-consent-signer">
@@ -341,50 +410,15 @@ export const ProvisionalConsentSigner: React.FC<ProvisionalConsentSignerProps> =
           No consent forms apply to this user.
         </Text>
       )}
-      {statuses.map((row) => {
-        const formId = rowFormId(row);
-        return (
-          <Card key={formId} testID={`provisional-consent-row-${formId}`}>
-            <Box gap={2}>
-              <Heading size="sm">{row.form.title}</Heading>
-              <Box alignSelf="start">
-                <Badge
-                  status={STATUS_BADGE[row.status]}
-                  testID={`provisional-consent-status-${formId}`}
-                  value={provisionalConsentStatusLabel(row)}
-                />
-              </Box>
-              <Box direction="row" gap={2} wrap>
-                {CAN_SIGN_STATUSES.has(row.status) && (
-                  <Button
-                    onClick={() => handleOpen(formId)}
-                    testID={`provisional-consent-open-${formId}`}
-                    text="Sign on behalf"
-                    variant="outline"
-                  />
-                )}
-                {row.status !== "pending" && (
-                  <Button
-                    iconName="print"
-                    onClick={() => printRow(row, variables)}
-                    testID={`provisional-consent-print-${formId}`}
-                    text="Print"
-                    variant="outline"
-                  />
-                )}
-                {row.status === "provisional" && (
-                  <Button
-                    onClick={() => handleOpenVoid(row)}
-                    testID={`provisional-consent-void-${formId}`}
-                    text="Void"
-                    variant="destructive"
-                  />
-                )}
-              </Box>
-            </Box>
-          </Card>
-        );
-      })}
+      {statuses.map((row) => (
+        <ConsentStatusRow
+          key={rowFormId(row)}
+          onOpen={handleOpen}
+          onOpenVoid={handleOpenVoid}
+          onPrint={handlePrintRow}
+          row={row}
+        />
+      ))}
       <Modal
         onDismiss={handleCloseVoid}
         primaryButtonDisabled={voidReason.trim().length === 0 || isVoiding}

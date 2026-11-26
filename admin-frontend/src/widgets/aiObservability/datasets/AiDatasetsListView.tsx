@@ -12,7 +12,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import {DateTime} from "luxon";
-import React, {useCallback, useMemo} from "react";
+import React, {useCallback, useLayoutEffect, useMemo, useRef} from "react";
 import {MeterBar} from "../shell/AgreementMeter";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
@@ -244,6 +244,15 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
   onOpenImport,
   onRetry,
 }) => {
+  // Callers may pass inline open handlers. The cells read them through a ref so the cells keep
+  // their component identity; a new map would remount every name and import cell in the table.
+  const openHandlersRef = useRef({onOpenDetail, onOpenImport});
+
+  // Point at the newest handlers after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    openHandlersRef.current = {onOpenDetail, onOpenImport};
+  });
+
   const customColumnComponentMap = useMemo(
     () => ({
       datasetAnswers: AnswersCell,
@@ -253,7 +262,7 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
             <Button
               iconName="file-import"
               onClick={() => {
-                onOpenImport(String(cellData.value ?? ""));
+                openHandlersRef.current.onOpenImport(String(cellData.value ?? ""));
               }}
               size="sm"
               testID={`ai-datasets-import-${String(cellData.value ?? "")}`}
@@ -271,7 +280,7 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
             flex="grow"
             justifyContent="center"
             onClick={() => {
-              onOpenDetail(dataset.id);
+              openHandlersRef.current.onOpenDetail(dataset.id);
             }}
           >
             <Box testID={`ai-datasets-open-${dataset.id}`}>
@@ -285,7 +294,7 @@ export const AiDatasetsListView: React.FC<AiDatasetsListViewProps> = ({
       datasetSource: SourceCell,
       number: NumberCell,
     }),
-    [canImport, onOpenDetail, onOpenImport]
+    [canImport]
   );
 
   const columns = useMemo(() => buildColumns(datasets), [datasets]);

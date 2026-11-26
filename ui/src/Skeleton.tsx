@@ -2,6 +2,7 @@ import {LinearGradient} from "expo-linear-gradient";
 import {
   createContext,
   type FC,
+  memo,
   type ReactNode,
   useContext,
   useEffect,
@@ -290,12 +291,14 @@ export const SkeletonCircle: FC<SkeletonCircleProps> = ({animation, size = 40, t
   );
 };
 
+// Memoized so a loading list re-rendering under its parent, or gaining a row, does not re-render
+// every existing row and the placeholder blocks inside it.
 const SkeletonRow: FC<{
   animation?: SkeletonAnimation;
   lines: number;
   showAvatar: boolean;
   testID?: string;
-}> = ({animation, lines, showAvatar, testID}) => {
+}> = memo(({animation, lines, showAvatar, testID}) => {
   return (
     <View
       style={{alignItems: "flex-start", flexDirection: "row", gap: getSpacing(3), width: "100%"}}
@@ -321,7 +324,8 @@ const SkeletonRow: FC<{
       </View>
     </View>
   );
-};
+});
+SkeletonRow.displayName = "SkeletonRow";
 
 /** A card-shaped placeholder: optional media, optional avatar, a title bar, and text lines. */
 export const SkeletonCard: FC<SkeletonCardProps> = ({

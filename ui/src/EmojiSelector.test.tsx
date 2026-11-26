@@ -22,8 +22,13 @@ interface LayoutRoot {
 }
 
 interface RenderItemCell {
-  props: {onPress?: () => void};
+  props: {emoji: StoredEmoji; onSelect?: (emoji: StoredEmoji) => void};
 }
+
+// The grid cell takes a shared `onSelect` and calls it with its own emoji when pressed.
+const pressCell = (cell: RenderItemCell): void => {
+  cell.props.onSelect?.(cell.props.emoji);
+};
 
 const waitForEmojiData = async (getRoot: () => LayoutRoot): Promise<void> => {
   await act(async () => {
@@ -294,8 +299,8 @@ describe("EmojiSelector", () => {
     expect(data.length).toBeGreaterThan(0);
     const first = data[0];
     const cell = list.props.renderItem({index: 0, item: first});
-    // Invoke the emoji cell onPress to exercise handleEmojiSelect + addToHistoryAsync.
-    (cell.props as RenderItemCell["props"]).onPress?.();
+    // Press the emoji cell to exercise handleEmojiSelect + addToHistoryAsync.
+    pressCell(cell as RenderItemCell);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
@@ -375,7 +380,7 @@ describe("EmojiSelector", () => {
       const [list] = UNSAFE_getAllByType(FlatList);
       const first = (list.props.data ?? [])[0];
       const cell = list.props.renderItem({index: 0, item: first});
-      (cell.props as RenderItemCell["props"]).onPress?.();
+      pressCell(cell as RenderItemCell);
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
       });
@@ -422,7 +427,7 @@ describe("EmojiSelector", () => {
         JSON.stringify(alreadyStored)
       ) as unknown as typeof AsyncStorage.getItem;
       const cell = list.props.renderItem({index: 0, item: first});
-      (cell.props as RenderItemCell["props"]).onPress?.();
+      pressCell(cell as RenderItemCell);
       await act(async () => {
         await new Promise((resolve) => setTimeout(resolve, 20));
       });

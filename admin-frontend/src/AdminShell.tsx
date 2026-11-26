@@ -1,7 +1,7 @@
 import {Box, Heading, Icon, isSupportedDesktopWidth, Spinner, Text, useTheme} from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
-import React, {useCallback, useEffect, useState} from "react";
+import React, {memo, useCallback, useEffect, useMemo, useState} from "react";
 import {useWindowDimensions} from "react-native";
 import {SafeAreaView} from "react-native-safe-area-context";
 import {type AdminBreadcrumbSegment, AdminBreadcrumbs} from "./AdminBreadcrumbs";
@@ -96,7 +96,49 @@ interface AdminShellSidebarNavProps {
   versionConfigPath: string;
 }
 
-const AdminShellSidebarNav: React.FC<AdminShellSidebarNavProps> = ({
+const DEFAULT_PLATFORM_TOOLS: NonNullable<AdminConfigResponse["platformTools"]> = {
+  configuration: true,
+  roles: true,
+  scripts: true,
+  version: true,
+};
+
+const NO_SCRIPTS: {name: string}[] = [];
+
+interface AdminShellNavData {
+  jobsScreen?: AdminCustomScreen;
+  platformTools: NonNullable<AdminConfigResponse["platformTools"]>;
+  scripts: {name: string}[];
+  sidebarGroups: AdminSidebarGroup[];
+  ungroupedScreens: AdminCustomScreen[];
+}
+
+/** Sidebar data derived from the admin config. */
+const buildAdminShellNavData = ({
+  config,
+  propCustomScreens,
+}: {
+  config: AdminConfigResponse;
+  propCustomScreens?: AdminCustomScreen[];
+}): AdminShellNavData => {
+  const backendScreens = config.customScreens ?? [];
+  const allCustomScreens = config.platformTools
+    ? backendScreens
+    : [...backendScreens, ...(propCustomScreens ?? [])];
+  const {groups: sidebarGroups, ungroupedScreens} = buildAdminSidebarGroups({
+    customScreens: allCustomScreens.filter((screen) => !isJobsScreen(screen)),
+    models: config.models as AdminModelConfig[],
+  });
+  return {
+    jobsScreen: allCustomScreens.find(isJobsScreen),
+    platformTools: config.platformTools ?? DEFAULT_PLATFORM_TOOLS,
+    scripts: config.scripts ?? NO_SCRIPTS,
+    sidebarGroups,
+    ungroupedScreens,
+  };
+};
+
+const AdminShellSidebarNavComponent: React.FC<AdminShellSidebarNavProps> = ({
   configurationPath,
   footer,
   isOrganizationOperator,
@@ -349,6 +391,11 @@ const AdminShellSidebarNav: React.FC<AdminShellSidebarNavProps> = ({
   );
 };
 
+// Memoized: the shell re-renders on every navigation (new `children`) and breadcrumb change,
+// and the sidebar's links depend on neither.
+const AdminShellSidebarNav = memo(AdminShellSidebarNavComponent);
+AdminShellSidebarNav.displayName = "AdminShellSidebarNav";
+
 /**
  * Admin UI v2 shell: grouped sidebar navigation, optional breadcrumbs, and main area.
  *
@@ -420,6 +467,13 @@ export const AdminShell: React.FC<AdminShellProps> = ({
     }
   }, [isMobileLayout, isNavOpen]);
 
+  // Derived once per config so the memoized sidebar keeps its props across navigations.
+  const navData = useMemo(
+    (): AdminShellNavData | undefined =>
+      config ? buildAdminShellNavData({config, propCustomScreens}) : undefined,
+    [config, propCustomScreens]
+  );
+
   if (isLoading) {
     return (
       <Box
@@ -434,7 +488,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({
     );
   }
 
-  if (error || !config) {
+  if (error || !config || !navData) {
     if (isAdminPageForbiddenError(error)) {
       return (
         <Box padding={4} testID="admin-shell-forbidden">
@@ -451,22 +505,7 @@ export const AdminShell: React.FC<AdminShellProps> = ({
     );
   }
 
-  const backendScreens = config.customScreens ?? [];
-  const allCustomScreens = config.platformTools
-    ? backendScreens
-    : [...backendScreens, ...(propCustomScreens ?? [])];
-  const scripts = config.scripts ?? [];
-  const platformTools = config.platformTools ?? {
-    configuration: true,
-    roles: true,
-    scripts: true,
-    version: true,
-  };
-  const jobsScreen = allCustomScreens.find(isJobsScreen);
-  const {groups: sidebarGroups, ungroupedScreens} = buildAdminSidebarGroups({
-    customScreens: allCustomScreens.filter((screen) => !isJobsScreen(screen)),
-    models: config.models as AdminModelConfig[],
-  });
+  const {jobsScreen, platformTools, scripts, sidebarGroups, ungroupedScreens} = navData;
 
   const sidebarIsColorful = sidebarVariant === "colorful";
   const showTopBar = Boolean(headerActions) || Boolean(breadcrumbs && breadcrumbs.length > 0);

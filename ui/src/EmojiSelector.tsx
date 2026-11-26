@@ -26,7 +26,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import type {FlatListProps, LayoutChangeEvent} from "react-native";
 import {
   ActivityIndicator,
@@ -42,6 +42,7 @@ import {
 export {Categories} from "./emojiCategories";
 
 import {Categories} from "./emojiCategories";
+import {useStableCallback} from "./useStableCallback";
 
 interface Emoji {
   unified: string;
@@ -86,7 +87,8 @@ interface TabBarProps {
   width: number;
 }
 
-const TabBar = ({theme, activeCategory, onPress, width}: TabBarProps) => {
+// Memoized so typing in the search box does not re-render every category tab.
+const TabBar = memo(({theme, activeCategory, onPress, width}: TabBarProps) => {
   const tabSize = width / categoryKeys.length;
 
   return categoryKeys.map((c) => {
@@ -120,7 +122,8 @@ const TabBar = ({theme, activeCategory, onPress, width}: TabBarProps) => {
       </TouchableOpacity>
     );
   });
-};
+});
+TabBar.displayName = "TabBar";
 
 interface EmojiSelectorProps {
   theme: string;
@@ -148,25 +151,33 @@ interface EmojiItem {
 interface EmojiCellProps {
   emoji: Emoji;
   colSize: number;
-  onPress: () => void;
+  onSelect: (emoji: Emoji) => void;
 }
 
-const EmojiCell = ({emoji, colSize, onPress}: EmojiCellProps) => (
-  <TouchableOpacity
-    activeOpacity={0.5}
-    onPress={onPress}
-    style={{
-      alignItems: "center",
-      height: colSize,
-      justifyContent: "center",
-      width: colSize,
-    }}
-  >
-    <Text style={{color: "#FFFFFF", fontSize: Math.max(colSize - 12, 6)}}>
-      {charFromEmojiObject(emoji)}
-    </Text>
-  </TouchableOpacity>
-);
+// Memoized so a parent re-render or a search keystroke does not re-render every emoji in the grid.
+const EmojiCell = memo(({emoji, colSize, onSelect}: EmojiCellProps) => {
+  const handlePress = useCallback((): void => {
+    onSelect(emoji);
+  }, [emoji, onSelect]);
+
+  return (
+    <TouchableOpacity
+      activeOpacity={0.5}
+      onPress={handlePress}
+      style={{
+        alignItems: "center",
+        height: colSize,
+        justifyContent: "center",
+        width: colSize,
+      }}
+    >
+      <Text style={{color: "#FFFFFF", fontSize: Math.max(colSize - 12, 6)}}>
+        {charFromEmojiObject(emoji)}
+      </Text>
+    </TouchableOpacity>
+  );
+});
+EmojiCell.displayName = "EmojiCell";
 
 const storage_key = "@react-native-emoji-selector:HISTORY";
 
@@ -237,15 +248,13 @@ const EmojiSelector = (props: EmojiSelectorProps) => {
     setHistory(value);
   }, []);
 
-  const handleEmojiSelect = useCallback(
-    (selectedEmoji: Emoji) => {
-      if (showHistory) {
-        void addToHistoryAsync(selectedEmoji);
-      }
-      onEmojiSelected(charFromEmojiObject(selectedEmoji));
-    },
-    [onEmojiSelected, showHistory, addToHistoryAsync]
-  );
+  // Stable identity so a new `onEmojiSelected` from the caller does not re-render the grid.
+  const handleEmojiSelect = useStableCallback((selectedEmoji: Emoji): void => {
+    if (showHistory) {
+      void addToHistoryAsync(selectedEmoji);
+    }
+    onEmojiSelected(charFromEmojiObject(selectedEmoji));
+  });
 
   const loadHistoryAsync = useCallback(async () => {
     const result = await AsyncStorage.getItem(storage_key);
@@ -260,12 +269,7 @@ const EmojiSelector = (props: EmojiSelectorProps) => {
   //
   const renderEmojiCell: FlatListProps<EmojiItem>["renderItem"] = useCallback(
     ({item}: {item: EmojiItem}) => (
-      <EmojiCell
-        colSize={colSize}
-        emoji={item.emoji}
-        key={item.key}
-        onPress={() => handleEmojiSelect(item.emoji)}
-      />
+      <EmojiCell colSize={colSize} emoji={item.emoji} key={item.key} onSelect={handleEmojiSelect} />
     ),
     [handleEmojiSelect, colSize]
   );
@@ -325,6 +329,9 @@ const EmojiSelector = (props: EmojiSelectorProps) => {
 
     return shouldInclude ? emojiData.filter((e) => shouldInclude(e.emoji)) : emojiData;
   }, [category, emojiList, filteredEmojis, history, searchQuery, shouldInclude]);
+
+  const sectionData = useMemo((): EmojiItem[] => returnSectionData(), [returnSectionData]);
+  const listContentStyle = useMemo(() => ({paddingBottom: colSize}), [colSize]);
 
   const prerenderEmojis = useCallback(
     (emojis: Emoji[], callback?: () => void) => {
@@ -425,8 +432,8 @@ const EmojiSelector = (props: EmojiSelectorProps) => {
             <View style={styles.container}>
               {showSectionTitles && <Text style={styles.sectionHeader}>{title}</Text>}
               <FlatList
-                contentContainerStyle={{paddingBottom: colSize}}
-                data={returnSectionData()}
+                contentContainerStyle={listContentStyle}
+                data={sectionData}
                 horizontal={false}
                 keyboardShouldPersistTaps={"always"}
                 numColumns={columns}

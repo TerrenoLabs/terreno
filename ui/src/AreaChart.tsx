@@ -79,7 +79,13 @@ export const AreaChart: FC<AreaChartProps> = ({
   }, []);
 
   const handleMarkPress = useCallback((seriesIndex: number, pointIndex: number): void => {
-    setActivePoint({pointIndex, seriesIndex});
+    // Keep the current state object when the mark is already active (hover, then press),
+    // so React skips re-rendering the whole plot.
+    setActivePoint((current) =>
+      current?.pointIndex === pointIndex && current.seriesIndex === seriesIndex
+        ? current
+        : {pointIndex, seriesIndex}
+    );
   }, []);
 
   const resolvedSeries = resolveChartSeries({data, legendLabel, series});

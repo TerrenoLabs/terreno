@@ -1,5 +1,5 @@
 import type React from "react";
-import {useMemo, useRef} from "react";
+import {memo, useCallback, useMemo, useRef} from "react";
 import {
   Platform,
   Pressable,
@@ -18,6 +18,7 @@ import {FieldTitle} from "./fieldElements/FieldTitle";
 import {MarkdownView} from "./MarkdownView";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
+import {useStableCallback} from "./useStableCallback";
 
 interface MarkdownEditorFieldProps extends HelperTextProps, ErrorTextProps {
   title?: string;
@@ -50,6 +51,52 @@ const DEFAULT_MAX_HEIGHT = 500;
 const MIN_PANE_HEIGHT = 200;
 const TOOLBAR_MIN_HEIGHT = 34;
 
+interface ToolbarButtonViewProps {
+  button: ToolbarButton;
+  monoFont?: string;
+  onInsert: (button: ToolbarButton) => void;
+}
+
+// Memoized so typing in the editor does not re-render every toolbar button.
+const ToolbarButtonView: React.FC<ToolbarButtonViewProps> = memo(({button, monoFont, onInsert}) => {
+  const {theme} = useTheme();
+  const handlePress = useCallback((): void => {
+    onInsert(button);
+  }, [button, onInsert]);
+
+  return (
+    <Pressable
+      onPress={handlePress}
+      style={({pressed}) => ({
+        alignItems: "center",
+        backgroundColor: pressed ? theme.border.default : "transparent",
+        borderColor: theme.border.default,
+        borderRadius: 3,
+        borderWidth: 1,
+        justifyContent: "center",
+        minHeight: 24,
+        minWidth: 28,
+        paddingHorizontal: 5,
+        paddingVertical: 3,
+      })}
+    >
+      <RNText
+        style={{
+          color: theme.text.primary,
+          fontFamily: monoFont,
+          fontSize: 12,
+          fontWeight: button.label === "B" ? "700" : "400",
+          lineHeight: 14,
+          textAlign: "center",
+        }}
+      >
+        {button.label}
+      </RNText>
+    </Pressable>
+  );
+});
+ToolbarButtonView.displayName = "ToolbarButtonView";
+
 export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
   title,
   value = "",
@@ -69,6 +116,10 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
     () => (isWeb ? "monospace" : Platform.select({android: "monospace", ios: "Menlo"})),
     [isWeb]
   );
+
+  const handleInsert = useStableCallback((button: ToolbarButton): void => {
+    onChange(button.insert(value));
+  });
 
   const paneContainerStyle = {
     flex: 1,
@@ -135,35 +186,12 @@ export const MarkdownEditorField: React.FC<MarkdownEditorFieldProps> = ({
               }}
             >
               {TOOLBAR_BUTTONS.map((button) => (
-                <Pressable
+                <ToolbarButtonView
+                  button={button}
                   key={button.label}
-                  onPress={() => onChange(button.insert(value))}
-                  style={({pressed}) => ({
-                    alignItems: "center",
-                    backgroundColor: pressed ? theme.border.default : "transparent",
-                    borderColor: theme.border.default,
-                    borderRadius: 3,
-                    borderWidth: 1,
-                    justifyContent: "center",
-                    minHeight: 24,
-                    minWidth: 28,
-                    paddingHorizontal: 5,
-                    paddingVertical: 3,
-                  })}
-                >
-                  <RNText
-                    style={{
-                      color: theme.text.primary,
-                      fontFamily: monoFont,
-                      fontSize: 12,
-                      fontWeight: button.label === "B" ? "700" : "400",
-                      lineHeight: 14,
-                      textAlign: "center",
-                    }}
-                  >
-                    {button.label}
-                  </RNText>
-                </Pressable>
+                  monoFont={monoFont}
+                  onInsert={handleInsert}
+                />
               ))}
             </View>
           )}

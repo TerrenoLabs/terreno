@@ -17,7 +17,7 @@ import {
 } from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useMemo, useRef, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
 import {CommsStatCard} from "./CommsStatCard";
 import {CommsStatusBadge} from "./CommsStatusBadge";
@@ -185,6 +185,12 @@ export const CommsDashboardScreen: React.FC<CommsDashboardScreenProps> = ({
   });
   const [retryMessage] = useRetryMutation();
   const [retryMany, retryManyState] = useRetryManyMutation();
+
+  // `useToast`, the retry mutation hook, and callers' inline `onFiltersChange` hand back new
+  // identities on every render. The row and pager handlers read them through a ref so the
+  // table data keeps its identity and the memoized rows do not re-render with the screen.
+  const latestRef = useRef({filters, onFiltersChange, retryMessage, toast});
+  latestRef.current = {filters, onFiltersChange, retryMessage, toast};
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
   const retryableCount = Math.min(
@@ -230,18 +236,22 @@ export const CommsDashboardScreen: React.FC<CommsDashboardScreenProps> = ({
   const handleRetry = useCallback(
     async (id: string): Promise<void> => {
       try {
-        const result = await retryMessage(id).unwrap();
+        const result = await latestRef.current.retryMessage(id).unwrap();
         const created = unwrapCommsMessage(result);
         if (!created) {
           throw new Error("Retry did not return a message");
         }
         openMessage(commsMessageId(created));
       } catch (retryError: unknown) {
-        toast.catch(retryError, "Retry failed");
+        latestRef.current.toast.catch(retryError, "Retry failed");
       }
     },
-    [openMessage, retryMessage, toast]
+    [openMessage]
   );
+
+  const handleSetPage = useCallback((nextPage: number): void => {
+    latestRef.current.onFiltersChange({...latestRef.current.filters, page: nextPage});
+  }, []);
 
   const handleRetryMany = useCallback(async (): Promise<void> => {
     try {
@@ -466,7 +476,7 @@ export const CommsDashboardScreen: React.FC<CommsDashboardScreenProps> = ({
             customColumnComponentMap={customColumnComponentMap}
             data={tableData}
             page={page}
-            setPage={(nextPage) => onFiltersChange({...filters, page: nextPage})}
+            setPage={handleSetPage}
             testID="comms-dashboard-table"
             totalPages={Math.max(1, Math.ceil(total / LIST_LIMIT))}
           />

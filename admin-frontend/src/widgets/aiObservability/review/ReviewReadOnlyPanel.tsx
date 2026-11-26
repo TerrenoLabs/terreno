@@ -1,5 +1,5 @@
 import {Accordion, Box, Card, Heading, type SurfaceColor, Text} from "@terreno/ui";
-import React from "react";
+import React, {memo} from "react";
 import {displayReviewValue, type ReviewPanelField, wordCount} from "./reviewTypes";
 
 const LONG_FIELD_WORDS = 40;
@@ -44,7 +44,7 @@ export interface ReviewReadOnlyPanelProps {
   title: string;
 }
 
-export const ReviewReadOnlyPanel: React.FC<ReviewReadOnlyPanelProps> = ({
+const ReviewReadOnlyPanelComponent: React.FC<ReviewReadOnlyPanelProps> = ({
   color = "base",
   fields,
   title,
@@ -62,3 +62,7 @@ export const ReviewReadOnlyPanel: React.FC<ReviewReadOnlyPanelProps> = ({
     </Card>
   </Box>
 );
+
+/** Memoized so typing a note or answering a question does not re-render every field. */
+export const ReviewReadOnlyPanel = memo(ReviewReadOnlyPanelComponent);
+ReviewReadOnlyPanel.displayName = "ReviewReadOnlyPanel";

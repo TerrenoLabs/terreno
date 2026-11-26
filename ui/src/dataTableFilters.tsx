@@ -1,5 +1,5 @@
 import type React from "react";
-import {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {type FC, memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Platform} from "react-native";
 
 import {BooleanField} from "./BooleanField";
@@ -17,6 +17,7 @@ import {
 import {MultiselectField} from "./MultiselectField";
 import {NumberField} from "./NumberField";
 import {TextField} from "./TextField";
+import {useStableCallback} from "./useStableCallback";
 
 export interface DataTableFilterFieldsProps {
   filters: DataTableColumnFilter[];
@@ -60,6 +61,199 @@ const toChoiceValue = (value: unknown): string[] => {
   return [];
 };
 
+type SetFilterField = (key: string, value: unknown) => void;
+
+// Each filter kind is its own memoized field, so typing in one filter re-renders that
+// filter only, not every field in the panel.
+
+interface CustomFilterFieldProps {
+  filter: DataTableColumnFilter;
+  setField: SetFilterField;
+  value: unknown;
+}
+
+const CustomFilterField: FC<CustomFilterFieldProps> = memo(({filter, setField, value}) => {
+  const field = filter.field;
+  return (
+    <Box width="100%">
+      {filter.renderFilter?.({
+        field,
+        onChange: (next) => setField(field, next),
+        value,
+      })}
+    </Box>
+  );
+});
+CustomFilterField.displayName = "CustomFilterField";
+
+interface BooleanFilterFieldProps {
+  field: string;
+  label: string;
+  setField: SetFilterField;
+  showFieldClear: boolean;
+  value: unknown;
+}
+
+const BooleanFilterField: FC<BooleanFilterFieldProps> = memo(
+  ({field, label, setField, showFieldClear, value}) => {
+    const boolValue = value === true || value === "true";
+    return (
+      <Box direction="column" gap={1} width="100%">
+        <BooleanField
+          onChange={(next: boolean) => setField(field, next)}
+          testID={`data-table-filter-${field}`}
+          title={label}
+          value={boolValue}
+        />
+        {showFieldClear && value !== undefined ? (
+          <Button
+            onClick={() => setField(field, undefined)}
+            testID={`data-table-filter-${field}-clear`}
+            text="Clear filter"
+            variant="ghost"
+          />
+        ) : null}
+      </Box>
+    );
+  }
+);
+BooleanFilterField.displayName = "BooleanFilterField";
+
+interface DateRangeFilterFieldProps {
+  field: string;
+  gteValue: string;
+  label: string;
+  lteValue: string;
+  setField: SetFilterField;
+}
+
+const DateRangeFilterField: FC<DateRangeFilterFieldProps> = memo(
+  ({field, gteValue, label, lteValue, setField}) => (
+    <Box direction="column" gap={2} width="100%">
+      <DateTimeField
+        onChange={(next: string) => setField(`${field}_gte`, startOfUtcDay(next))}
+        testID={`data-table-filter-${field}-gte`}
+        title={`${label} from`}
+        type="date"
+        value={gteValue}
+      />
+      <DateTimeField
+        onChange={(next: string) => setField(`${field}_lte`, endOfUtcDay(next))}
+        testID={`data-table-filter-${field}-lte`}
+        title={`${label} to`}
+        type="date"
+        value={lteValue}
+      />
+    </Box>
+  )
+);
+DateRangeFilterField.displayName = "DateRangeFilterField";
+
+interface NumberRangeFilterFieldProps {
+  field: string;
+  label: string;
+  setField: SetFilterField;
+  value: unknown;
+}
+
+const NumberRangeFilterField: FC<NumberRangeFilterFieldProps> = memo(
+  ({field, label, setField, value}) => {
+    const range = parseNumberRangeDraft(value);
+    return (
+      <Box direction="column" gap={2} width="100%">
+        <NumberField
+          onChange={(next: string) => {
+            const parsed = next === "" ? undefined : Number(next);
+            const current = parseNumberRangeDraft(value);
+            setField(field, {
+              ...current,
+              $gte: parsed === undefined || Number.isNaN(parsed) ? undefined : parsed,
+            });
+          }}
+          testID={`data-table-filter-${field}-gte`}
+          title={`${label} min`}
+          type="number"
+          value={range.$gte === undefined ? "" : String(range.$gte)}
+        />
+        <NumberField
+          onChange={(next: string) => {
+            const parsed = next === "" ? undefined : Number(next);
+            const current = parseNumberRangeDraft(value);
+            setField(field, {
+              ...current,
+              $lte: parsed === undefined || Number.isNaN(parsed) ? undefined : parsed,
+            });
+          }}
+          testID={`data-table-filter-${field}-lte`}
+          title={`${label} max`}
+          type="number"
+          value={range.$lte === undefined ? "" : String(range.$lte)}
+        />
+      </Box>
+    );
+  }
+);
+NumberRangeFilterField.displayName = "NumberRangeFilterField";
+
+interface ChoiceFilterFieldProps {
+  allowEmpty: boolean;
+  field: string;
+  label: string;
+  options?: DataTableColumnFilter["options"];
+  setField: SetFilterField;
+  value: unknown;
+}
+
+const ChoiceFilterField: FC<ChoiceFilterFieldProps> = memo(
+  ({allowEmpty, field, label, options, setField, value}) => {
+    const choiceOptions = useMemo(
+      () =>
+        allowEmpty
+          ? [
+              {label: DATA_TABLE_CHOICE_EMPTY_LABEL, value: DATA_TABLE_CHOICE_EMPTY_VALUE},
+              ...(options ?? []),
+            ]
+          : (options ?? []),
+      [allowEmpty, options]
+    );
+    const handleChange = useCallback(
+      (next: string[]): void => setField(field, next),
+      [field, setField]
+    );
+    return (
+      <Box width="100%">
+        <MultiselectField
+          onChange={handleChange}
+          options={choiceOptions}
+          testID={`data-table-filter-${field}`}
+          title={label}
+          value={toChoiceValue(value)}
+        />
+      </Box>
+    );
+  }
+);
+ChoiceFilterField.displayName = "ChoiceFilterField";
+
+interface TextFilterFieldProps {
+  field: string;
+  label: string;
+  setField: SetFilterField;
+  value: string;
+}
+
+const TextFilterField: FC<TextFilterFieldProps> = memo(({field, label, setField, value}) => (
+  <Box width="100%">
+    <TextField
+      onChange={(next: string) => setField(field, next)}
+      testID={`data-table-filter-${field}`}
+      title={label}
+      value={value}
+    />
+  </Box>
+));
+TextFilterField.displayName = "TextFilterField";
+
 export const DataTableFilterFields: FC<DataTableFilterFieldsProps> = ({
   draftValues,
   filters,
@@ -72,14 +266,13 @@ export const DataTableFilterFields: FC<DataTableFilterFieldsProps> = ({
   const draftValuesRef = useRef(draftValues);
   draftValuesRef.current = draftValues;
 
-  const setField = useCallback(
-    (key: string, value: unknown): void => {
-      const next = {...draftValuesRef.current, [key]: value};
-      draftValuesRef.current = next;
-      onDraftChange(next);
-    },
-    [onDraftChange]
-  );
+  // One identity for the life of the panel, so an inline `onDraftChange` from the caller does
+  // not re-render every memoized field.
+  const setField = useStableCallback((key: string, value: unknown): void => {
+    const next = {...draftValuesRef.current, [key]: value};
+    draftValuesRef.current = next;
+    onDraftChange(next);
+  });
 
   const filterFields = useMemo((): React.ReactNode[] => {
     const nodes: React.ReactNode[] = [];
@@ -100,127 +293,75 @@ export const DataTableFilterFields: FC<DataTableFilterFieldsProps> = ({
       const label = filter.label ?? field;
       if (filter.renderFilter) {
         nodes.push(
-          <Box key={field} width="100%">
-            {filter.renderFilter({
-              field,
-              onChange: (value) => setField(field, value),
-              value: draftValues[field],
-            })}
-          </Box>
+          <CustomFilterField
+            filter={filter}
+            key={field}
+            setField={setField}
+            value={draftValues[field]}
+          />
         );
         continue;
       }
       if (filter.kind === "boolean") {
-        const raw = draftValues[field];
-        const boolValue = raw === true || raw === "true";
         nodes.push(
-          <Box direction="column" gap={1} key={field} width="100%">
-            <BooleanField
-              onChange={(next: boolean) => setField(field, next)}
-              testID={`data-table-filter-${field}`}
-              title={label}
-              value={boolValue}
-            />
-            {showFieldClear && raw !== undefined ? (
-              <Button
-                onClick={() => setField(field, undefined)}
-                testID={`data-table-filter-${field}-clear`}
-                text="Clear filter"
-                variant="ghost"
-              />
-            ) : null}
-          </Box>
+          <BooleanFilterField
+            field={field}
+            key={field}
+            label={label}
+            setField={setField}
+            showFieldClear={showFieldClear}
+            value={draftValues[field]}
+          />
         );
         continue;
       }
       if (filter.kind === "dateRange") {
-        const gteKey = `${field}_gte`;
-        const lteKey = `${field}_lte`;
         nodes.push(
-          <Box direction="column" gap={2} key={field} width="100%">
-            <DateTimeField
-              onChange={(next: string) => setField(gteKey, startOfUtcDay(next))}
-              testID={`data-table-filter-${field}-gte`}
-              title={`${label} from`}
-              type="date"
-              value={String(draftValues[gteKey] ?? "")}
-            />
-            <DateTimeField
-              onChange={(next: string) => setField(lteKey, endOfUtcDay(next))}
-              testID={`data-table-filter-${field}-lte`}
-              title={`${label} to`}
-              type="date"
-              value={String(draftValues[lteKey] ?? "")}
-            />
-          </Box>
+          <DateRangeFilterField
+            field={field}
+            gteValue={String(draftValues[`${field}_gte`] ?? "")}
+            key={field}
+            label={label}
+            lteValue={String(draftValues[`${field}_lte`] ?? "")}
+            setField={setField}
+          />
         );
         continue;
       }
       if (filter.kind === "numberRange") {
-        const range = parseNumberRangeDraft(draftValues[field]);
         nodes.push(
-          <Box direction="column" gap={2} key={field} width="100%">
-            <NumberField
-              onChange={(next: string) => {
-                const parsed = next === "" ? undefined : Number(next);
-                const current = parseNumberRangeDraft(draftValues[field]);
-                setField(field, {
-                  ...current,
-                  $gte: parsed === undefined || Number.isNaN(parsed) ? undefined : parsed,
-                });
-              }}
-              testID={`data-table-filter-${field}-gte`}
-              title={`${label} min`}
-              type="number"
-              value={range.$gte === undefined ? "" : String(range.$gte)}
-            />
-            <NumberField
-              onChange={(next: string) => {
-                const parsed = next === "" ? undefined : Number(next);
-                const current = parseNumberRangeDraft(draftValues[field]);
-                setField(field, {
-                  ...current,
-                  $lte: parsed === undefined || Number.isNaN(parsed) ? undefined : parsed,
-                });
-              }}
-              testID={`data-table-filter-${field}-lte`}
-              title={`${label} max`}
-              type="number"
-              value={range.$lte === undefined ? "" : String(range.$lte)}
-            />
-          </Box>
+          <NumberRangeFilterField
+            field={field}
+            key={field}
+            label={label}
+            setField={setField}
+            value={draftValues[field]}
+          />
         );
         continue;
       }
       if (filter.kind === "choice") {
-        const choiceOptions = filter.allowEmpty
-          ? [
-              {label: DATA_TABLE_CHOICE_EMPTY_LABEL, value: DATA_TABLE_CHOICE_EMPTY_VALUE},
-              ...(filter.options ?? []),
-            ]
-          : (filter.options ?? []);
         nodes.push(
-          <Box key={field} width="100%">
-            <MultiselectField
-              onChange={(next: string[]) => setField(field, next)}
-              options={choiceOptions}
-              testID={`data-table-filter-${field}`}
-              title={label}
-              value={toChoiceValue(draftValues[field])}
-            />
-          </Box>
+          <ChoiceFilterField
+            allowEmpty={filter.allowEmpty === true}
+            field={field}
+            key={field}
+            label={label}
+            options={filter.options}
+            setField={setField}
+            value={draftValues[field]}
+          />
         );
         continue;
       }
       nodes.push(
-        <Box key={field} width="100%">
-          <TextField
-            onChange={(next: string) => setField(field, next)}
-            testID={`data-table-filter-${field}`}
-            title={label}
-            value={String(draftValues[field] ?? "")}
-          />
-        </Box>
+        <TextFilterField
+          field={field}
+          key={field}
+          label={label}
+          setField={setField}
+          value={String(draftValues[field] ?? "")}
+        />
       );
     }
     return nodes;

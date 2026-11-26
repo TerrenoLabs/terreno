@@ -1,5 +1,5 @@
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
-import {type FC, Fragment, type ReactElement} from "react";
+import {type FC, Fragment, memo, type ReactElement} from "react";
 
 import {Box} from "../Box";
 import {Button} from "../Button";
@@ -46,6 +46,8 @@ interface OAuthButtonsProps {
   testID?: string;
 }
 
+const NO_GENERIC_PROVIDERS: GenericOAuthProviderConfig[] = [];
+
 interface ProviderEntry {
   id: string;
   /** The button's visible text, used to build its last-used accessible name. */
@@ -57,130 +59,137 @@ interface ProviderEntry {
 /**
  * Renders OAuth provider buttons with an optional divider text.
  * Uses SocialLoginButton for branded provider buttons and an outline Button for generic ones.
+ * Memoized so a parent form does not re-render every provider button on each keystroke.
  */
-export const OAuthButtons: FC<OAuthButtonsProps> = ({
-  providers,
-  genericProviders = [],
-  lastUsed,
-  disabled = false,
-  dividerText = "Or continue with",
-  dividerPosition = "above",
-  appearance = "brand",
-  testID = "oauth-buttons",
-}) => {
-  const {theme} = useTheme();
-  if ((providers.length === 0 && genericProviders.length === 0) || !theme) {
-    return null;
-  }
-  const isPill = appearance === "pill";
+export const OAuthButtons: FC<OAuthButtonsProps> = memo(
+  ({
+    providers,
+    genericProviders = NO_GENERIC_PROVIDERS,
+    lastUsed,
+    disabled = false,
+    dividerText = "Or continue with",
+    dividerPosition = "above",
+    appearance = "brand",
+    testID = "oauth-buttons",
+  }) => {
+    const {theme} = useTheme();
+    if ((providers.length === 0 && genericProviders.length === 0) || !theme) {
+      return null;
+    }
+    const isPill = appearance === "pill";
 
-  const entries: ProviderEntry[] = [
-    ...providers.map((config) => ({
-      id: config.provider,
-      label: `Continue with ${SOCIAL_PROVIDER_NAMES[config.provider]}`,
-      render: (
-        accessibilityLabel?: string,
-        lastUsed?: {label: string; testID: string}
-      ): ReactElement => (
-        <SocialLoginButton
-          accessibilityLabel={accessibilityLabel}
-          disabled={disabled || config.disabled}
-          lastUsedLabel={lastUsed?.label}
-          lastUsedTestID={lastUsed?.testID}
-          loading={config.loading}
-          onPress={config.onPress}
-          provider={config.provider}
-          testID={`${testID}-${config.provider}`}
-          variant={isPill ? "outline" : "primary"}
-        />
-      ),
-    })),
-    ...genericProviders.map((config) => ({
-      id: config.id,
-      label: `Continue with ${config.label}`,
-      render: (
-        accessibilityLabel?: string,
-        lastUsed?: {label: string; testID: string}
-      ): ReactElement =>
-        isPill ? (
-          <OutlinePill
+    const entries: ProviderEntry[] = [
+      ...providers.map((config) => ({
+        id: config.provider,
+        label: `Continue with ${SOCIAL_PROVIDER_NAMES[config.provider]}`,
+        render: (
+          accessibilityLabel?: string,
+          lastUsed?: {label: string; testID: string}
+        ): ReactElement => (
+          <SocialLoginButton
             accessibilityLabel={accessibilityLabel}
             disabled={disabled || config.disabled}
-            icon={
-              config.iconName ? (
-                <FontAwesome6 color={theme.text.primary} name={config.iconName} size={18} />
-              ) : undefined
-            }
             lastUsedLabel={lastUsed?.label}
             lastUsedTestID={lastUsed?.testID}
             loading={config.loading}
             onPress={config.onPress}
-            testID={`${testID}-${config.id}`}
-            text={`Continue with ${config.label}`}
-          />
-        ) : (
-          <Button
-            accessibilityLabel={accessibilityLabel}
-            disabled={disabled || config.disabled}
-            fullWidth
-            iconName={config.iconName}
-            loading={config.loading}
-            onClick={config.onPress}
-            testID={`${testID}-${config.id}`}
-            text={`Continue with ${config.label}`}
-            variant="outline"
+            provider={config.provider}
+            testID={`${testID}-${config.provider}`}
+            variant={isPill ? "outline" : "primary"}
           />
         ),
-    })),
-  ];
+      })),
+      ...genericProviders.map((config) => ({
+        id: config.id,
+        label: `Continue with ${config.label}`,
+        render: (
+          accessibilityLabel?: string,
+          lastUsed?: {label: string; testID: string}
+        ): ReactElement =>
+          isPill ? (
+            <OutlinePill
+              accessibilityLabel={accessibilityLabel}
+              disabled={disabled || config.disabled}
+              icon={
+                config.iconName ? (
+                  <FontAwesome6 color={theme.text.primary} name={config.iconName} size={18} />
+                ) : undefined
+              }
+              lastUsedLabel={lastUsed?.label}
+              lastUsedTestID={lastUsed?.testID}
+              loading={config.loading}
+              onPress={config.onPress}
+              testID={`${testID}-${config.id}`}
+              text={`Continue with ${config.label}`}
+            />
+          ) : (
+            <Button
+              accessibilityLabel={accessibilityLabel}
+              disabled={disabled || config.disabled}
+              fullWidth
+              iconName={config.iconName}
+              loading={config.loading}
+              onClick={config.onPress}
+              testID={`${testID}-${config.id}`}
+              text={`Continue with ${config.label}`}
+              variant="outline"
+            />
+          ),
+      })),
+    ];
 
-  const lastUsedIndex = lastUsed
-    ? entries.findIndex((entry) => entry.id === lastUsed.provider)
-    : -1;
-  const orderedEntries =
-    lastUsedIndex > 0
-      ? [entries[lastUsedIndex], ...entries.filter((_, index) => index !== lastUsedIndex)]
-      : entries;
+    const lastUsedIndex = lastUsed
+      ? entries.findIndex((entry) => entry.id === lastUsed.provider)
+      : -1;
+    const orderedEntries =
+      lastUsedIndex > 0
+        ? [entries[lastUsedIndex], ...entries.filter((_, index) => index !== lastUsedIndex)]
+        : entries;
 
-  const badgeLabel = lastUsed?.label ?? "Last used";
+    const badgeLabel = lastUsed?.label ?? "Last used";
 
-  const divider =
-    dividerPosition === "above" ? (
-      <Box alignItems="center" marginTop={6}>
-        <Text color="secondaryLight">{dividerText}</Text>
-      </Box>
-    ) : (
-      <Box alignItems="center" marginBottom={2} marginTop={6}>
-        <Text color="secondaryLight">{dividerText}</Text>
+    const divider =
+      dividerPosition === "above" ? (
+        <Box alignItems="center" marginTop={6}>
+          <Text color="secondaryLight">{dividerText}</Text>
+        </Box>
+      ) : (
+        <Box alignItems="center" marginBottom={2} marginTop={6}>
+          <Text color="secondaryLight">{dividerText}</Text>
+        </Box>
+      );
+
+    return (
+      <Box testID={testID} width="100%">
+        {dividerPosition === "above" && divider}
+        <Box gap={3} marginTop={dividerPosition === "above" ? 4 : undefined}>
+          {orderedEntries.map((entry) => {
+            if (lastUsedIndex === -1 || entry.id !== lastUsed?.provider) {
+              return <Fragment key={entry.id}>{entry.render()}</Fragment>;
+            }
+            const lastUsedTestID = lastUsed.testID ?? `${testID}-${entry.id}-last-used`;
+            const accessibleName = withLastUsedLabel({
+              label: entry.label,
+              lastUsedLabel: badgeLabel,
+            });
+            if (isPill) {
+              return (
+                <Fragment key={entry.id}>
+                  {entry.render(accessibleName, {label: badgeLabel, testID: lastUsedTestID})}
+                </Fragment>
+              );
+            }
+            return (
+              <Box key={entry.id}>
+                <LastUsedPill label={badgeLabel} testID={lastUsedTestID} />
+                {entry.render(accessibleName)}
+              </Box>
+            );
+          })}
+        </Box>
+        {dividerPosition === "below" && divider}
       </Box>
     );
-
-  return (
-    <Box testID={testID} width="100%">
-      {dividerPosition === "above" && divider}
-      <Box gap={3} marginTop={dividerPosition === "above" ? 4 : undefined}>
-        {orderedEntries.map((entry) => {
-          if (lastUsedIndex === -1 || entry.id !== lastUsed?.provider) {
-            return <Fragment key={entry.id}>{entry.render()}</Fragment>;
-          }
-          const lastUsedTestID = lastUsed.testID ?? `${testID}-${entry.id}-last-used`;
-          const accessibleName = withLastUsedLabel({label: entry.label, lastUsedLabel: badgeLabel});
-          if (isPill) {
-            return (
-              <Fragment key={entry.id}>
-                {entry.render(accessibleName, {label: badgeLabel, testID: lastUsedTestID})}
-              </Fragment>
-            );
-          }
-          return (
-            <Box key={entry.id}>
-              <LastUsedPill label={badgeLabel} testID={lastUsedTestID} />
-              {entry.render(accessibleName)}
-            </Box>
-          );
-        })}
-      </Box>
-      {dividerPosition === "below" && divider}
-    </Box>
-  );
-};
+  }
+);
+OAuthButtons.displayName = "OAuthButtons";

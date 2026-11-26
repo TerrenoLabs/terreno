@@ -1,4 +1,4 @@
-import type {FC} from "react";
+import {type FC, memo} from "react";
 import {Image} from "react-native";
 import {SwiperFlatList} from "react-native-swiper-flatlist";
 
@@ -16,8 +16,9 @@ interface SwiperProps {
 
 /**
  * An onboarding swiper that displays pages with optional images, titles, and subtitles.
+ * Memoized so a parent form does not re-render every page on each keystroke.
  */
-export const Swiper: FC<SwiperProps> = ({pages, testID = "onboarding-swiper"}) => {
+export const Swiper: FC<SwiperProps> = memo(({pages, testID = "onboarding-swiper"}) => {
   if (pages.length === 0) {
     return null;
   }
@@ -56,4 +57,5 @@ export const Swiper: FC<SwiperProps> = ({pages, testID = "onboarding-swiper"}) =
       </SwiperFlatList>
     </Box>
   );
-};
+});
+Swiper.displayName = "Swiper";

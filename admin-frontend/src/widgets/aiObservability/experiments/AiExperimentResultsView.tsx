@@ -12,7 +12,7 @@ import {
   SelectField,
   Text,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 import {ProgressMeter} from "../shell/AgreementMeter";
 import {ObservabilityEmptyState} from "../shell/ObservabilityStates";
 import {
@@ -129,8 +129,12 @@ const GATE_NAME_MIN_WIDTH = 200;
 const GATE_NEEDS_WIDTH = 96;
 const GATE_VERSION_MIN_WIDTH = 160;
 
-/** Gate | Needs | one column per version, and a final Result row. */
-const GatesTable: React.FC<{summaries: VersionGateSummary[]}> = ({summaries}) => {
+/**
+ * Gate | Needs | one column per version, and a final Result row. Memoized: `summaries` is stable
+ * between experiment payloads, so opening the promote dialog or measuring the items table does
+ * not re-render every gate cell.
+ */
+const GatesTable: React.FC<{summaries: VersionGateSummary[]}> = memo(({summaries}) => {
   const rows = gateRows(summaries);
   const versionCell = {flex: "grow" as const, minWidth: GATE_VERSION_MIN_WIDTH};
   return (
@@ -238,7 +242,8 @@ const GatesTable: React.FC<{summaries: VersionGateSummary[]}> = ({summaries}) =>
       </Box>
     </Card>
   );
-};
+});
+GatesTable.displayName = "GatesTable";
 
 const PassFailCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
   return (

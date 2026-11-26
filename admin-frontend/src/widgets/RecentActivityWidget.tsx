@@ -1,9 +1,37 @@
 import {Box, Card, Heading, printDateAndTime, Spinner, Text} from "@terreno/ui";
-import React, {useMemo} from "react";
+import React, {memo, useMemo} from "react";
 import {shouldSkipOrgScopedAdminQuery} from "../orgs/shouldSkipOrgScopedAdminQuery";
 import {useOptionalOrgContext} from "../orgs/useOrgContext";
 import type {AdminFieldValue, AdminHomeWidgetProps} from "../types";
 import {useAdminModelApi} from "../useAdminModelApi";
+
+interface ActivityRowProps {
+  row: Record<string, AdminFieldValue>;
+}
+
+// Memoized so a home re-render does not re-render every audit entry.
+const ActivityRow: React.FC<ActivityRowProps> = memo(({row}) => {
+  const verb = String(row.verb ?? "");
+  const modelName = String(row.modelName ?? "");
+  const label = String(row.recordLabel ?? row.recordId ?? "");
+  const created = row.createdAt ?? row.created;
+  const when =
+    typeof created === "string" ? printDateAndTime(created, {defaultValue: created}) : "";
+  return (
+    <Box border="default" padding={2} rounding="sm">
+      <Text size="sm">
+        <Text bold>{verb}</Text> {modelName}
+        {label ? ` — ${label}` : ""}
+      </Text>
+      {when ? (
+        <Text color="secondaryDark" size="sm">
+          {when}
+        </Text>
+      ) : null}
+    </Box>
+  );
+});
+ActivityRow.displayName = "ActivityRow";
 
 export const RecentActivityWidget: React.FC<AdminHomeWidgetProps> = ({auditModel}) => {
   const organizationId = useOptionalOrgContext()?.organizationId;
@@ -62,24 +90,8 @@ export const RecentActivityWidget: React.FC<AdminHomeWidgetProps> = ({auditModel
           {rows.map((row) => {
             const id = String(row._id ?? row.id ?? "");
             const verb = String(row.verb ?? "");
-            const modelName = String(row.modelName ?? "");
             const label = String(row.recordLabel ?? row.recordId ?? "");
-            const created = row.createdAt ?? row.created;
-            const when =
-              typeof created === "string" ? printDateAndTime(created, {defaultValue: created}) : "";
-            return (
-              <Box border="default" key={id || `${verb}-${label}`} padding={2} rounding="sm">
-                <Text size="sm">
-                  <Text bold>{verb}</Text> {modelName}
-                  {label ? ` — ${label}` : ""}
-                </Text>
-                {when ? (
-                  <Text color="secondaryDark" size="sm">
-                    {when}
-                  </Text>
-                ) : null}
-              </Box>
-            );
+            return <ActivityRow key={id || `${verb}-${label}`} row={row} />;
           })}
         </Box>
       ) : null}

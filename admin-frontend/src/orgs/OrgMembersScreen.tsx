@@ -10,7 +10,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useMemo, useRef, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
 import {MemberSecurityPanel} from "./MemberSecurityPanel";
 import {normalizeListData} from "./normalizeListData";
@@ -89,6 +89,12 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
   const [removeMember, {isLoading: isRemoving}] = useMemberRemoveMutation();
   const handleInvite = useCallback((): void => {}, []);
 
+  // The member mutation hooks hand back a new trigger on every render. The row handlers read
+  // them through a ref so the actions cell keeps its component identity and the table rows do
+  // not remount on every keystroke in the add-member modal.
+  const latestRef = useRef({removeMember, updateMember});
+  latestRef.current = {removeMember, updateMember};
+
   const handleDismiss = useCallback((): void => {
     setIsAddOpen(false);
     setEmail("");
@@ -117,32 +123,36 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
     async (membership: OrgMembership): Promise<void> => {
       try {
         setActionError(undefined);
-        await updateMember({
-          body: {roleName: membership.roleName === "org-admin" ? "member" : "org-admin"},
-          id: organizationId,
-          memberId: membership._id,
-        }).unwrap();
+        await latestRef.current
+          .updateMember({
+            body: {roleName: membership.roleName === "org-admin" ? "member" : "org-admin"},
+            id: organizationId,
+            memberId: membership._id,
+          })
+          .unwrap();
       } catch (mutationError) {
         setActionError(mutationErrorTitle(mutationError, "Could not update member."));
       }
     },
-    [organizationId, updateMember]
+    [organizationId]
   );
 
   const handleReactivate = useCallback(
     async (membership: OrgMembership): Promise<void> => {
       try {
         setActionError(undefined);
-        await updateMember({
-          body: {status: "active"},
-          id: organizationId,
-          memberId: membership._id,
-        }).unwrap();
+        await latestRef.current
+          .updateMember({
+            body: {status: "active"},
+            id: organizationId,
+            memberId: membership._id,
+          })
+          .unwrap();
       } catch (mutationError) {
         setActionError(mutationErrorTitle(mutationError, "Could not reactivate member."));
       }
     },
-    [organizationId, updateMember]
+    [organizationId]
   );
 
   const handleSecurityClose = useCallback((): void => {
@@ -158,16 +168,18 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
     async (membership: OrgMembership): Promise<void> => {
       try {
         setActionError(undefined);
-        await removeMember({
-          body: {},
-          id: organizationId,
-          memberId: membership._id,
-        }).unwrap();
+        await latestRef.current
+          .removeMember({
+            body: {},
+            id: organizationId,
+            memberId: membership._id,
+          })
+          .unwrap();
       } catch (mutationError) {
         setActionError(mutationErrorTitle(mutationError, "Could not remove member."));
       }
     },
-    [organizationId, removeMember]
+    [organizationId]
   );
 
   const ActionsCell: React.FC<{
@@ -230,16 +242,20 @@ export const OrgMembersScreen: React.FC<OrgMembersScreenProps> = ({
     () => ({[ACTION_COLUMN]: ActionsCell}),
     [ActionsCell]
   );
-  const rows = memberships.map((membership) => {
-    const user = membershipUser(membership);
-    return [
-      {value: memberLabel(user)},
-      {value: user.email ?? ""},
-      {value: membership.roleName},
-      {value: membership.status},
-      {value: membership},
-    ];
-  });
+  const rows = useMemo(
+    (): DataTableCellData[][] =>
+      memberships.map((membership) => {
+        const user = membershipUser(membership);
+        return [
+          {value: memberLabel(user)},
+          {value: user.email ?? ""},
+          {value: membership.roleName},
+          {value: membership.status},
+          {value: membership},
+        ];
+      }),
+    [memberships]
+  );
 
   return (
     <AdminScreenPage

@@ -76,6 +76,9 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
   const evaluators = useMemo(() => unwrapEvaluators(evaluatorsRaw), [evaluatorsRaw]);
   const datasets = useMemo(() => unwrapDatasetList(datasetsRaw), [datasetsRaw]);
   const prompts = useMemo(() => unwrapPromptList(promptsRaw), [promptsRaw]);
+  // One array per prompt list: the view builds the table columns from it, and a new array on
+  // every screen state change would re-render every row and cell.
+  const promptOptions = useMemo((): string[] => prompts.map((prompt) => prompt.name), [prompts]);
   const status = useMemo(() => unwrapObservabilityStatus(statusRaw), [statusRaw]);
   const prefix = (routeBase ?? "").replace(/\/$/, "");
   const playgroundAiSource = status?.playgroundAi?.source;
@@ -261,7 +264,7 @@ export const AiTracesScreenWidget: React.FC<AiTracesScreenWidgetProps> = (props)
         onToggleSelect={handleToggleSelect}
         page={page}
         pageSize={listed.limit}
-        promptOptions={prompts.map((prompt) => prompt.name)}
+        promptOptions={promptOptions}
         reviewModalOpen={reviewModalOpen}
         routeBase={prefix}
         selectedIds={selectedIds}

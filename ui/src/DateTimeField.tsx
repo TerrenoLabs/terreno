@@ -1,6 +1,6 @@
 import FontAwesome6 from "@expo/vector-icons/FontAwesome6";
 import {DateTime} from "luxon";
-import React, {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import React, {type FC, memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Pressable, TextInput, type TextInputInstance, View} from "react-native";
 
 import type {ActionSheet} from "./ActionSheet";
@@ -17,6 +17,7 @@ import {Text} from "./Text";
 import {useTheme} from "./Theme";
 import {TimezonePicker} from "./TimezonePicker";
 import {resolveFieldTestIDsFromProps} from "./testing/resolveTestId";
+import {useStableCallback} from "./useStableCallback";
 
 /** The state each segment index edits, per field type. */
 const SEGMENT_NAMES = {
@@ -24,6 +25,11 @@ const SEGMENT_NAMES = {
   datetime: ["month", "day", "year", "hour", "minute"],
   time: ["hour", "minute"],
 } as const;
+
+const AM_PM_OPTIONS = [
+  {label: "am", value: "am"},
+  {label: "pm", value: "pm"},
+];
 
 interface SeparatorProps {
   type: "date" | "time";
@@ -330,6 +336,54 @@ interface DesktopTimeSectionProps {
   type: "date" | "datetime" | "time";
 }
 
+interface DesktopTimeSelectorsProps {
+  amPm: "am" | "pm";
+  disabled?: boolean;
+  onAmPmChange: (amPm: "am" | "pm") => void;
+  onTimezoneChange: (tz: string) => void;
+  timezone: string;
+}
+
+/**
+ * The AM/PM {@link SelectField} and {@link TimezonePicker} of the desktop time row.
+ * Memoized so typing in a date or time segment does not re-render both dropdowns on every
+ * keystroke. Needs stable `onAmPmChange` and `onTimezoneChange` handlers.
+ */
+const DesktopTimeSelectors: FC<DesktopTimeSelectorsProps> = memo(
+  ({amPm, disabled, onAmPmChange, onTimezoneChange, timezone}) => {
+    const handleAmPmSelect = useCallback(
+      (result: string | undefined): void => {
+        onAmPmChange(result as "am" | "pm");
+      },
+      [onAmPmChange]
+    );
+
+    return (
+      <>
+        <Box direction="column" marginLeft={2} marginRight={2} width={60}>
+          <SelectField
+            disabled={disabled}
+            onChange={handleAmPmSelect}
+            options={AM_PM_OPTIONS}
+            requireValue
+            value={amPm}
+          />
+        </Box>
+        <Box direction="column" width={70}>
+          <TimezonePicker
+            disabled={disabled}
+            hideTitle
+            onChange={onTimezoneChange}
+            shortTimezone
+            timezone={timezone}
+          />
+        </Box>
+      </>
+    );
+  }
+);
+DesktopTimeSelectors.displayName = "DesktopTimeSelectors";
+
 /**
  * Desktop time editing controls rendered in a horizontal row.
  * Contains editable {@link TimeField} segments (hh:mm), an AM/PM {@link SelectField},
@@ -352,27 +406,13 @@ const DesktopTimeSection: FC<DesktopTimeSectionProps> = ({
   return (
     <View style={{alignItems: "center", flexDirection: "row"}}>
       <TimeField {...segmentProps} type={type} />
-      <Box direction="column" marginLeft={2} marginRight={2} width={60}>
-        <SelectField
-          disabled={disabled}
-          onChange={(result) => onAmPmChange(result as "am" | "pm")}
-          options={[
-            {label: "am", value: "am"},
-            {label: "pm", value: "pm"},
-          ]}
-          requireValue
-          value={amPm}
-        />
-      </Box>
-      <Box direction="column" width={70}>
-        <TimezonePicker
-          disabled={disabled}
-          hideTitle
-          onChange={onTimezoneChange}
-          shortTimezone
-          timezone={timezone}
-        />
-      </Box>
+      <DesktopTimeSelectors
+        amPm={amPm}
+        disabled={disabled}
+        onAmPmChange={onAmPmChange}
+        onTimezoneChange={onTimezoneChange}
+        timezone={timezone}
+      />
       {!disabled && type === "datetime" && !isMobile && (
         <Box marginLeft={2}>
           <IconButton
@@ -436,7 +476,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
 }): React.ReactElement => {
   const {theme} = useTheme();
   const fieldTestIDs = resolveFieldTestIDsFromProps({testID, testIDs});
-  const dateActionSheetRef: React.RefObject<ActionSheet | null> = React.createRef();
+  const dateActionSheetRef = useRef<ActionSheet | null>(null);
   const [amPm, setAmPm] = useState<"am" | "pm">("am");
   const [showDate, setShowDate] = useState(false);
   const [month, setMonth] = useState("");
@@ -1055,6 +1095,30 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
     setShowDate(true);
   }, []);
 
+  const closeActionSheet = useCallback((): void => {
+    setShowDate(false);
+  }, []);
+
+  // Stable identities for the memoized dropdowns and picker; each call runs the newest handler.
+  const stableAmPmChange = useStableCallback(handleAmPmChange);
+  const stableTimezoneChange = useStableCallback(handleTimezoneChange);
+
+  // Built once per picker input so typing in a segment does not re-render the hidden picker.
+  const actionSheet = useMemo(
+    (): React.ReactElement => (
+      <DateTimeActionSheet
+        actionSheetRef={dateActionSheetRef}
+        onChange={onActionSheetChange}
+        onDismiss={closeActionSheet}
+        timezone={timezone}
+        type={type}
+        value={value}
+        visible={showDate}
+      />
+    ),
+    [closeActionSheet, onActionSheetChange, showDate, timezone, type, value]
+  );
+
   return (
     <>
       {Boolean(title) && <FieldTitle testID={fieldTestIDs.label} text={title as string} />}
@@ -1122,9 +1186,9 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
               amPm={amPm}
               disabled={disabled}
               isMobile={parentIsLessThanBreakpointOrIsMobile}
-              onAmPmChange={handleAmPmChange}
+              onAmPmChange={stableAmPmChange}
               onOpenActionSheet={openActionSheet}
-              onTimezoneChange={handleTimezoneChange}
+              onTimezoneChange={stableTimezoneChange}
               segmentProps={segmentProps}
               timezone={timezone}
               type={type}
@@ -1133,17 +1197,7 @@ export const DateTimeField: FC<DateTimeFieldProps> = ({
         </Pressable>
       )}
 
-      {!disabled && (
-        <DateTimeActionSheet
-          actionSheetRef={dateActionSheetRef}
-          onChange={onActionSheetChange}
-          onDismiss={() => setShowDate(false)}
-          timezone={timezone}
-          type={type}
-          value={value}
-          visible={showDate}
-        />
-      )}
+      {!disabled && actionSheet}
       {Boolean(helperText) && (
         <FieldHelperText testID={fieldTestIDs.helper} text={helperText as string} />
       )}

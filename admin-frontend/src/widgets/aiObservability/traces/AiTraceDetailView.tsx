@@ -1,5 +1,5 @@
 import {Accordion, Badge, Box, Button, Heading, Text} from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 import {
   durationBarPercent,
   type FlatSpan,
@@ -40,12 +40,15 @@ const spanColumnStyle = (grow: number): SpanColumnStyle => ({
 const SPAN_LIST_COLUMN = spanColumnStyle(2);
 const SPAN_DETAIL_COLUMN = spanColumnStyle(3);
 
-const SpanRow: React.FC<{
+interface SpanRowProps {
   maxDuration: number;
   onSelect: (span: TraceSpanNode) => void;
   row: FlatSpan;
   selected: boolean;
-}> = ({maxDuration, onSelect, row, selected}) => {
+}
+
+/** Memoized so selecting a span re-renders the two rows whose highlight changed, not every row. */
+const SpanRow: React.FC<SpanRowProps> = memo(({maxDuration, onSelect, row, selected}) => {
   const handleSelect = useCallback((): void => {
     onSelect(row.span);
   }, [onSelect, row.span]);
@@ -72,7 +75,8 @@ const SpanRow: React.FC<{
       <Text size="sm">{row.span.durationMs != null ? `${row.span.durationMs} ms` : "—"}</Text>
     </Box>
   );
-};
+});
+SpanRow.displayName = "SpanRow";
 
 const SCORE_SOURCE_LABELS: Record<string, string> = {
   code: "Code",

@@ -1,5 +1,5 @@
 import {Box, IconButton, Spinner, Text, TextField} from "@terreno/ui";
-import React, {useCallback, useEffect, useRef, useState} from "react";
+import React, {memo, useCallback, useEffect, useLayoutEffect, useRef, useState} from "react";
 import {withQueryString} from "./adminRpc";
 import {adminOrganizationHeaders} from "./orgs/organizationHeaders";
 import {useOptionalOrgContext} from "./orgs/useOrgContext";
@@ -61,6 +61,38 @@ const getPrimaryField = (item: PickerItem): DisplayField | "_id" => {
   }
   return "_id";
 };
+
+interface PickerResultRowProps {
+  item: PickerItem;
+  onSelect: (item: PickerItem) => void;
+  refModelName: string;
+}
+
+/** One pickable result. Memoized so typing in the search box does not re-render every row. */
+const PickerResultRow: React.FC<PickerResultRowProps> = memo(({item, onSelect, refModelName}) => {
+  const primaryField = getPrimaryField(item);
+  const secondary = getSecondaryText(item, primaryField);
+  return (
+    <Box
+      accessibilityHint={`Selects ${getDisplayValue(item)}`}
+      accessibilityLabel={`Select ${getDisplayValue(item)}`}
+      onClick={() => onSelect(item)}
+      paddingX={3}
+      paddingY={2}
+      testID={`admin-picker-${refModelName}-result-${item._id}`}
+    >
+      <Text size="sm" skipLinking>
+        {getDisplayValue(item)}
+      </Text>
+      {secondary && (
+        <Text color="secondaryDark" size="sm" skipLinking>
+          {secondary}
+        </Text>
+      )}
+    </Box>
+  );
+});
+PickerResultRow.displayName = "PickerResultRow";
 
 export const AdminObjectPicker: React.FC<AdminObjectPickerProps> = ({
   routePath,
@@ -136,17 +168,22 @@ export const AdminObjectPicker: React.FC<AdminObjectPickerProps> = ({
     }, 300);
   }, []);
 
-  const handleSelect = useCallback(
-    (item: PickerItem) => {
-      onChange(item._id ?? "");
-      setSelectedDisplay(getDisplayValue(item));
-      setSearchText("");
-      setDebouncedQuery("");
-      setIsOpen(false);
-      setIsChanging(false);
-    },
-    [onChange]
-  );
+  // Result rows are memoized, so `handleSelect` keeps one identity and reads the newest
+  // `onChange` from a ref that is refreshed after every commit.
+  const latestOnChange = useRef(onChange);
+  // Point `handleSelect` at the newest `onChange` before any event can fire.
+  useLayoutEffect(() => {
+    latestOnChange.current = onChange;
+  });
+
+  const handleSelect = useCallback((item: PickerItem): void => {
+    latestOnChange.current(item._id ?? "");
+    setSelectedDisplay(getDisplayValue(item));
+    setSearchText("");
+    setDebouncedQuery("");
+    setIsOpen(false);
+    setIsChanging(false);
+  }, []);
 
   const handleClear = useCallback(() => {
     onChange("");
@@ -257,30 +294,14 @@ export const AdminObjectPicker: React.FC<AdminObjectPickerProps> = ({
           )}
 
           {!isResultsLoading &&
-            (results as PickerItem[]).map((item) => {
-              const primaryField = getPrimaryField(item);
-              const secondary = getSecondaryText(item, primaryField);
-              return (
-                <Box
-                  accessibilityHint={`Selects ${getDisplayValue(item)}`}
-                  accessibilityLabel={`Select ${getDisplayValue(item)}`}
-                  key={item._id}
-                  onClick={() => handleSelect(item)}
-                  paddingX={3}
-                  paddingY={2}
-                  testID={`admin-picker-${refModelName}-result-${item._id}`}
-                >
-                  <Text size="sm" skipLinking>
-                    {getDisplayValue(item)}
-                  </Text>
-                  {secondary && (
-                    <Text color="secondaryDark" size="sm" skipLinking>
-                      {secondary}
-                    </Text>
-                  )}
-                </Box>
-              );
-            })}
+            (results as PickerItem[]).map((item) => (
+              <PickerResultRow
+                item={item}
+                key={item._id}
+                onSelect={handleSelect}
+                refModelName={refModelName}
+              />
+            ))}
 
           {!isResultsLoading && autocomplete && !debouncedQuery && (
             <Box padding={3}>

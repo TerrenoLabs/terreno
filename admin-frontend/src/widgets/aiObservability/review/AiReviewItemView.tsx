@@ -1,5 +1,5 @@
 import {Accordion, Badge, Box, Button, Card, Text, TextArea} from "@terreno/ui";
-import React from "react";
+import React, {memo} from "react";
 import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {ReviewQuestionList} from "./ReviewQuestionList";
 import {ReviewReadOnlyPanel} from "./ReviewReadOnlyPanel";
@@ -82,6 +82,21 @@ export const AiReviewItemNav: React.FC<AiReviewItemNavProps> = ({onNext, onPrevi
   </>
 );
 
+interface ReviewRawJsonProps {
+  rawInput?: unknown;
+  rawOutput?: unknown;
+}
+
+const ReviewRawJsonComponent: React.FC<ReviewRawJsonProps> = ({rawInput, rawOutput}) => (
+  <Accordion isCollapsed testID="ai-review-raw-json" title="Raw JSON">
+    <Text size="sm">{displayReviewValue({input: rawInput, output: rawOutput})}</Text>
+  </Accordion>
+);
+
+/** Memoized so the raw payload is not formatted again on every keystroke in the note. */
+const ReviewRawJson = memo(ReviewRawJsonComponent);
+ReviewRawJson.displayName = "ReviewRawJson";
+
 export interface AiReviewItemViewProps {
   activeQuestionKey?: string;
   comment: string;
@@ -119,11 +134,7 @@ export const AiReviewItemView: React.FC<AiReviewItemViewProps> = ({
       </Box>
     </Box>
 
-    <Accordion isCollapsed testID="ai-review-raw-json" title="Raw JSON">
-      <Text size="sm">
-        {displayReviewValue({input: detail.rawInput, output: detail.rawOutput})}
-      </Text>
-    </Accordion>
+    <ReviewRawJson rawInput={detail.rawInput} rawOutput={detail.rawOutput} />
 
     <Card padding={4} testID="ai-review-questions-card">
       <Box gap={4}>

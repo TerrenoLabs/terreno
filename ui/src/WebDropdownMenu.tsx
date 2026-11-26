@@ -1,4 +1,6 @@
 import {
+  type FC,
+  memo,
   type ReactElement,
   type RefObject,
   useCallback,
@@ -28,6 +30,7 @@ import {createWebPortal} from "./createWebPortal";
 import {resolveDocumentBodyPortalTarget} from "./resolveDocumentBodyPortalTarget";
 import {useTheme} from "./Theme";
 import {createBoxShadow} from "./Utilities";
+import {useStableCallback} from "./useStableCallback";
 
 export {resolveDocumentBodyPortalTarget};
 
@@ -114,6 +117,86 @@ interface PressableWebState {
   hovered?: boolean;
   focused?: boolean;
 }
+
+interface DropdownOptionProps {
+  color?: string;
+  /** Position in the filtered list, reported back with the row's layout. */
+  filteredIndex: number;
+  helperText?: string;
+  isSelected: boolean;
+  label: string;
+  onLayout: (index: number, offset: number, height: number) => void;
+  onSelect: (value: string, index: number) => void;
+  optionTextStyle?: TextStyle;
+  /** Position in the unfiltered `options`, passed to `onSelect`. */
+  originalIndex: number;
+  testID: string;
+  value: string;
+}
+
+// Memoized so a search keystroke or a new selection re-renders the rows that changed, not all.
+const DropdownOption: FC<DropdownOptionProps> = memo(
+  ({
+    color,
+    filteredIndex,
+    helperText,
+    isSelected,
+    label,
+    onLayout,
+    onSelect,
+    optionTextStyle,
+    originalIndex,
+    testID,
+    value,
+  }): ReactElement => {
+    const {theme} = useTheme();
+    return (
+      <Pressable
+        aria-role="button"
+        onLayout={(event) => {
+          const {height, y} = event.nativeEvent.layout;
+          onLayout(filteredIndex, y, height);
+        }}
+        onPress={() => onSelect(value, originalIndex)}
+        style={(state: PressableWebState) => ({
+          backgroundColor:
+            isSelected || state.hovered || state.pressed
+              ? theme.surface.neutralLight
+              : theme.surface.base,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+        })}
+        testID={testID}
+      >
+        <View style={{alignSelf: "stretch"}}>
+          <Text
+            style={{
+              color: color ?? theme.text.primary,
+              fontWeight: isSelected ? "600" : "400",
+              ...optionTextStyle,
+            }}
+          >
+            {label}
+          </Text>
+          {Boolean(helperText) && (
+            <Text
+              style={{
+                color: theme.text.secondaryDark,
+                fontSize: 12,
+                fontWeight: "400",
+                lineHeight: 16,
+                marginTop: 2,
+              }}
+            >
+              {helperText}
+            </Text>
+          )}
+        </View>
+      </Pressable>
+    );
+  }
+);
+DropdownOption.displayName = "DropdownOption";
 
 /**
  * Shared popup used by `RNPickerSelect` and `SelectBadge` for a consistent
@@ -229,6 +312,10 @@ export const WebDropdownMenu = ({
     [scrollSelectedIntoView, selectedFilteredIndex, visible]
   );
 
+  // Stable identities so memoized rows skip renders when the caller passes inline handlers.
+  const stableOptionLayout = useStableCallback(handleOptionLayout);
+  const stableSelect = useStableCallback(onSelect);
+
   const windowHeight = Dimensions.get("window").height;
   const windowWidth = Dimensions.get("window").width;
   const isCenteredPresentation = presentation === "centered";
@@ -331,49 +418,20 @@ export const WebDropdownMenu = ({
               ? originalIdx === selectedIndex
               : item.value === selectedValue;
           return (
-            <Pressable
-              aria-role="button"
+            <DropdownOption
+              color={item.color}
+              filteredIndex={filteredIndex}
+              helperText={item.helperText}
+              isSelected={isSelected}
               key={item.key ?? originalIdx}
-              onLayout={(event) => {
-                const {height, y} = event.nativeEvent.layout;
-                handleOptionLayout(filteredIndex, y, height);
-              }}
-              onPress={() => onSelect(item.value, originalIdx)}
-              style={(state: PressableWebState) => ({
-                backgroundColor:
-                  isSelected || state.hovered || state.pressed
-                    ? theme.surface.neutralLight
-                    : theme.surface.base,
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-              })}
+              label={item.label}
+              onLayout={stableOptionLayout}
+              onSelect={stableSelect}
+              optionTextStyle={optionTextStyle}
+              originalIndex={originalIdx}
               testID={`${testIDPrefix}_option_${item.value}`}
-            >
-              <View style={{alignSelf: "stretch"}}>
-                <Text
-                  style={{
-                    color: item.color ?? theme.text.primary,
-                    fontWeight: isSelected ? "600" : "400",
-                    ...optionTextStyle,
-                  }}
-                >
-                  {item.label}
-                </Text>
-                {Boolean(item.helperText) && (
-                  <Text
-                    style={{
-                      color: theme.text.secondaryDark,
-                      fontSize: 12,
-                      fontWeight: "400",
-                      lineHeight: 16,
-                      marginTop: 2,
-                    }}
-                  >
-                    {item.helperText}
-                  </Text>
-                )}
-              </View>
-            </Pressable>
+              value={item.value}
+            />
           );
         })}
         {(searchable || showEmptyStateWhenNoOptions) && filteredOptions.length === 0 && (

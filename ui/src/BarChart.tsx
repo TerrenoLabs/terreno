@@ -1,5 +1,5 @@
 import type {FC} from "react";
-import {useCallback, useState} from "react";
+import {memo, useCallback, useState} from "react";
 import {Rect, Svg, Line as SvgLine} from "react-native-svg";
 
 import {Box} from "./Box";
@@ -28,6 +28,7 @@ import {resolveTestID} from "./testing/resolveTestId";
 const DEFAULT_HEIGHT = 200;
 const DEFAULT_WIDTH = 300;
 const BAR_FILL = 0.7;
+const NO_POINTS: ChartPoint[] = [];
 
 const formatChartTooltip = ({
   formatValue,
@@ -39,96 +40,69 @@ const formatChartTooltip = ({
   return `${point.label}: ${formatValue(point.value)}`;
 };
 
-export const BarChart: FC<BarChartProps> = ({
-  accessibilityLabel,
-  comparisonData = [],
-  data,
-  emptyText = "No data",
-  formatValue = String,
-  height = DEFAULT_HEIGHT,
-  legendLabel,
-  loading = false,
-  loadingAnimation,
-  loadingComponent,
-  loadingLabel,
-  onPeriodPress,
-  periodLabel,
-  series,
-  testID,
-  title,
-  xTickPolicy = "auto",
-}) => {
-  const {theme} = useTheme();
-  const paint = getChartPaint(theme);
-  const [chartWidth, setChartWidth] = useState(DEFAULT_WIDTH);
-  const [activePointIndex, setActivePointIndex] = useState<number | undefined>(undefined);
+interface BarChartPlotProps {
+  chartData: ChartPoint[];
+  chartWidth: number;
+  comparisonData: ChartPoint[];
+  formatValue: (value: number) => string;
+  hasLegend: boolean;
+  height: number;
+  onLayout: (event: LayoutChangeEvent) => void;
+  onMarkPress: (pointIndex: number) => void;
+  seriesColor?: string;
+  seriesId: string;
+  seriesLabel: string;
+  testID?: string;
+  xTickPolicy: NonNullable<BarChartProps["xTickPolicy"]>;
+}
 
-  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
-    const nextWidth = event.nativeEvent.layout.width;
-    if (nextWidth > 0) {
-      setChartWidth(nextWidth);
-    }
-  }, []);
-
-  const handleMarkPress = useCallback((pointIndex: number): void => {
-    setActivePointIndex(pointIndex);
-  }, []);
-
-  const primarySeries = series && series.length > 0 ? series[0] : undefined;
-  const chartData = primarySeries?.data ?? data;
-  const seriesColor = primarySeries?.color ?? paint.series;
-  const effectiveLegendLabel = primarySeries?.label ?? legendLabel;
-  const axisPoints = getAxisPoints({
+// Memoized so hovering or pressing a bar, which only changes the tooltip text, does not
+// re-render every bar, hit target, and axis tick.
+const BarChartPlot: FC<BarChartPlotProps> = memo(
+  ({
+    chartData,
+    chartWidth,
     comparisonData,
-    series: [
-      {data: chartData, id: primarySeries?.id ?? "default", label: effectiveLegendLabel ?? ""},
-    ],
-  });
-  const allPoints = [...chartData, ...comparisonData];
-  const isXTickRotated = shouldRotateChartXTicks({
-    labelCount: axisPoints.length,
-    policy: xTickPolicy,
-  });
-  const xAxisHeight = isXTickRotated ? CHART_ROTATED_X_AXIS_HEIGHT : CHART_X_AXIS_HEIGHT;
-  const axisWidth = getChartAxisWidth(chartWidth);
-  const plotHeight = getPlotHeight({
-    hasLegend: Boolean(effectiveLegendLabel),
+    formatValue,
+    hasLegend,
     height,
-    xAxisHeight,
-  });
-  const plot = getChartPlot({chartWidth, height: plotHeight});
-  const plotWidth = chartWidth - axisWidth;
-  const scales = createCartesianScales({
-    plot,
-    points: allPoints,
-    xLabels: axisPoints.map((point) => point.label),
-  });
-  const yTicks = getYTickValues(allPoints);
-  const baselineY = scales.y(0);
-  const barWidth = Math.max(scales.bandwidth * BAR_FILL, 1);
-  const comparisonBarWidth = Math.max(scales.bandwidth * 0.9, 1);
-  const activePoint = activePointIndex === undefined ? undefined : chartData[activePointIndex];
-  const tooltipText = activePoint
-    ? formatChartTooltip({formatValue, point: activePoint})
-    : undefined;
-  const summaryLabel =
-    accessibilityLabel ??
-    (effectiveLegendLabel ? `${effectiveLegendLabel} bar chart` : "Bar chart");
+    onLayout,
+    onMarkPress,
+    seriesColor: seriesColorOverride,
+    seriesId,
+    seriesLabel,
+    testID,
+    xTickPolicy,
+  }) => {
+    const {theme} = useTheme();
+    const paint = getChartPaint(theme);
+    const seriesColor = seriesColorOverride ?? paint.series;
+    const axisPoints = getAxisPoints({
+      comparisonData,
+      series: [{data: chartData, id: seriesId, label: seriesLabel}],
+    });
+    const allPoints = [...chartData, ...comparisonData];
+    const isXTickRotated = shouldRotateChartXTicks({
+      labelCount: axisPoints.length,
+      policy: xTickPolicy,
+    });
+    const xAxisHeight = isXTickRotated ? CHART_ROTATED_X_AXIS_HEIGHT : CHART_X_AXIS_HEIGHT;
+    const axisWidth = getChartAxisWidth(chartWidth);
+    const plotHeight = getPlotHeight({hasLegend, height, xAxisHeight});
+    const plot = getChartPlot({chartWidth, height: plotHeight});
+    const plotWidth = chartWidth - axisWidth;
+    const scales = createCartesianScales({
+      plot,
+      points: allPoints,
+      xLabels: axisPoints.map((point) => point.label),
+    });
+    const yTicks = getYTickValues(allPoints);
+    const baselineY = scales.y(0);
+    const barWidth = Math.max(scales.bandwidth * BAR_FILL, 1);
+    const comparisonBarWidth = Math.max(scales.bandwidth * 0.9, 1);
 
-  const chart = (
-    <ChartFrame
-      accessibilityLabel={summaryLabel}
-      emptyText={emptyText}
-      isEmpty={allPoints.length === 0}
-      legendLabel={effectiveLegendLabel}
-      loading={loading}
-      loadingAnimation={loadingAnimation}
-      loadingComponent={loadingComponent}
-      loadingLabel={loadingLabel}
-      testID={testID}
-      tooltipText={tooltipText}
-    >
-      <Box minWidth={0} onLayout={handleLayout} testID={resolveTestID(testID, "plot")} width="100%">
+    return (
+      <Box minWidth={0} onLayout={onLayout} testID={resolveTestID(testID, "plot")} width="100%">
         <Box direction="row" height={plotHeight}>
           <Box height={plotHeight} position="relative" width={axisWidth}>
             {yTicks.map((tick) => (
@@ -208,7 +182,7 @@ export const BarChart: FC<BarChartProps> = ({
             </Svg>
             {chartData.map((point, index) => {
               const onPress = (): void => {
-                handleMarkPress(index);
+                onMarkPress(index);
               };
               const layout = getBarLayout({
                 barWidth,
@@ -269,6 +243,83 @@ export const BarChart: FC<BarChartProps> = ({
           </Box>
         </Box>
       </Box>
+    );
+  }
+);
+BarChartPlot.displayName = "BarChartPlot";
+
+export const BarChart: FC<BarChartProps> = ({
+  accessibilityLabel,
+  comparisonData = NO_POINTS,
+  data,
+  emptyText = "No data",
+  formatValue = String,
+  height = DEFAULT_HEIGHT,
+  legendLabel,
+  loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
+  onPeriodPress,
+  periodLabel,
+  series,
+  testID,
+  title,
+  xTickPolicy = "auto",
+}) => {
+  const [chartWidth, setChartWidth] = useState(DEFAULT_WIDTH);
+  const [activePointIndex, setActivePointIndex] = useState<number | undefined>(undefined);
+
+  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
+    const nextWidth = event.nativeEvent.layout.width;
+    if (nextWidth > 0) {
+      setChartWidth(nextWidth);
+    }
+  }, []);
+
+  const handleMarkPress = useCallback((pointIndex: number): void => {
+    setActivePointIndex(pointIndex);
+  }, []);
+
+  const primarySeries = series && series.length > 0 ? series[0] : undefined;
+  const chartData = primarySeries?.data ?? data;
+  const effectiveLegendLabel = primarySeries?.label ?? legendLabel;
+  const activePoint = activePointIndex === undefined ? undefined : chartData[activePointIndex];
+  const tooltipText = activePoint
+    ? formatChartTooltip({formatValue, point: activePoint})
+    : undefined;
+  const summaryLabel =
+    accessibilityLabel ??
+    (effectiveLegendLabel ? `${effectiveLegendLabel} bar chart` : "Bar chart");
+
+  const chart = (
+    <ChartFrame
+      accessibilityLabel={summaryLabel}
+      emptyText={emptyText}
+      isEmpty={chartData.length + comparisonData.length === 0}
+      legendLabel={effectiveLegendLabel}
+      loading={loading}
+      loadingAnimation={loadingAnimation}
+      loadingComponent={loadingComponent}
+      loadingLabel={loadingLabel}
+      testID={testID}
+      tooltipText={tooltipText}
+    >
+      <BarChartPlot
+        chartData={chartData}
+        chartWidth={chartWidth}
+        comparisonData={comparisonData}
+        formatValue={formatValue}
+        hasLegend={Boolean(effectiveLegendLabel)}
+        height={height}
+        onLayout={handleLayout}
+        onMarkPress={handleMarkPress}
+        seriesColor={primarySeries?.color}
+        seriesId={primarySeries?.id ?? "default"}
+        seriesLabel={effectiveLegendLabel ?? ""}
+        testID={testID}
+        xTickPolicy={xTickPolicy}
+      />
     </ChartFrame>
   );
 

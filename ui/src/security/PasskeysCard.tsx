@@ -1,4 +1,4 @@
-import {type FC, useCallback, useState} from "react";
+import {type FC, memo, useCallback, useState} from "react";
 import {View} from "react-native";
 
 import {Badge} from "../Badge";
@@ -37,6 +37,105 @@ const describePasskey = (passkey: AccountPasskey): string => {
   ].filter((part): part is string => Boolean(part));
   return parts.length > 0 ? parts.join(" · ") : "Passkey";
 };
+
+interface PasskeyRowProps {
+  /** The passkey this row shows. */
+  passkey: AccountPasskey;
+  /** Shows the Rename button. */
+  canRename: boolean;
+  /** Shows the Remove button. */
+  canRemove: boolean;
+  /** Disables both buttons. */
+  isBusy: boolean;
+  /** Shows the Rename button's spinner. */
+  isRenamePending: boolean;
+  /** Shows the Remove button's spinner. */
+  isRemovePending: boolean;
+  /** Opens the rename dialog for this passkey. */
+  onOpenRename: (passkey: AccountPasskey) => void;
+  /** Opens the remove confirmation for this passkey. */
+  onOpenRemove: (passkey: AccountPasskey) => void;
+  /** The card's test ID, the prefix of every row test ID. */
+  testID: string;
+}
+
+// Memoized so typing a name in a dialog re-renders the dialog, not every passkey row.
+const PasskeyRow: FC<PasskeyRowProps> = memo(
+  ({
+    passkey,
+    canRename,
+    canRemove,
+    isBusy,
+    isRenamePending,
+    isRemovePending,
+    onOpenRename,
+    onOpenRemove,
+    testID,
+  }) => {
+    const {id} = passkey;
+    const label = getPasskeyLabel(passkey);
+
+    const handleRename = useCallback((): void => {
+      onOpenRename(passkey);
+    }, [onOpenRename, passkey]);
+
+    const handleRemove = useCallback((): void => {
+      onOpenRemove(passkey);
+    }, [onOpenRemove, passkey]);
+
+    return (
+      <Box alignItems="center" direction="row" gap={3} testID={`${testID}-row-${id}`}>
+        <Box alignItems="center" width={24}>
+          <Icon iconName="key" size="lg" />
+        </Box>
+        <Box flex="grow" gap={1}>
+          <Box alignItems="center" direction="row" gap={2} wrap>
+            <Text bold testID={`${testID}-name-${id}`}>
+              {label}
+            </Text>
+            {Boolean(passkey.backedUp) && (
+              <Badge
+                iconName="cloud"
+                secondary
+                status="info"
+                testID={`${testID}-synced-${id}`}
+                value="Synced"
+              />
+            )}
+          </Box>
+          <Text color="secondaryLight" size="sm" testID={`${testID}-status-${id}`}>
+            {describePasskey(passkey)}
+          </Text>
+        </Box>
+        {canRename && (
+          <Button
+            accessibilityLabel={`Rename passkey ${label}`}
+            disabled={isBusy}
+            loading={isRenamePending}
+            onClick={handleRename}
+            size="sm"
+            testID={`${testID}-rename-${id}`}
+            text="Rename"
+            variant="muted"
+          />
+        )}
+        {canRemove && (
+          <Button
+            accessibilityLabel={`Remove passkey ${label}`}
+            disabled={isBusy}
+            loading={isRemovePending}
+            onClick={handleRemove}
+            size="sm"
+            testID={`${testID}-remove-${id}`}
+            text="Remove"
+            variant="outline"
+          />
+        )}
+      </Box>
+    );
+  }
+);
+PasskeyRow.displayName = "PasskeyRow";
 
 /**
  * Lists the user's passkeys with their created and last-used dates and a "Synced" badge for
@@ -199,66 +298,20 @@ export const PasskeysCard: FC<PasskeysCardProps> = ({
           </Text>
         )}
 
-        {passkeys.map((passkey) => {
-          const {id} = passkey;
-          const label = getPasskeyLabel(passkey);
-          return (
-            <Box
-              alignItems="center"
-              direction="row"
-              gap={3}
-              key={id}
-              testID={`${testID}-row-${id}`}
-            >
-              <Box alignItems="center" width={24}>
-                <Icon iconName="key" size="lg" />
-              </Box>
-              <Box flex="grow" gap={1}>
-                <Box alignItems="center" direction="row" gap={2} wrap>
-                  <Text bold testID={`${testID}-name-${id}`}>
-                    {label}
-                  </Text>
-                  {Boolean(passkey.backedUp) && (
-                    <Badge
-                      iconName="cloud"
-                      secondary
-                      status="info"
-                      testID={`${testID}-synced-${id}`}
-                      value="Synced"
-                    />
-                  )}
-                </Box>
-                <Text color="secondaryLight" size="sm" testID={`${testID}-status-${id}`}>
-                  {describePasskey(passkey)}
-                </Text>
-              </Box>
-              {Boolean(onRename) && (
-                <Button
-                  accessibilityLabel={`Rename passkey ${label}`}
-                  disabled={isBusy}
-                  loading={pendingKey === `rename:${id}`}
-                  onClick={() => handleOpenRename(passkey)}
-                  size="sm"
-                  testID={`${testID}-rename-${id}`}
-                  text="Rename"
-                  variant="muted"
-                />
-              )}
-              {Boolean(onRemove) && (
-                <Button
-                  accessibilityLabel={`Remove passkey ${label}`}
-                  disabled={isBusy}
-                  loading={pendingKey === `remove:${id}`}
-                  onClick={() => handleOpenRemove(passkey)}
-                  size="sm"
-                  testID={`${testID}-remove-${id}`}
-                  text="Remove"
-                  variant="outline"
-                />
-              )}
-            </Box>
-          );
-        })}
+        {passkeys.map((passkey) => (
+          <PasskeyRow
+            canRemove={Boolean(onRemove)}
+            canRename={Boolean(onRename)}
+            isBusy={isBusy}
+            isRemovePending={pendingKey === `remove:${passkey.id}`}
+            isRenamePending={pendingKey === `rename:${passkey.id}`}
+            key={passkey.id}
+            onOpenRemove={handleOpenRemove}
+            onOpenRename={handleOpenRename}
+            passkey={passkey}
+            testID={testID}
+          />
+        ))}
 
         {!supported && (
           <Text color="secondaryLight" testID={`${testID}-unsupported`}>

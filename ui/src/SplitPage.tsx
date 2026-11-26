@@ -2,6 +2,7 @@ import {
   Children,
   type ComponentProps,
   type ElementRef,
+  memo,
   type ReactElement,
   type ReactNode,
   useCallback,
@@ -28,6 +29,7 @@ import {SegmentedControl} from "./SegmentedControl";
 import {Spinner} from "./Spinner";
 import {SplitPageLoading} from "./SplitPageLoading";
 import {useTheme} from "./Theme";
+import {useStableCallback} from "./useStableCallback";
 
 // flex: 1 (basis 0, shrink 1) sizes the content container to the pane. A height: "100%"
 // child then stays pane-bounded and can scroll internally. A taller child that does not
@@ -76,6 +78,97 @@ const renderDesktopChildColumn = ({
     </View>
   );
 };
+
+const DEFAULT_LIST_VIEW_WIDTH = 300;
+
+const listViewKeyExtractor = (item: SplitPageListItem): string => item.id;
+
+interface SplitPageListProps<TItem extends SplitPageListItem> {
+  data: TItem[];
+  extraData?: unknown;
+  /** The narrow layout fills the page; the desktop layout is a fixed-width column. */
+  isFullWidth: boolean;
+  listViewMaxWidth?: number;
+  listViewWidth?: number;
+  onItemSelect: (itemInfo: ListRenderItemInfo<TItem>) => Promise<void>;
+  renderListViewHeader?: () => ReactElement | null;
+  renderListViewItem: (itemInfo: ListRenderItemInfo<TItem>) => ReactElement | null;
+}
+
+const SplitPageListInner = <TItem extends SplitPageListItem>({
+  data,
+  extraData,
+  isFullWidth,
+  listViewMaxWidth,
+  listViewWidth,
+  onItemSelect,
+  renderListViewHeader,
+  renderListViewItem,
+}: SplitPageListProps<TItem>): ReactElement => {
+  const renderItem = useCallback(
+    (itemInfo: ListRenderItemInfo<TItem>): ReactElement => {
+      return (
+        <Box
+          accessibilityHint=""
+          accessibilityLabel="Select"
+          onClick={async () => {
+            await onItemSelect(itemInfo);
+          }}
+        >
+          {renderListViewItem(itemInfo)}
+        </Box>
+      );
+    },
+    [onItemSelect, renderListViewItem]
+  );
+
+  const style: ViewStyle = isFullWidth
+    ? {
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+        flexShrink: 0,
+        height: "100%",
+        maxWidth: "100%",
+        width: "100%",
+      }
+    : {
+        display: "flex",
+        flexDirection: "column",
+        flexGrow: 1,
+        flexShrink: 0,
+        maxWidth: listViewMaxWidth ?? listViewWidth ?? DEFAULT_LIST_VIEW_WIDTH,
+        width: listViewWidth ?? DEFAULT_LIST_VIEW_WIDTH,
+      };
+
+  return (
+    <View style={style}>
+      {renderListViewHeader?.()}
+      {isFullWidth ? (
+        <FlatList
+          data={data}
+          extraData={extraData}
+          keyExtractor={listViewKeyExtractor}
+          nestedScrollEnabled
+          renderItem={renderItem}
+        />
+      ) : (
+        <FlatList
+          data={data}
+          extraData={extraData}
+          keyExtractor={listViewKeyExtractor}
+          renderItem={renderItem}
+        />
+      )}
+    </View>
+  );
+};
+
+// Memoized so selecting an item, paging, or a layout measurement re-renders the detail side
+// without re-rendering every list row.
+const MemoizedSplitPageList = memo(SplitPageListInner);
+MemoizedSplitPageList.displayName = "SplitPageList";
+const SplitPageList = MemoizedSplitPageList as typeof SplitPageListInner;
 
 /**
  * A component for rendering a list on one side and a details view on the right for large screens,
@@ -135,13 +228,10 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
 
   const elementArray = Children.toArray(children).filter((c) => c !== null);
 
-  const onItemSelect = useCallback(
-    async (item: ListRenderItemInfo<TItem>): Promise<void> => {
-      setSelectedId(item.index);
-      await onSelectionChange(item);
-    },
-    [onSelectionChange]
-  );
+  const onItemSelect = useStableCallback(async (item: ListRenderItemInfo<TItem>): Promise<void> => {
+    setSelectedId(item.index);
+    await onSelectionChange(item);
+  });
 
   const onItemDeselect = useCallback(async () => {
     setSelectedId(undefined);
@@ -239,40 +329,18 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     );
   }
 
-  const renderItem = (itemInfo: ListRenderItemInfo<TItem>) => {
-    return (
-      <Box
-        accessibilityHint=""
-        accessibilityLabel="Select"
-        onClick={async () => {
-          await onItemSelect(itemInfo);
-        }}
-      >
-        {renderListViewItem(itemInfo)}
-      </Box>
-    );
-  };
-
   const renderList = () => {
     return (
-      <View
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
-          flexShrink: 0,
-          maxWidth: listViewMaxWidth ?? listViewWidth ?? 300,
-          width: listViewWidth ?? 300,
-        }}
-      >
-        {renderListViewHeader?.()}
-        <FlatList
-          data={listViewData}
-          extraData={listViewExtraData}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-        />
-      </View>
+      <SplitPageList
+        data={listViewData}
+        extraData={listViewExtraData}
+        isFullWidth={false}
+        listViewMaxWidth={listViewMaxWidth}
+        listViewWidth={listViewWidth}
+        onItemSelect={onItemSelect}
+        renderListViewHeader={renderListViewHeader}
+        renderListViewItem={renderListViewItem}
+      />
     );
   };
 
@@ -402,26 +470,14 @@ export const SplitPage = <TItem extends SplitPageListItem = SplitPageListItem>({
     }
 
     return (
-      <View
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          flexGrow: 1,
-          flexShrink: 0,
-          height: "100%",
-          maxWidth: "100%",
-          width: "100%",
-        }}
-      >
-        {renderListViewHeader?.()}
-        <FlatList
-          data={listViewData}
-          extraData={listViewExtraData}
-          keyExtractor={(item) => item.id}
-          nestedScrollEnabled
-          renderItem={renderItem}
-        />
-      </View>
+      <SplitPageList
+        data={listViewData}
+        extraData={listViewExtraData}
+        isFullWidth
+        onItemSelect={onItemSelect}
+        renderListViewHeader={renderListViewHeader}
+        renderListViewItem={renderListViewItem}
+      />
     );
   };
 

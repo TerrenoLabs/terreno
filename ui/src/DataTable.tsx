@@ -64,6 +64,7 @@ import {
   resolveDataTableTestIDsFromProps,
   toTestProps,
 } from "./testing/resolveTestId";
+import {useStableCallback} from "./useStableCallback";
 
 // TODO: Add permanent horizontal scroll bar so users with only a mouse can scroll left/right
 // easily.
@@ -487,7 +488,7 @@ interface DataTableHeaderProps {
   onFilterValuesChange?: (next: Record<string, unknown>) => void;
 }
 
-const DataTableHeader: FC<DataTableHeaderProps> = ({
+const DataTableHeaderComponent: FC<DataTableHeaderProps> = ({
   columns,
   filterValues,
   hasMoreContent,
@@ -581,6 +582,11 @@ const DataTableHeader: FC<DataTableHeaderProps> = ({
     </View>
   );
 };
+
+DataTableHeaderComponent.displayName = "DataTableHeader";
+
+// Memoized so typing in the search box or paging does not re-render every header cell.
+const DataTableHeader = memo(DataTableHeaderComponent);
 
 interface DataTableContentProps {
   data: DataTableCellData[][];
@@ -1094,7 +1100,7 @@ const DataTableComponent: FC<DataTableProps> = ({
       }),
     [columns, customColumnComponentMap, data, defaultTextSize, onFilterValuesChange]
   );
-  const columnWidths = useMemo(
+  const fittedColumnWidths = useMemo(
     () =>
       fitDataTableColumnWidths({
         availableWidth: availableWidth > 0 ? availableWidth - moreColumnWidth : 0,
@@ -1103,6 +1109,10 @@ const DataTableComponent: FC<DataTableProps> = ({
       }),
     [availableWidth, columns, moreColumnWidth, naturalWidths]
   );
+  // New data re-measures the columns but usually lands on the same widths. Keying the array on
+  // its values keeps the sized columns and pinned offsets stable, so only changed rows re-render.
+  const columnWidthsKey = JSON.stringify(fittedColumnWidths);
+  const columnWidths = useMemo((): number[] => JSON.parse(columnWidthsKey), [columnWidthsKey]);
   const sizedColumns = useMemo(
     (): SizedDataTableColumn[] =>
       columns.map((column, index) =>
@@ -1141,30 +1151,28 @@ const DataTableComponent: FC<DataTableProps> = ({
     []
   );
 
-  const handleSort = useCallback(
-    (columnIndex: number) => {
-      if (!setSortColumn || !columns[columnIndex].sortable) {
-        return;
-      }
+  // Stable identity so the memoized header ignores an inline `setSortColumn` from the caller.
+  const handleSort = useStableCallback((columnIndex: number): void => {
+    if (!setSortColumn || !columns[columnIndex].sortable) {
+      return;
+    }
 
-      if (sortColumn?.column === columnIndex) {
-        if (sortColumn.direction === "asc") {
-          setSortColumn({
-            column: columnIndex,
-            direction: "desc",
-          });
-        } else {
-          setSortColumn(undefined);
-        }
-      } else {
+    if (sortColumn?.column === columnIndex) {
+      if (sortColumn.direction === "asc") {
         setSortColumn({
           column: columnIndex,
-          direction: "asc",
+          direction: "desc",
         });
+      } else {
+        setSortColumn(undefined);
       }
-    },
-    [sortColumn, setSortColumn, columns]
-  );
+    } else {
+      setSortColumn({
+        column: columnIndex,
+        direction: "asc",
+      });
+    }
+  });
 
   return (
     <View

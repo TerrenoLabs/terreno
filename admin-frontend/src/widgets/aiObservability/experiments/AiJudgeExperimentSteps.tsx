@@ -11,7 +11,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
-import React from "react";
+import React, {memo} from "react";
 import {
   type DatasetJudgment,
   type DatasetRecord,
@@ -103,11 +103,12 @@ export const judgesForQuestionSet = (
     .sort((left, right) => right.shared.length - left.shared.length);
 };
 
+// Memoized: picking a dataset re-renders only the two rows whose selection changed.
 const DatasetChoiceBody: React.FC<{
   dataset: DatasetRecord;
   isSelected: boolean;
   onOpenDataset: (id: string) => void;
-}> = ({dataset, isSelected, onOpenDataset}) => {
+}> = memo(({dataset, isSelected, onOpenDataset}) => {
   const judgments = dataset.judgments ?? [];
   const isJudged = judgedQuestionSets(dataset).length > 0;
   return (
@@ -158,9 +159,10 @@ const DatasetChoiceBody: React.FC<{
       )}
     </Box>
   );
-};
+});
+DatasetChoiceBody.displayName = "DatasetChoiceBody";
 
-export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
+const AiJudgeExperimentStepsComponent: React.FC<AiJudgeExperimentStepsProps> = ({
   datasetId,
   datasets,
   estimate,
@@ -466,3 +468,8 @@ export const AiJudgeExperimentSteps: React.FC<AiJudgeExperimentStepsProps> = ({
     </Card>
   );
 };
+
+// Memoized: the experiment name field sits above this wizard, and typing in it must not
+// re-render every step. The parent passes each prop with a stable identity.
+export const AiJudgeExperimentSteps = memo(AiJudgeExperimentStepsComponent);
+AiJudgeExperimentSteps.displayName = "AiJudgeExperimentSteps";

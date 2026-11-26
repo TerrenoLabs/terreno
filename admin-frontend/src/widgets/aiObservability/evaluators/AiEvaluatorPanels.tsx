@@ -12,7 +12,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
-import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
+import React, {memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   ObservabilityTable,
   type ObservabilityTableColumn,
@@ -631,6 +631,89 @@ const DimensionScaleFields: React.FC<DimensionScaleFieldsProps> = ({
   );
 };
 
+interface DimensionRowProps {
+  canRemove: boolean;
+  dimension: EvaluatorDimension;
+  index: number;
+  onDimensionChange: (index: number, dimension: EvaluatorDimension) => void;
+  onRemoveDimension: (index: number) => void;
+  showQuestion: boolean;
+}
+
+/**
+ * One score's card. Memoized so typing in the name, purpose, or another score does not re-render
+ * every score card in the form.
+ */
+const DimensionRow: React.FC<DimensionRowProps> = memo(
+  ({canRemove, dimension, index, onDimensionChange, onRemoveDimension, showQuestion}) => {
+    return (
+      <Card gap={3} padding={4} testID={`ai-evaluator-dimension-row-${index}`}>
+        <Box alignItems="center" direction="row" justifyContent="between">
+          <Text bold>{`Score ${index + 1}`}</Text>
+          <Button
+            disabled={!canRemove}
+            iconName="trash"
+            onClick={() => {
+              onRemoveDimension(index);
+            }}
+            size="sm"
+            testID={`ai-evaluator-dimension-${index}-remove`}
+            text="Remove"
+            variant="ghost"
+          />
+        </Box>
+        <TextField
+          helperText={EVALUATOR_DIMENSION_KEY_HELP}
+          onChange={(value) => {
+            onDimensionChange(index, {...dimension, key: value});
+          }}
+          testID={`ai-evaluator-dimension-${index}-key`}
+          title="Score name"
+          value={dimension.key}
+        />
+        {showQuestion ? (
+          <TextField
+            helperText={EVALUATOR_DIMENSION_QUESTION_HELP}
+            onChange={(value) => {
+              onDimensionChange(index, {...dimension, question: value || undefined});
+            }}
+            testID={`ai-evaluator-dimension-${index}-question`}
+            title="Reviewer question (optional)"
+            value={dimension.question ?? ""}
+          />
+        ) : null}
+        <Box gap={2}>
+          <Text bold size="sm">
+            Answer type
+          </Text>
+          <Box alignItems="start" testID={`ai-evaluator-dimension-${index}-data-type`}>
+            <SegmentedControl
+              items={DIMENSION_DATA_TYPES.map((dataType) => DIMENSION_DATA_TYPE_LABELS[dataType])}
+              onChange={(dataTypeIndex) => {
+                const dataType = DIMENSION_DATA_TYPES[dataTypeIndex];
+                if (dataType) {
+                  onDimensionChange(index, dimensionForDataType(dimension, dataType));
+                }
+              }}
+              selectedIndex={DIMENSION_DATA_TYPES.indexOf(dimension.dataType)}
+              size="sm"
+            />
+          </Box>
+          <Text color="secondaryLight" size="sm">
+            {DIMENSION_DATA_TYPE_HELP[dimension.dataType]}
+          </Text>
+        </Box>
+        <DimensionScaleFields
+          dimension={dimension}
+          index={index}
+          onDimensionChange={onDimensionChange}
+        />
+      </Card>
+    );
+  }
+);
+DimensionRow.displayName = "DimensionRow";
+
 export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
   assertionConstraint,
   assertionPath,
@@ -772,75 +855,15 @@ export const AiEvaluatorNewView: React.FC<AiEvaluatorNewViewProps> = ({
         </Text>
         {dimensions.map((dimension, index) => {
           return (
-            <Card
-              gap={3}
+            <DimensionRow
+              canRemove={dimensions.length > 1}
+              dimension={dimension}
+              index={index}
               key={`dimension-${index}`}
-              padding={4}
-              testID={`ai-evaluator-dimension-row-${index}`}
-            >
-              <Box alignItems="center" direction="row" justifyContent="between">
-                <Text bold>{`Score ${index + 1}`}</Text>
-                <Button
-                  disabled={dimensions.length <= 1}
-                  iconName="trash"
-                  onClick={() => {
-                    onRemoveDimension(index);
-                  }}
-                  size="sm"
-                  testID={`ai-evaluator-dimension-${index}-remove`}
-                  text="Remove"
-                  variant="ghost"
-                />
-              </Box>
-              <TextField
-                helperText={EVALUATOR_DIMENSION_KEY_HELP}
-                onChange={(value) => {
-                  onDimensionChange(index, {...dimension, key: value});
-                }}
-                testID={`ai-evaluator-dimension-${index}-key`}
-                title="Score name"
-                value={dimension.key}
-              />
-              {type === "human" ? (
-                <TextField
-                  helperText={EVALUATOR_DIMENSION_QUESTION_HELP}
-                  onChange={(value) => {
-                    onDimensionChange(index, {...dimension, question: value || undefined});
-                  }}
-                  testID={`ai-evaluator-dimension-${index}-question`}
-                  title="Reviewer question (optional)"
-                  value={dimension.question ?? ""}
-                />
-              ) : null}
-              <Box gap={2}>
-                <Text bold size="sm">
-                  Answer type
-                </Text>
-                <Box alignItems="start" testID={`ai-evaluator-dimension-${index}-data-type`}>
-                  <SegmentedControl
-                    items={DIMENSION_DATA_TYPES.map(
-                      (dataType) => DIMENSION_DATA_TYPE_LABELS[dataType]
-                    )}
-                    onChange={(dataTypeIndex) => {
-                      const dataType = DIMENSION_DATA_TYPES[dataTypeIndex];
-                      if (dataType) {
-                        onDimensionChange(index, dimensionForDataType(dimension, dataType));
-                      }
-                    }}
-                    selectedIndex={DIMENSION_DATA_TYPES.indexOf(dimension.dataType)}
-                    size="sm"
-                  />
-                </Box>
-                <Text color="secondaryLight" size="sm">
-                  {DIMENSION_DATA_TYPE_HELP[dimension.dataType]}
-                </Text>
-              </Box>
-              <DimensionScaleFields
-                dimension={dimension}
-                index={index}
-                onDimensionChange={onDimensionChange}
-              />
-            </Card>
+              onDimensionChange={onDimensionChange}
+              onRemoveDimension={onRemoveDimension}
+              showQuestion={type === "human"}
+            />
           );
         })}
         <Box alignItems="start">

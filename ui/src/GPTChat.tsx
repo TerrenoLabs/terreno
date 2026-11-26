@@ -7,7 +7,7 @@ import {
   parseBlocksPartial,
 } from "@terreno/blocks";
 import {DateTime} from "luxon";
-import React, {useCallback, useEffect, useRef, useState} from "react";
+import React, {memo, useCallback, useEffect, useRef, useState} from "react";
 import {
   AccessibilityInfo,
   findNodeHandle,
@@ -1158,26 +1158,105 @@ const AskTranscriptItem = ({
   );
 };
 
-const MessageList = ({
-  allowHtml,
-  appendedByMessage,
-  askErrors,
-  blockOverrides,
-  currentMessages,
-  handleCopyMessage,
-  hostActions,
-  imageHosts,
-  isStreaming,
-  onAskSubmit,
-  onBlockEvent,
-  onRateComment,
-  onRateFeedback,
-  pendingElements,
-  resolveAskFiles,
-  resolveDataset,
-  resolveImage,
-  uiBlocks,
-}: {
+interface ChatMessageRowProps {
+  allowHtml?: boolean;
+  handleCopyMessage: (message: GPTChatMessage, index: number) => void;
+  hostActions?: readonly string[];
+  imageHosts?: readonly string[];
+  /** True for the assistant reply still streaming in a `uiBlocks` chat. */
+  isLive: boolean;
+  message: GPTChatMessage;
+  messageId: string;
+  onBlockEvent: (event: BlockChatEvent) => void;
+  onRateComment?: (promptIndex: number, comment: string) => void | Promise<void>;
+  onRateFeedback?: (promptIndex: number, rating: "up" | "down" | null) => void;
+  overrides?: Record<string, Block>;
+  pendingElementIds?: readonly string[];
+  resolveDataset?: BlocksViewProps["resolveDataset"];
+  resolveImage?: BlocksViewProps["resolveImage"];
+  /** Index in `currentMessages`, or -1 for a message appended by a block callback. */
+  sourceIndex: number;
+  uiBlocks: boolean;
+}
+
+// Memoized so a streaming reply or a composer keystroke re-renders only the message that changed.
+const ChatMessageRow = memo(
+  ({
+    allowHtml,
+    handleCopyMessage,
+    hostActions,
+    imageHosts,
+    isLive,
+    message,
+    messageId,
+    onBlockEvent,
+    onRateComment,
+    onRateFeedback,
+    overrides,
+    pendingElementIds,
+    resolveDataset,
+    resolveImage,
+    sourceIndex,
+    uiBlocks,
+  }: ChatMessageRowProps): React.ReactElement | null => {
+    const isUser = message.role === "user";
+    const hasBody =
+      Boolean(message.content.trim()) ||
+      Boolean(message.contentParts?.length) ||
+      Boolean(message.blockNote) ||
+      (uiBlocks && isLive && message.role === "assistant");
+    if (!hasBody) {
+      return null;
+    }
+    const body = (
+      <>
+        <ContentPartsPreview hasContent={Boolean(message.content)} parts={message.contentParts} />
+        {message.content || (uiBlocks && isLive && message.role === "assistant") ? (
+          <MessageText
+            allowHtml={allowHtml}
+            content={message.content}
+            hostActions={hostActions}
+            imageHosts={imageHosts}
+            isPartial={isLive}
+            messageId={messageId}
+            onBlockEvent={onBlockEvent}
+            overrides={overrides}
+            pendingElementIds={pendingElementIds}
+            resolveDataset={resolveDataset}
+            resolveImage={resolveImage}
+            role={message.role}
+            uiBlocks={uiBlocks}
+          />
+        ) : null}
+        {message.blockNote ? (
+          <Text color="secondaryLight" size="sm" testID={`gpt-block-note-${messageId}`}>
+            {message.blockNote}
+          </Text>
+        ) : null}
+        <AssistantActions
+          handleCopyMessage={handleCopyMessage}
+          index={sourceIndex}
+          message={message}
+          onRateComment={onRateComment}
+          onRateFeedback={onRateFeedback}
+        />
+      </>
+    );
+    if (isUser) {
+      return (
+        <Box alignItems="end" width="100%">
+          <Box color="neutralLight" maxWidth="80%" paddingX={3} paddingY={2} rounding="xl">
+            {body}
+          </Box>
+        </Box>
+      );
+    }
+    return <Box width="100%">{body}</Box>;
+  }
+);
+ChatMessageRow.displayName = "ChatMessageRow";
+
+interface MessageListProps {
   allowHtml?: boolean;
   appendedByMessage: Record<string, GPTChatMessage[]>;
   askErrors?: Record<string, AskValidationError[]>;
@@ -1196,171 +1275,155 @@ const MessageList = ({
   resolveDataset?: BlocksViewProps["resolveDataset"];
   resolveImage?: BlocksViewProps["resolveImage"];
   uiBlocks: boolean;
-}): React.ReactElement => {
-  const askToolCallIds = new Set<string>();
-  const toolResults = new Map<string, unknown>();
-  const toolCallIds = new Set<string>();
-  for (const message of currentMessages) {
-    if (message.role === "tool-call" && message.ask) {
-      askToolCallIds.add(message.ask.toolCallId);
-    }
-    if (message.role === "tool-call" && message.toolCall && !message.ask) {
-      toolCallIds.add(message.toolCall.toolCallId);
-    }
-    if (message.role === "tool-result" && message.toolResult) {
-      toolResults.set(message.toolResult.toolCallId, message.toolResult.result);
-    }
-  }
-  const pairedToolResults = new Map<string, ToolResultInfo>();
-  const pairedResultIndexes = new Set<number>();
-  currentMessages.forEach((message, index) => {
-    const toolResult = message.toolResult;
-    if (message.role !== "tool-result" || !toolResult) {
-      return;
-    }
-    if (!toolCallIds.has(toolResult.toolCallId) || askToolCallIds.has(toolResult.toolCallId)) {
-      return;
-    }
-    if (pairedToolResults.has(toolResult.toolCallId)) {
-      return;
-    }
-    pairedToolResults.set(toolResult.toolCallId, toolResult);
-    pairedResultIndexes.add(index);
-  });
+}
 
-  // The live reply stays partial after an ask is appended, so a draft document does not
-  // validate as a finished message while the turn is still streaming.
-  const liveAssistantIndex = ((): number => {
-    if (!uiBlocks || !isStreaming) {
-      return -1;
-    }
-    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
-      const role = currentMessages[index]?.role;
-      if (role === "assistant") {
-        return index;
+// Memoized so composer keystrokes and sidebar state do not re-render the transcript.
+const MessageList = memo(
+  ({
+    allowHtml,
+    appendedByMessage,
+    askErrors,
+    blockOverrides,
+    currentMessages,
+    handleCopyMessage,
+    hostActions,
+    imageHosts,
+    isStreaming,
+    onAskSubmit,
+    onBlockEvent,
+    onRateComment,
+    onRateFeedback,
+    pendingElements,
+    resolveAskFiles,
+    resolveDataset,
+    resolveImage,
+    uiBlocks,
+  }: MessageListProps): React.ReactElement => {
+    const askToolCallIds = new Set<string>();
+    const toolResults = new Map<string, unknown>();
+    const toolCallIds = new Set<string>();
+    for (const message of currentMessages) {
+      if (message.role === "tool-call" && message.ask) {
+        askToolCallIds.add(message.ask.toolCallId);
       }
-      if (role === "user") {
+      if (message.role === "tool-call" && message.toolCall && !message.ask) {
+        toolCallIds.add(message.toolCall.toolCallId);
+      }
+      if (message.role === "tool-result" && message.toolResult) {
+        toolResults.set(message.toolResult.toolCallId, message.toolResult.result);
+      }
+    }
+    const pairedToolResults = new Map<string, ToolResultInfo>();
+    const pairedResultIndexes = new Set<number>();
+    currentMessages.forEach((message, index) => {
+      const toolResult = message.toolResult;
+      if (message.role !== "tool-result" || !toolResult) {
+        return;
+      }
+      if (!toolCallIds.has(toolResult.toolCallId) || askToolCallIds.has(toolResult.toolCallId)) {
+        return;
+      }
+      if (pairedToolResults.has(toolResult.toolCallId)) {
+        return;
+      }
+      pairedToolResults.set(toolResult.toolCallId, toolResult);
+      pairedResultIndexes.add(index);
+    });
+
+    // The live reply stays partial after an ask is appended, so a draft document does not
+    // validate as a finished message while the turn is still streaming.
+    const liveAssistantIndex = ((): number => {
+      if (!uiBlocks || !isStreaming) {
         return -1;
       }
-    }
-    return -1;
-  })();
-  const rows = currentMessages.flatMap((message, sourceIndex) => {
-    const messageKey = message.id ?? `msg-${sourceIndex}`;
-    const extras = appendedByMessage[messageKey] ?? [];
-    return [
-      {message, messageKey, sourceIndex},
-      ...extras.map((extra) => ({
-        message: extra,
-        messageKey: extra.id ?? `${messageKey}-extra`,
-        sourceIndex: -1 as const,
-      })),
-    ];
-  });
+      for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+        const role = currentMessages[index]?.role;
+        if (role === "assistant") {
+          return index;
+        }
+        if (role === "user") {
+          return -1;
+        }
+      }
+      return -1;
+    })();
+    const rows = currentMessages.flatMap((message, sourceIndex) => {
+      const messageKey = message.id ?? `msg-${sourceIndex}`;
+      const extras = appendedByMessage[messageKey] ?? [];
+      return [
+        {message, messageKey, sourceIndex},
+        ...extras.map((extra) => ({
+          message: extra,
+          messageKey: extra.id ?? `${messageKey}-extra`,
+          sourceIndex: -1 as const,
+        })),
+      ];
+    });
 
-  return (
-    <>
-      {rows.map(({message, messageKey, sourceIndex}, index) => {
-        if (message.role === "tool-call" && message.ask) {
-          return (
-            <AskTranscriptItem
-              ask={withStoredResponse(message.ask, toolResults)}
-              errors={askErrors?.[message.ask.toolCallId]}
-              key={`ask-${message.ask.toolCallId}`}
-              onAskSubmit={onAskSubmit}
-              resolveAskFiles={resolveAskFiles}
-            />
-          );
-        }
-        if (
-          message.role === "tool-result" &&
-          message.toolResult &&
-          askToolCallIds.has(message.toolResult.toolCallId)
-        ) {
-          return null;
-        }
-        if (message.role === "tool-call" && message.toolCall) {
-          return (
-            <ToolTurnRow
-              key={`msg-${index}`}
-              toolCall={message.toolCall}
-              toolResult={pairedToolResults.get(message.toolCall.toolCallId)}
-            />
-          );
-        }
-        if (message.role === "tool-result" && message.toolResult) {
-          if (pairedResultIndexes.has(sourceIndex)) {
+    return (
+      <>
+        {rows.map(({message, messageKey, sourceIndex}, index) => {
+          if (message.role === "tool-call" && message.ask) {
+            return (
+              <AskTranscriptItem
+                ask={withStoredResponse(message.ask, toolResults)}
+                errors={askErrors?.[message.ask.toolCallId]}
+                key={`ask-${message.ask.toolCallId}`}
+                onAskSubmit={onAskSubmit}
+                resolveAskFiles={resolveAskFiles}
+              />
+            );
+          }
+          if (
+            message.role === "tool-result" &&
+            message.toolResult &&
+            askToolCallIds.has(message.toolResult.toolCallId)
+          ) {
             return null;
           }
-          return <ToolTurnRow key={`msg-${index}`} toolResult={message.toolResult} />;
-        }
-
-        const messageId = messageKey;
-        const isUser = message.role === "user";
-        const isLive = liveAssistantIndex >= 0 && sourceIndex === liveAssistantIndex;
-        const hasBody =
-          Boolean(message.content.trim()) ||
-          Boolean(message.contentParts?.length) ||
-          Boolean(message.blockNote) ||
-          (uiBlocks && isLive && message.role === "assistant");
-        if (!hasBody) {
-          return null;
-        }
-        const body = (
-          <>
-            <ContentPartsPreview
-              hasContent={Boolean(message.content)}
-              parts={message.contentParts}
-            />
-            {message.content || (uiBlocks && isLive && message.role === "assistant") ? (
-              <MessageText
-                allowHtml={allowHtml}
-                content={message.content}
-                hostActions={hostActions}
-                imageHosts={imageHosts}
-                isPartial={isLive}
-                messageId={messageId}
-                onBlockEvent={onBlockEvent}
-                overrides={blockOverrides[messageId]}
-                pendingElementIds={pendingElements[messageId]}
-                resolveDataset={resolveDataset}
-                resolveImage={resolveImage}
-                role={message.role}
-                uiBlocks={uiBlocks}
+          if (message.role === "tool-call" && message.toolCall) {
+            return (
+              <ToolTurnRow
+                key={`msg-${index}`}
+                toolCall={message.toolCall}
+                toolResult={pairedToolResults.get(message.toolCall.toolCallId)}
               />
-            ) : null}
-            {message.blockNote ? (
-              <Text color="secondaryLight" size="sm" testID={`gpt-block-note-${messageId}`}>
-                {message.blockNote}
-              </Text>
-            ) : null}
-            <AssistantActions
+            );
+          }
+          if (message.role === "tool-result" && message.toolResult) {
+            if (pairedResultIndexes.has(sourceIndex)) {
+              return null;
+            }
+            return <ToolTurnRow key={`msg-${index}`} toolResult={message.toolResult} />;
+          }
+
+          return (
+            <ChatMessageRow
+              allowHtml={allowHtml}
               handleCopyMessage={handleCopyMessage}
-              index={sourceIndex}
+              hostActions={hostActions}
+              imageHosts={imageHosts}
+              isLive={liveAssistantIndex >= 0 && sourceIndex === liveAssistantIndex}
+              key={messageKey}
               message={message}
+              messageId={messageKey}
+              onBlockEvent={onBlockEvent}
               onRateComment={sourceIndex >= 0 ? onRateComment : undefined}
               onRateFeedback={sourceIndex >= 0 ? onRateFeedback : undefined}
+              overrides={blockOverrides[messageKey]}
+              pendingElementIds={pendingElements[messageKey]}
+              resolveDataset={resolveDataset}
+              resolveImage={resolveImage}
+              sourceIndex={sourceIndex}
+              uiBlocks={uiBlocks}
             />
-          </>
-        );
-        if (isUser) {
-          return (
-            <Box alignItems="end" key={messageKey} width="100%">
-              <Box color="neutralLight" maxWidth="80%" paddingX={3} paddingY={2} rounding="xl">
-                {body}
-              </Box>
-            </Box>
           );
-        }
-        return (
-          <Box key={messageKey} width="100%">
-            {body}
-          </Box>
-        );
-      })}
-    </>
-  );
-};
+        })}
+      </>
+    );
+  }
+);
+MessageList.displayName = "MessageList";
 
 const StreamingIndicator = ({isStreaming}: {isStreaming: boolean}): React.ReactElement | null => {
   if (!isStreaming) {
@@ -1576,6 +1639,128 @@ const ApiKeyModal = ({
     </Modal>
   );
 };
+
+interface HistorySidebarProps {
+  availableModels?: Array<{label: string; value: string}>;
+  currentHistoryId?: string;
+  editingHistoryId: string | null;
+  editingTitle: string;
+  handleFinishRename: () => void;
+  handleOpenApiKeyModal: () => void;
+  handleStartRename: (id: string, title: string) => void;
+  histories: GPTChatHistory[];
+  mcpServers?: MCPServerStatus[];
+  onCreateHistory: () => void;
+  onDeleteHistory: (id: string) => void;
+  onGeminiApiKeyChange?: (key: string) => void;
+  onMemoryEdit?: (memory: string) => void;
+  onModelChange?: (modelId: string) => void;
+  onSelectHistory: (id: string) => void;
+  onUpdateTitle?: (id: string, title: string) => void;
+  selectedModel?: string;
+  setEditingTitle: (title: string) => void;
+  systemMemory?: string;
+}
+
+// Memoized so composer keystrokes and transcript updates do not re-render every history row.
+const HistorySidebar = memo(
+  ({
+    availableModels,
+    currentHistoryId,
+    editingHistoryId,
+    editingTitle,
+    handleFinishRename,
+    handleOpenApiKeyModal,
+    handleStartRename,
+    histories,
+    mcpServers,
+    onCreateHistory,
+    onDeleteHistory,
+    onGeminiApiKeyChange,
+    onMemoryEdit,
+    onModelChange,
+    onSelectHistory,
+    onUpdateTitle,
+    selectedModel,
+    setEditingTitle,
+    systemMemory,
+  }: HistorySidebarProps): React.ReactElement => {
+    return (
+      <Box
+        border="default"
+        color="base"
+        minWidth={250}
+        overflow="scrollY"
+        padding={3}
+        testID="gpt-history-sidebar"
+        width="30%"
+      >
+        <SidebarModelSelector
+          availableModels={availableModels}
+          onModelChange={onModelChange}
+          selectedModel={selectedModel}
+        />
+
+        <Box alignItems="center" direction="row" justifyContent="between" marginBottom={3}>
+          <Heading size="sm">Chats</Heading>
+          <Box direction="row" gap={1}>
+            <SidebarToolbarButtons
+              handleOpenApiKeyModal={handleOpenApiKeyModal}
+              mcpServers={mcpServers}
+              onGeminiApiKeyChange={onGeminiApiKeyChange}
+              onMemoryEdit={onMemoryEdit}
+              systemMemory={systemMemory}
+            />
+            <IconButton
+              accessibilityLabel="New chat"
+              iconName="plus"
+              onClick={onCreateHistory}
+              testID="gpt-new-chat-button"
+            />
+          </Box>
+        </Box>
+
+        {histories.map((history) => (
+          <Box
+            accessibilityHint="Opens this chat history"
+            accessibilityLabel={`Select chat: ${history.title ?? "New Chat"}`}
+            alignItems="center"
+            color={history.id === currentHistoryId ? "primary" : undefined}
+            direction="row"
+            justifyContent="between"
+            key={history.id}
+            marginBottom={1}
+            onClick={() => onSelectHistory(history.id)}
+            padding={2}
+            rounding="md"
+            testID={`gpt-history-${history.id}`}
+          >
+            <HistoryItemTitle
+              currentHistoryId={currentHistoryId}
+              editingHistoryId={editingHistoryId}
+              editingTitle={editingTitle}
+              handleFinishRename={handleFinishRename}
+              history={history}
+              setEditingTitle={setEditingTitle}
+            />
+            <Box marginLeft={1}>
+              <HistoryItemActions
+                editingHistoryId={editingHistoryId}
+                handleFinishRename={handleFinishRename}
+                handleStartRename={handleStartRename}
+                history={history}
+                isSelected={history.id === currentHistoryId}
+                onDeleteHistory={onDeleteHistory}
+                onUpdateTitle={onUpdateTitle}
+              />
+            </Box>
+          </Box>
+        ))}
+      </Box>
+    );
+  }
+);
+HistorySidebar.displayName = "HistorySidebar";
 
 // ============================================================
 // Main Component
@@ -1899,77 +2084,27 @@ export const GPTChat = ({
     <Box direction="row" flex="grow" testID={testID}>
       {/* Sidebar */}
       {showHistory && (
-        <Box
-          border="default"
-          color="base"
-          minWidth={250}
-          overflow="scrollY"
-          padding={3}
-          testID="gpt-history-sidebar"
-          width="30%"
-        >
-          <SidebarModelSelector
-            availableModels={availableModels}
-            onModelChange={onModelChange}
-            selectedModel={selectedModel}
-          />
-
-          <Box alignItems="center" direction="row" justifyContent="between" marginBottom={3}>
-            <Heading size="sm">Chats</Heading>
-            <Box direction="row" gap={1}>
-              <SidebarToolbarButtons
-                handleOpenApiKeyModal={handleOpenApiKeyModal}
-                mcpServers={mcpServers}
-                onGeminiApiKeyChange={onGeminiApiKeyChange}
-                onMemoryEdit={onMemoryEdit}
-                systemMemory={systemMemory}
-              />
-              <IconButton
-                accessibilityLabel="New chat"
-                iconName="plus"
-                onClick={onCreateHistory}
-                testID="gpt-new-chat-button"
-              />
-            </Box>
-          </Box>
-
-          {histories.map((history) => (
-            <Box
-              accessibilityHint="Opens this chat history"
-              accessibilityLabel={`Select chat: ${history.title ?? "New Chat"}`}
-              alignItems="center"
-              color={history.id === currentHistoryId ? "primary" : undefined}
-              direction="row"
-              justifyContent="between"
-              key={history.id}
-              marginBottom={1}
-              onClick={() => onSelectHistory(history.id)}
-              padding={2}
-              rounding="md"
-              testID={`gpt-history-${history.id}`}
-            >
-              <HistoryItemTitle
-                currentHistoryId={currentHistoryId}
-                editingHistoryId={editingHistoryId}
-                editingTitle={editingTitle}
-                handleFinishRename={handleFinishRename}
-                history={history}
-                setEditingTitle={setEditingTitle}
-              />
-              <Box marginLeft={1}>
-                <HistoryItemActions
-                  editingHistoryId={editingHistoryId}
-                  handleFinishRename={handleFinishRename}
-                  handleStartRename={handleStartRename}
-                  history={history}
-                  isSelected={history.id === currentHistoryId}
-                  onDeleteHistory={onDeleteHistory}
-                  onUpdateTitle={onUpdateTitle}
-                />
-              </Box>
-            </Box>
-          ))}
-        </Box>
+        <HistorySidebar
+          availableModels={availableModels}
+          currentHistoryId={currentHistoryId}
+          editingHistoryId={editingHistoryId}
+          editingTitle={editingTitle}
+          handleFinishRename={handleFinishRename}
+          handleOpenApiKeyModal={handleOpenApiKeyModal}
+          handleStartRename={handleStartRename}
+          histories={histories}
+          mcpServers={mcpServers}
+          onCreateHistory={onCreateHistory}
+          onDeleteHistory={onDeleteHistory}
+          onGeminiApiKeyChange={onGeminiApiKeyChange}
+          onMemoryEdit={onMemoryEdit}
+          onModelChange={onModelChange}
+          onSelectHistory={onSelectHistory}
+          onUpdateTitle={onUpdateTitle}
+          selectedModel={selectedModel}
+          setEditingTitle={setEditingTitle}
+          systemMemory={systemMemory}
+        />
       )}
 
       {/* Chat Panel */}

@@ -13,7 +13,7 @@ import {
   useToast,
 } from "@terreno/ui";
 import startCase from "lodash/startCase";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 import {useConfigurationApi} from "./useConfigurationApi";
 
 /**
@@ -54,13 +54,19 @@ interface ConfigurationScreenProps {
 /**
  * Renders a single configuration field based on its metadata.
  */
-const ConfigField: React.FC<{
+const ConfigFieldComponent: React.FC<{
   fieldKey: string;
   fieldMeta: ConfigFieldMeta;
   value: ConfigValue;
-  onChange: (value: ConfigValue) => void;
+  onFieldChange: (sectionName: string, fieldKey: string, value: ConfigValue) => void;
   sectionName: string;
-}> = ({fieldKey, fieldMeta, value, onChange, sectionName}) => {
+}> = ({fieldKey, fieldMeta, value, onFieldChange, sectionName}) => {
+  const onChange = useCallback(
+    (nextValue: ConfigValue): void => {
+      onFieldChange(sectionName, fieldKey, nextValue);
+    },
+    [fieldKey, onFieldChange, sectionName]
+  );
   const label = startCase(fieldKey);
   const helperText = fieldMeta.description;
   const testID = `config-${sectionName}-${fieldKey}`;
@@ -132,21 +138,23 @@ const ConfigField: React.FC<{
   );
 };
 
+// Memoized so typing in one field re-renders that field, not every field of every section.
+const ConfigField = memo(ConfigFieldComponent);
+ConfigField.displayName = "ConfigField";
+
+const NO_SECTION_VALUES: Record<string, ConfigValue> = {};
+
 const SectionDescription: React.FC<{description: string}> = ({description}) => (
   <Text color="secondaryDark" size="sm">
     {description}
   </Text>
 );
 
-const SectionCard: React.FC<{
+const SectionCardComponent: React.FC<{
   section: ConfigSectionMeta;
-  formState: Record<string, ConfigValue>;
+  sectionValues: Record<string, ConfigValue>;
   onFieldChange: (sectionName: string, fieldKey: string, value: ConfigValue) => void;
-}> = ({section, formState, onFieldChange}) => {
-  const sectionValues =
-    section.name === "__root__"
-      ? formState
-      : ((formState[section.name] as Record<string, ConfigValue> | undefined) ?? {});
+}> = ({section, sectionValues, onFieldChange}) => {
   return (
     <Card padding={4}>
       <Box gap={3}>
@@ -159,7 +167,7 @@ const SectionCard: React.FC<{
             fieldKey={fieldKey}
             fieldMeta={fieldMeta}
             key={fieldKey}
-            onChange={(value: ConfigValue) => onFieldChange(section.name, fieldKey, value)}
+            onFieldChange={onFieldChange}
             sectionName={section.name}
             value={sectionValues[fieldKey]}
           />
@@ -168,6 +176,10 @@ const SectionCard: React.FC<{
     </Card>
   );
 };
+
+// Memoized on its own section's values: an edit in one section leaves the other cards alone.
+const SectionCard = memo(SectionCardComponent);
+SectionCard.displayName = "SectionCard";
 
 const EmptySections: React.FC = () => (
   <Text color="secondaryDark">No configuration sections defined.</Text>
@@ -320,10 +332,15 @@ export const ConfigurationScreen: React.FC<ConfigurationScreenProps> = ({
         ) : (
           sections.map((section) => (
             <SectionCard
-              formState={formState}
               key={section.name}
               onFieldChange={handleFieldChange}
               section={section}
+              sectionValues={
+                section.name === "__root__"
+                  ? formState
+                  : ((formState[section.name] as Record<string, ConfigValue> | undefined) ??
+                    NO_SECTION_VALUES)
+              }
             />
           ))
         )}

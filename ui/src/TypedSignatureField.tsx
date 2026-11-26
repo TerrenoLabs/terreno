@@ -3,7 +3,7 @@ import {DancingScript_400Regular} from "@expo-google-fonts/dancing-script";
 import {GreatVibes_400Regular} from "@expo-google-fonts/great-vibes";
 import {Sacramento_400Regular} from "@expo-google-fonts/sacramento";
 import {useFonts} from "expo-font";
-import type {ReactElement} from "react";
+import {type FC, memo, type ReactElement, useCallback} from "react";
 import {Text as NativeText, Pressable, View} from "react-native";
 
 import type {SignatureFont, TypedSignatureFieldProps, TypedSignatureValue} from "./Common";
@@ -13,6 +13,7 @@ import {FieldTitle} from "./fieldElements/FieldTitle";
 import {TextField} from "./TextField";
 import {useTheme} from "./Theme";
 import {resolveFieldTestIDsFromProps} from "./testing/resolveTestId";
+import {useStableCallback} from "./useStableCallback";
 
 /**
  * Font families registered by this component via expo-font. Prefixed with "signature-" to
@@ -46,6 +47,52 @@ const resolveSelectedFont = (
 ): SignatureFont => {
   return fonts.find((font) => font.key === fontKey) ?? fonts[0];
 };
+
+interface SignatureFontOptionProps {
+  disabled: boolean;
+  fontFamily: string;
+  fontKey: string;
+  isSelected: boolean;
+  label: string;
+  onSelect: (fontKey: string) => void;
+}
+
+// Memoized so typing the name re-renders the input and preview, not every font option.
+const SignatureFontOption: FC<SignatureFontOptionProps> = memo(
+  ({disabled, fontFamily, fontKey, isSelected, label, onSelect}) => {
+    const {theme} = useTheme();
+    const handlePress = useCallback((): void => {
+      onSelect(fontKey);
+    }, [onSelect, fontKey]);
+
+    return (
+      <Pressable
+        accessibilityHint="Sets the style of your signature"
+        accessibilityLabel={`Signature font ${label}`}
+        accessibilityState={{disabled, selected: isSelected}}
+        aria-role="button"
+        disabled={disabled}
+        hitSlop={8}
+        onPress={handlePress}
+        style={{
+          backgroundColor: isSelected ? theme.surface.neutralLight : theme.surface.base,
+          borderColor: isSelected ? theme.border.activeAccent : theme.border.default,
+          borderRadius: 8,
+          borderWidth: isSelected ? 2 : 1,
+          minWidth: 96,
+          opacity: disabled ? 0.5 : 1,
+          paddingHorizontal: 12,
+          paddingVertical: 8,
+        }}
+      >
+        <NativeText numberOfLines={1} style={{color: theme.text.primary, fontFamily, fontSize: 22}}>
+          {label}
+        </NativeText>
+      </Pressable>
+    );
+  }
+);
+SignatureFontOption.displayName = "SignatureFontOption";
 
 /**
  * A cross-platform typed signature field. The signer types their name and picks a font from a
@@ -93,6 +140,10 @@ export const TypedSignatureField = ({
     });
   };
 
+  const handleFontSelect = useStableCallback((fontKey: string): void => {
+    emitChange({fontKey});
+  });
+
   return (
     <View style={{flexDirection: "column", width: "100%"}} {...(testID ? {testID} : {})}>
       {Boolean(title) && <FieldTitle testID={fieldTestIDs.label} text={title} />}
@@ -113,38 +164,17 @@ export const TypedSignatureField = ({
       {/* Font picker: each option renders its own label in its own typeface so the signer can
           compare styles before selecting. */}
       <View style={{flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12}}>
-        {resolvedFonts.map((font) => {
-          const isSelected = font.key === selectedFont.key;
-          return (
-            <Pressable
-              accessibilityHint="Sets the style of your signature"
-              accessibilityLabel={`Signature font ${font.label}`}
-              accessibilityState={{disabled, selected: isSelected}}
-              aria-role="button"
-              disabled={disabled}
-              hitSlop={8}
-              key={font.key}
-              onPress={() => emitChange({fontKey: font.key})}
-              style={{
-                backgroundColor: isSelected ? theme.surface.neutralLight : theme.surface.base,
-                borderColor: isSelected ? theme.border.activeAccent : theme.border.default,
-                borderRadius: 8,
-                borderWidth: isSelected ? 2 : 1,
-                minWidth: 96,
-                opacity: disabled ? 0.5 : 1,
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-              }}
-            >
-              <NativeText
-                numberOfLines={1}
-                style={{color: theme.text.primary, fontFamily: font.fontFamily, fontSize: 22}}
-              >
-                {font.label}
-              </NativeText>
-            </Pressable>
-          );
-        })}
+        {resolvedFonts.map((font) => (
+          <SignatureFontOption
+            disabled={disabled}
+            fontFamily={font.fontFamily}
+            fontKey={font.key}
+            isSelected={font.key === selectedFont.key}
+            key={font.key}
+            label={font.label}
+            onSelect={handleFontSelect}
+          />
+        ))}
       </View>
 
       {/* Live preview of the finished signature in the selected font. */}

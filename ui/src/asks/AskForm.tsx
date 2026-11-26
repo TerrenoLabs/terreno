@@ -6,7 +6,7 @@ import {
 } from "@terreno/blocks";
 import {DateTime} from "luxon";
 import type React from "react";
-import {useCallback, useMemo, useState} from "react";
+import {memo, useCallback, useMemo, useState} from "react";
 
 import {BooleanField} from "../BooleanField";
 import {Box} from "../Box";
@@ -72,7 +72,7 @@ interface FormFieldControlProps {
 }
 
 /** The `@terreno/ui` control for one field, chosen by its type. */
-const FormFieldControl = ({
+const FormFieldControlBase = ({
   disabled,
   errorText,
   field,
@@ -168,6 +168,10 @@ const FormFieldControl = ({
       );
   }
 };
+
+// Memoized so typing in one field re-renders that field, not every field of the form.
+const FormFieldControl = memo(FormFieldControlBase);
+FormFieldControl.displayName = "FormFieldControl";
 
 /**
  * Fill in a form's fields and submit them at once. Each field uses the `@terreno/ui` control for

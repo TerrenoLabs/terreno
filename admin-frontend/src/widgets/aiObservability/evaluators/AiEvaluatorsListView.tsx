@@ -8,7 +8,7 @@ import {
   Spinner,
   Text,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {AgreementMeter} from "../shell/AgreementMeter";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
@@ -216,6 +216,15 @@ export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
     setKindIndex(index);
   }, []);
 
+  // Callers may pass an inline `onOpen`. The name cell reads it through a ref so the cell keeps
+  // its component identity; a new map would remount every name cell and re-render every row.
+  const onOpenRef = useRef(onOpen);
+
+  // Point at the newest handler after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    onOpenRef.current = onOpen;
+  });
+
   const customColumnComponentMap = useMemo(
     () => ({
       evaluatorCalibration: CalibrationCell,
@@ -229,7 +238,7 @@ export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
             gap={1}
             justifyContent="center"
             onClick={() => {
-              onOpen(evaluator.id);
+              onOpenRef.current(evaluator.id);
             }}
           >
             <Box testID={`ai-evaluator-open-${evaluator.id}`}>
@@ -247,7 +256,7 @@ export const AiEvaluatorsListView: React.FC<AiEvaluatorsListViewProps> = ({
       },
       evaluatorType: TypeBadgeCell,
     }),
-    [onOpen]
+    []
   );
 
   const columns = useMemo(() => buildColumns(evaluators), [evaluators]);

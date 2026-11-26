@@ -1,5 +1,5 @@
 import {getCalendars} from "expo-localization";
-import {type FC, useCallback, useEffect, useMemo, useRef, useState} from "react";
+import {type FC, memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   type DimensionValue,
   type KeyboardTypeOptions,
@@ -110,6 +110,10 @@ const getAutofillProps = ({
   const nativeHints = autoComplete ? NATIVE_AUTOFILL[autoComplete] : undefined;
   return nativeHints ?? {textContentType};
 };
+
+// Memoized so typing in the field does not re-render the suggestion box on every keystroke.
+const MemoizedAiSuggestionBox = memo(AiSuggestionBox);
+MemoizedAiSuggestionBox.displayName = "MemoizedAiSuggestionBox";
 
 interface WebTextInputRef {
   focus: () => void;
@@ -346,7 +350,7 @@ export const TextField: FC<TextFieldProps> = ({
         }}
       >
         {Boolean(aiSuggestion) && (
-          <AiSuggestionBox
+          <MemoizedAiSuggestionBox
             testID={fieldTestIDs.input ? `${fieldTestIDs.input}-ai-suggestion` : undefined}
             {...aiSuggestion!}
           />

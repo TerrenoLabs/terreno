@@ -664,15 +664,7 @@ export class TerrenoApp {
 
     // /auth/me must be registered after plugins so that session middleware
     // (e.g. Better Auth) has a chance to populate req.user first.
-    addMeRoutes(
-      app,
-      legacyAuth
-        ? passportUserModel(options.userModel)
-        : (options.userModel as unknown as PassportUserModel),
-      options.authOptions,
-      options.accessControl,
-      oapi
-    );
+    addMeRoutes(app, options.userModel, options.authOptions, options.accessControl, oapi);
 
     Sentry.setupExpressErrorHandler(app);
 

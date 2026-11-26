@@ -9,11 +9,11 @@ import {
   setDefaultTimeout,
   spyOn,
 } from "bun:test";
-import type express from "express";
+import express from "express";
 import mongoose, {Schema} from "mongoose";
 import supertest from "supertest";
 import {modelRouter} from "./api";
-import {generateTokens, type UserModel as LegacyUserModel} from "./auth";
+import {authenticateMiddleware, generateTokens, type UserModel as LegacyUserModel} from "./auth";
 import {BetterAuthApp} from "./betterAuthApp";
 import {APIError} from "./errors";
 import {logger} from "./logger";
@@ -137,6 +137,22 @@ describe("TerrenoApp legacyAuth", () => {
       Reflect.deleteProperty(process.env, "REFRESH_TOKEN_SECRET");
 
       expect(() => buildBetterAuthOnly()).not.toThrow();
+    });
+
+    it("builds and serves with none of the legacy secrets set", async () => {
+      for (const name of [
+        "TOKEN_SECRET",
+        "REFRESH_TOKEN_SECRET",
+        "SESSION_SECRET",
+        "TOKEN_ISSUER",
+      ]) {
+        Reflect.deleteProperty(process.env, name);
+      }
+
+      const app = buildBetterAuthOnly();
+      const res = await supertest(app).get("/todos");
+
+      expect(res.status).toBe(401);
     });
 
     for (const path of [
@@ -359,6 +375,50 @@ describe("TerrenoApp legacyAuth", () => {
 
       expect(onLegacy.status).toBe(200);
       expect(onModern.status).toBe(401);
+    });
+  });
+
+  describe("mounted express sub-apps", () => {
+    // Express sets req.app to the sub-app, so the legacy mark must be found on its parent.
+    it("accepts the JWT on a route inside a sub-app of a legacy app", async () => {
+      const subApp = express();
+      subApp.get("/whoami", authenticateMiddleware(), (req, res) => {
+        res.json({id: (req.user as {id?: string} | undefined)?.id});
+      });
+      const legacy = new TerrenoApp({
+        legacyAuth: true,
+        skipListen: true,
+        userModel: PassportUser as unknown as LegacyUserModel,
+      } as never)
+        .register({register: (app: express.Application) => app.use("/sub", subApp)})
+        .build();
+      const user = await PassportUser.create({email: uniqueEmail("sub-app")});
+      const {token} = await generateTokens(user);
+
+      const res = await supertest(legacy)
+        .get("/sub/whoami")
+        .set("authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.id).toBe(user.id);
+    });
+
+    it("still refuses the JWT inside a sub-app of a legacyAuth: false app", async () => {
+      const subApp = express();
+      subApp.get("/whoami", authenticateMiddleware(), (_req, res) => {
+        res.json({ok: true});
+      });
+      const modern = new TerrenoApp({legacyAuth: false, skipListen: true, userModel: PlainUser})
+        .register({register: (app: express.Application) => app.use("/sub", subApp)})
+        .build();
+      const user = await PassportUser.create({email: uniqueEmail("sub-app-modern")});
+      const {token} = await generateTokens(user);
+
+      const res = await supertest(modern)
+        .get("/sub/whoami")
+        .set("authorization", `Bearer ${token}`);
+
+      expect(res.status).toBe(401);
     });
   });
 });

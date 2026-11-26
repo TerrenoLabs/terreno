@@ -84,6 +84,19 @@ export interface GenerateTokensOptions {
 // process-wide, so the decision to call it is made per Express app.
 const passportApps = new WeakSet<object>();
 
+// Express sets req.app to a mounted sub-app and records its mount point as `parent`, so a
+// sub-app of an app that ran setupAuth is found by walking up. Express apps are functions.
+const isPassportApp = (app: unknown): boolean => {
+  let current = app;
+  while ((typeof current === "object" || typeof current === "function") && current !== null) {
+    if (passportApps.has(current)) {
+      return true;
+    }
+    current = "parent" in current ? current.parent : undefined;
+  }
+  return false;
+};
+
 export const authenticateMiddleware = (anonymous = false) => {
   const strategies = ["jwt"];
   if (anonymous) {
@@ -94,7 +107,7 @@ export const authenticateMiddleware = (anonymous = false) => {
       return next();
     }
     // Without setupAuth (legacyAuth: false) there is no jwt strategy: never call Passport.
-    if (!passportApps.has(req.app)) {
+    if (!isPassportApp(req.app)) {
       if (anonymous) {
         return next();
       }
@@ -877,9 +890,9 @@ const ME_PATCH_EXCLUDED_FIELDS = ["_id", "id", "__v", "created", "updated", "del
  * so they are left out of the documented shape.
  */
 const getMeUserOpenApiSpec = (
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): {properties: Record<string, OpenApiSchemaProperty>; required: string[]} => {
-  const {properties, required} = getOpenApiSpecForModel(userModel as unknown as Model<unknown>);
+  const {properties, required} = getOpenApiSpecForModel(userModel);
   const visible: Record<string, OpenApiSchemaProperty> = {};
   for (const [key, value] of Object.entries(properties)) {
     const schemaPath = userModel.schema.path(key) as {options?: {select?: unknown}} | undefined;
@@ -898,7 +911,7 @@ const buildMeOpenApi = ({
 }: {
   accessControl?: import("./rbac/types").AnyTerrenoAccess;
   openApi?: OpenApiMiddleware;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): {get: express.RequestHandler; patch: express.RequestHandler} => {
   const noop: express.RequestHandler = (_req, _res, next) => next();
   if (!openApi?.path) {
@@ -975,7 +988,7 @@ const buildMeOpenApi = ({
 
 export const addMeRoutes = (
   app: express.Application,
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   authOptions?: AuthOptions,
   accessControl?: import("./rbac/types").AnyTerrenoAccess,
   openApi?: OpenApiMiddleware

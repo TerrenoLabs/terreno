@@ -41,7 +41,11 @@ export interface RESTPermissions<T> {
   delete: PermissionMethod<T>[];
 }
 
-export const OwnerQueryFilter = (user?: User) => {
+/**
+ * Filters list queries to documents the user owns. Reads only `id`, so the app's registered
+ * user type (`TerrenoRegister`) passes through without having to match `User` exactly.
+ */
+export const OwnerQueryFilter = (user?: Partial<Pick<User, "id">>) => {
   if (user) {
     return {ownerId: user?.id};
   }

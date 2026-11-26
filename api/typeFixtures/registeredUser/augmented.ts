@@ -1,8 +1,10 @@
 import type {RegisteredUser} from "@terreno/api";
+import type {Types} from "mongoose";
 
 declare module "@terreno/api" {
   interface TerrenoRegister {
-    user: {_id: string; id: string; admin: boolean; name: string};
+    // A hydrated Mongoose user's `_id` is a document ObjectId (`Types.ObjectId`), not a string.
+    user: {_id: Types.ObjectId; id: string; admin: boolean; name: string};
   }
 }
 

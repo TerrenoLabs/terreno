@@ -103,7 +103,9 @@ const expectStatus = async (res: Response, status: number, step: string): Promis
   if (res.status !== status) {
     throw new Error(`${step}: expected ${status}, got ${res.status}: ${body}`);
   }
-  return body ? JSON.parse(body) : undefined;
+  // A route that is not mounted gets Express's HTML 404, so only parse JSON bodies.
+  const isJson = res.headers.get("content-type")?.includes("application/json") ?? false;
+  return body && isJson ? JSON.parse(body) : undefined;
 };
 
 /** Parent: a second child with `legacyAuth: false` mounts no legacy routes and still guards routes. */
@@ -113,10 +115,13 @@ const runNoLegacyChecks = async (): Promise<void> => {
   const server = await spawnUntilReady({
     cmd: [process.execPath, __filename, SERVE_ARG, NO_LEGACY_ARG],
     env: {
+      // No JWT or session secrets: a legacyAuth: false app must boot without any of them.
       MONGO_URI: await smokeMongoUri({databaseName: "apiSmokeNoLegacy"}),
       PORT: String(port),
-      SESSION_SECRET: "api-smoke-session-secret",
-      TOKEN_ISSUER: "api-smoke",
+      REFRESH_TOKEN_SECRET: "",
+      SESSION_SECRET: "",
+      TOKEN_ISSUER: "",
+      TOKEN_SECRET: "",
     },
     timeoutMs: 20000,
     url: `${baseUrl}/health`,

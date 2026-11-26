@@ -1,5 +1,5 @@
 import type {FC, ReactElement, ReactNode} from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {Platform, Pressable, type TextInputInstance, View} from "react-native";
 
 import {Avatar} from "../Avatar";
@@ -15,7 +15,7 @@ import {Text} from "../Text";
 import {TextField} from "../TextField";
 import {useTheme} from "../Theme";
 import {LastUsedPill} from "./LastUsedBadge";
-import {LoginAccountList} from "./LoginAccountList";
+import {type LoginAccountEntry, LoginAccountList} from "./LoginAccountList";
 import {getLoginMethodLabels, withLastUsedLabel} from "./loginMethods";
 import type {
   LoginAccountOption,
@@ -356,27 +356,25 @@ export const LoginScreen: FC<LoginScreenProps> = ({
   const isPasskeyLastUsed = lastUsedMethod === "passkey" && hasPasskey;
   const isEmailLastUsed = lastUsedMethod === "email";
 
-  const accountEntries =
-    onContinue === undefined
-      ? []
-      : [
-          ...(currentSessions ?? []).map((account) => ({
-            account,
-            method: getLoginMethodLabels({
-              genericProviders: otherProviders,
-              method: account.method,
-            }),
-            source: "session" as const,
-          })),
-          ...(rememberedAccounts ?? []).map((account) => ({
-            account,
-            method: getLoginMethodLabels({
-              genericProviders: otherProviders,
-              method: account.method,
-            }),
-            source: "remembered" as const,
-          })),
-        ];
+  const hasContinue = onContinue !== undefined;
+  // Memoized so typing in the form does not hand the account list a new array every keystroke.
+  const accountEntries = useMemo((): LoginAccountEntry[] => {
+    if (!hasContinue) {
+      return [];
+    }
+    return [
+      ...(currentSessions ?? []).map((account) => ({
+        account,
+        method: getLoginMethodLabels({genericProviders, method: account.method}),
+        source: "session" as const,
+      })),
+      ...(rememberedAccounts ?? []).map((account) => ({
+        account,
+        method: getLoginMethodLabels({genericProviders, method: account.method}),
+        source: "remembered" as const,
+      })),
+    ];
+  }, [currentSessions, genericProviders, hasContinue, rememberedAccounts]);
   const hasAccounts = accountEntries.length > 0;
   const showMethods = !hasAccounts || methodsExpanded;
   const resolvedTitle = title ?? (hasAccounts ? "Welcome back" : "Sign in");

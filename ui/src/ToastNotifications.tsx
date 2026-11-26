@@ -29,6 +29,7 @@ import React, {
   createContext,
   type FC,
   forwardRef,
+  memo,
   type ReactElement,
   useCallback,
   useContext,
@@ -201,7 +202,9 @@ export interface ToastProps extends ToastOptions {
 // Toast Component
 // ============================================================================
 
-const ToastItem: FC<ToastProps> = (props) => {
+// Memoized so showing or hiding one toast re-renders that toast, not the whole stack. Each
+// toast object keeps its identity in the container state until it changes.
+const ToastItem: FC<ToastProps> = memo((props) => {
   let {
     id,
     onDestroy,
@@ -428,7 +431,8 @@ const ToastItem: FC<ToastProps> = (props) => {
       )}
     </Animated.View>
   );
-};
+});
+ToastItem.displayName = "ToastItem";
 
 const toastStyles = StyleSheet.create({
   container: {alignItems: "center", pointerEvents: "box-none", width: "100%"},

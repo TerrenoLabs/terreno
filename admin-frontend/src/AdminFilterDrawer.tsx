@@ -13,7 +13,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import startCase from "lodash/startCase";
-import React, {useCallback, useEffect, useMemo, useState} from "react";
+import React, {memo, useCallback, useEffect, useMemo, useState} from "react";
 import {useWindowDimensions} from "react-native";
 import {AdminRefField} from "./AdminRefField";
 import {
@@ -41,12 +41,153 @@ const getRefRoutePath = (
   return modelConfigs?.find((m) => m.name === refModelName)?.routePath ?? "";
 };
 
+type AdminFilterConfig = NonNullable<AdminModelConfig["filters"]>[number];
+type AdminFilterValue = string | boolean | undefined;
+
+interface FilterFieldProps {
+  filter: AdminFilterConfig;
+  /** Upper bound of a date range; unused by the other filter kinds. */
+  lteValue: AdminListFilterState[string];
+  onFieldChange: (key: string, value: AdminFilterValue) => void;
+  refModelName: string | undefined;
+  routePath: string;
+  /** The filter's value, or the lower bound of a date range. */
+  value: AdminListFilterState[string];
+}
+
+const FilterFieldComponent: React.FC<FilterFieldProps> = ({
+  filter: f,
+  lteValue,
+  onFieldChange,
+  refModelName,
+  routePath,
+  value,
+}) => {
+  const gteKey = `${f.field}_gte`;
+  const lteKey = `${f.field}_lte`;
+  const handleChange = useCallback(
+    (next: string | boolean): void => {
+      onFieldChange(f.field, next);
+    },
+    [f.field, onFieldChange]
+  );
+  const handleClear = useCallback((): void => {
+    onFieldChange(f.field, undefined);
+  }, [f.field, onFieldChange]);
+  const handleGteChange = useCallback(
+    (next: string): void => {
+      onFieldChange(gteKey, next);
+    },
+    [gteKey, onFieldChange]
+  );
+  const handleLteChange = useCallback(
+    (next: string): void => {
+      onFieldChange(lteKey, next);
+    },
+    [lteKey, onFieldChange]
+  );
+  const handleChoiceChange = useCallback(
+    (next: string): void => {
+      onFieldChange(f.field, next === "__all__" ? "" : next);
+    },
+    [f.field, onFieldChange]
+  );
+
+  const label = f.label ?? startCase(f.field);
+  if (f.kind === "boolean") {
+    const boolValue = value === true || value === "true";
+    return (
+      <Box direction="column" gap={1} width="100%">
+        <BooleanField
+          helperText={value === undefined ? "All values" : undefined}
+          onChange={handleChange}
+          testID={`admin-filter-${f.field}`}
+          title={label}
+          value={boolValue}
+        />
+        {value !== undefined ? (
+          <Button onClick={handleClear} text="Clear filter" variant="ghost" />
+        ) : null}
+      </Box>
+    );
+  }
+  if (f.kind === "dateRange") {
+    return (
+      <Box direction="column" gap={2} width="100%">
+        <DateTimeField
+          onChange={handleGteChange}
+          testID={`admin-filter-${f.field}-gte`}
+          title={`${label} from`}
+          type="datetime"
+          value={String(value ?? "")}
+        />
+        <DateTimeField
+          onChange={handleLteChange}
+          testID={`admin-filter-${f.field}-lte`}
+          title={`${label} to`}
+          type="datetime"
+          value={String(lteValue ?? "")}
+        />
+      </Box>
+    );
+  }
+  if (f.kind === "choice") {
+    return (
+      <Box width="100%">
+        <SelectField
+          onChange={handleChoiceChange}
+          options={[
+            {label: "All", value: "__all__"},
+            ...((f.choices ?? []) as {label: string; value: string}[]).map((c) => ({
+              label: c.label,
+              value: c.value,
+            })),
+          ]}
+          testID={`admin-filter-${f.field}`}
+          title={label}
+          value={String(value ?? "__all__")}
+        />
+      </Box>
+    );
+  }
+  if (f.kind === "ref") {
+    return (
+      <Box width="100%">
+        <AdminRefField
+          autocomplete
+          onChange={handleChange}
+          refModelName={refModelName ?? "Unknown"}
+          routePath={routePath}
+          testID={`admin-filter-${f.field}`}
+          title={label}
+          value={String(value ?? "")}
+        />
+      </Box>
+    );
+  }
+  return (
+    <Box width="100%">
+      <TextField
+        onChange={handleChange}
+        testID={`admin-filter-${f.field}`}
+        title={label}
+        value={String(value ?? "")}
+      />
+    </Box>
+  );
+};
+
+FilterFieldComponent.displayName = "FilterField";
+
+// Memoized with primitive values so a keystroke in one filter re-renders only that filter.
+const FilterField = memo(FilterFieldComponent);
+
 interface FilterFieldsProps {
   draftState: AdminListFilterState;
   fields: Record<string, AdminFieldConfig>;
   filters: NonNullable<AdminModelConfig["filters"]>;
   modelConfigs?: Array<{name: string; routePath: string}>;
-  onDraftChange: (next: AdminListFilterState) => void;
+  onDraftChange: React.Dispatch<React.SetStateAction<AdminListFilterState>>;
 }
 
 const FilterFields: React.FC<FilterFieldsProps> = ({
@@ -57,119 +198,28 @@ const FilterFields: React.FC<FilterFieldsProps> = ({
   onDraftChange,
 }) => {
   const setField = useCallback(
-    (key: string, value: string | boolean | undefined) => {
-      onDraftChange({...draftState, [key]: value});
+    (key: string, value: AdminFilterValue): void => {
+      onDraftChange((prev) => ({...prev, [key]: value}));
     },
-    [draftState, onDraftChange]
+    [onDraftChange]
   );
 
   return (
     <Box direction="column" gap={3} width="100%">
       {filters.map((f) => {
-        const label = f.label ?? startCase(f.field);
-        if (f.kind === "boolean") {
-          const raw = draftState[f.field];
-          const boolValue = raw === true || raw === "true";
-          return (
-            <Box direction="column" gap={1} key={f.field} width="100%">
-              <BooleanField
-                helperText={raw === undefined ? "All values" : undefined}
-                onChange={(next: boolean) => {
-                  setField(f.field, next);
-                }}
-                testID={`admin-filter-${f.field}`}
-                title={label}
-                value={boolValue}
-              />
-              {raw !== undefined ? (
-                <Button
-                  onClick={() => {
-                    setField(f.field, undefined);
-                  }}
-                  text="Clear filter"
-                  variant="ghost"
-                />
-              ) : null}
-            </Box>
-          );
-        }
-        if (f.kind === "dateRange") {
-          const gteKey = `${f.field}_gte`;
-          const lteKey = `${f.field}_lte`;
-          return (
-            <Box direction="column" gap={2} key={f.field} width="100%">
-              <DateTimeField
-                onChange={(next: string) => {
-                  setField(gteKey, next);
-                }}
-                testID={`admin-filter-${f.field}-gte`}
-                title={`${label} from`}
-                type="datetime"
-                value={String(draftState[gteKey] ?? "")}
-              />
-              <DateTimeField
-                onChange={(next: string) => {
-                  setField(lteKey, next);
-                }}
-                testID={`admin-filter-${f.field}-lte`}
-                title={`${label} to`}
-                type="datetime"
-                value={String(draftState[lteKey] ?? "")}
-              />
-            </Box>
-          );
-        }
-        if (f.kind === "choice") {
-          return (
-            <Box key={f.field} width="100%">
-              <SelectField
-                onChange={(next: string) => {
-                  setField(f.field, next === "__all__" ? "" : next);
-                }}
-                options={[
-                  {label: "All", value: "__all__"},
-                  ...((f.choices ?? []) as {label: string; value: string}[]).map((c) => ({
-                    label: c.label,
-                    value: c.value,
-                  })),
-                ]}
-                testID={`admin-filter-${f.field}`}
-                title={label}
-                value={String(draftState[f.field] ?? "__all__")}
-              />
-            </Box>
-          );
-        }
-        if (f.kind === "ref") {
-          const refModelName = f.refModel ?? fields[f.field]?.ref ?? undefined;
-          const routePath = getRefRoutePath(modelConfigs, refModelName);
-          return (
-            <Box key={f.field} width="100%">
-              <AdminRefField
-                autocomplete
-                onChange={(next: string) => {
-                  setField(f.field, next);
-                }}
-                refModelName={refModelName ?? "Unknown"}
-                routePath={routePath}
-                testID={`admin-filter-${f.field}`}
-                title={label}
-                value={String(draftState[f.field] ?? "")}
-              />
-            </Box>
-          );
-        }
+        const isDateRange = f.kind === "dateRange";
+        const refModelName =
+          f.kind === "ref" ? (f.refModel ?? fields[f.field]?.ref ?? undefined) : undefined;
         return (
-          <Box key={f.field} width="100%">
-            <TextField
-              onChange={(next: string) => {
-                setField(f.field, next);
-              }}
-              testID={`admin-filter-${f.field}`}
-              title={label}
-              value={String(draftState[f.field] ?? "")}
-            />
-          </Box>
+          <FilterField
+            filter={f}
+            key={f.field}
+            lteValue={isDateRange ? draftState[`${f.field}_lte`] : undefined}
+            onFieldChange={setField}
+            refModelName={refModelName}
+            routePath={f.kind === "ref" ? getRefRoutePath(modelConfigs, refModelName) : ""}
+            value={draftState[isDateRange ? `${f.field}_gte` : f.field]}
+          />
         );
       })}
     </Box>

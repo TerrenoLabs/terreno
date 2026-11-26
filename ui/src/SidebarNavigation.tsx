@@ -5,7 +5,7 @@ import {Navigator, Slot} from "expo-router";
 // eslint-disable-next-line import/no-internal-modules
 import {Screen} from "expo-router/build/views/Screen";
 import {TabRouter} from "expo-router/react-navigation";
-import {type FC, type ReactNode, useCallback, useMemo, useState} from "react";
+import {type FC, memo, type ReactNode, useCallback, useMemo, useState} from "react";
 import {Pressable, type StyleProp, View, type ViewProps, type ViewStyle} from "react-native";
 
 import {Badge} from "./Badge";
@@ -19,85 +19,97 @@ import {SIDEBAR_BADGE_STATUS_MAP} from "./Common";
 import {Icon} from "./Icon";
 import {Text} from "./Text";
 import {useTheme} from "./Theme";
+import {useStableCallback} from "./useStableCallback";
 
 const COLLAPSED_WIDTH = 65;
 const EXPANDED_WIDTH = 220;
 const ITEM_HEIGHT = 44;
 const ICON_SIZE = 20;
 
-const SidebarItem: FC<{
-  item: SidebarNavigationItem;
+interface SidebarItemProps {
+  badge?: SidebarNavigationItem["badge"];
+  badgeStatus?: SidebarNavigationItem["badgeStatus"];
+  iconName: SidebarNavigationItem["iconName"];
   isActive: boolean;
   isExpanded: boolean;
-  onNavigate: (route: string) => void;
   itemStyle?: StyleProp<ViewStyle>;
-}> = ({item, isActive, isExpanded, onNavigate, itemStyle}) => {
-  const {theme} = useTheme();
-  const [isHovered, setIsHovered] = useState(false);
+  label: string;
+  onNavigate: (route: string) => void;
+  route: string;
+}
 
-  const handlePress = useCallback(() => {
-    onNavigate(item.route);
-  }, [onNavigate, item.route]);
+// Memoized, with the item spread into primitive props, so a route change or a layout re-render
+// with inline item arrays re-renders only the rows whose own values changed.
+const SidebarItem: FC<SidebarItemProps> = memo(
+  ({badge, badgeStatus, iconName, isActive, isExpanded, itemStyle, label, onNavigate, route}) => {
+    const {theme} = useTheme();
+    const [isHovered, setIsHovered] = useState(false);
 
-  const handleHoverIn = useCallback(() => setIsHovered(true), []);
-  const handleHoverOut = useCallback(() => setIsHovered(false), []);
+    const handlePress = useCallback(() => {
+      onNavigate(route);
+    }, [onNavigate, route]);
 
-  const backgroundColor = useMemo(() => {
-    if (isActive) {
-      return theme.surface.neutralLight;
-    }
-    if (isHovered) {
-      return theme.primitives.neutral050;
-    }
-    return "transparent";
-  }, [isActive, isHovered, theme]);
+    const handleHoverIn = useCallback(() => setIsHovered(true), []);
+    const handleHoverOut = useCallback(() => setIsHovered(false), []);
 
-  // Active = near-black (neutral900), hovered = light grey (neutral500), inactive = medium grey (neutral600)
-  const iconColor = isActive ? "primary" : isHovered ? "extraLight" : "secondaryLight";
+    const backgroundColor = useMemo(() => {
+      if (isActive) {
+        return theme.surface.neutralLight;
+      }
+      if (isHovered) {
+        return theme.primitives.neutral050;
+      }
+      return "transparent";
+    }, [isActive, isHovered, theme]);
 
-  return (
-    <Pressable
-      accessibilityLabel={item.label}
-      accessibilityRole="button"
-      onHoverIn={handleHoverIn}
-      onHoverOut={handleHoverOut}
-      onPress={handlePress}
-      style={[
-        {
-          alignItems: "center",
-          backgroundColor,
-          borderRadius: theme.radius.default,
-          flexDirection: "row",
-          gap: 12,
-          height: ITEM_HEIGHT,
-          justifyContent: isExpanded ? undefined : "center",
-          marginHorizontal: 8,
-          paddingHorizontal: 12,
-        },
-        itemStyle,
-      ]}
-    >
-      <View style={{alignItems: "center", justifyContent: "center", width: ICON_SIZE}}>
-        <Icon color={iconColor} iconName={item.iconName} size="lg" />
-        {Boolean(item.badge) && (
-          <Box marginLeft={5} marginTop={5} position="absolute">
-            <Badge
-              maxValue={99}
-              status={SIDEBAR_BADGE_STATUS_MAP[item.badgeStatus ?? "error"]}
-              value={item.badge === true ? undefined : String(item.badge)}
-              variant={item.badge === true ? "iconOnly" : "numberOnly"}
-            />
-          </Box>
+    // Active = near-black (neutral900), hovered = light grey (neutral500), inactive = medium grey (neutral600)
+    const iconColor = isActive ? "primary" : isHovered ? "extraLight" : "secondaryLight";
+
+    return (
+      <Pressable
+        accessibilityLabel={label}
+        accessibilityRole="button"
+        onHoverIn={handleHoverIn}
+        onHoverOut={handleHoverOut}
+        onPress={handlePress}
+        style={[
+          {
+            alignItems: "center",
+            backgroundColor,
+            borderRadius: theme.radius.default,
+            flexDirection: "row",
+            gap: 12,
+            height: ITEM_HEIGHT,
+            justifyContent: isExpanded ? undefined : "center",
+            marginHorizontal: 8,
+            paddingHorizontal: 12,
+          },
+          itemStyle,
+        ]}
+      >
+        <View style={{alignItems: "center", justifyContent: "center", width: ICON_SIZE}}>
+          <Icon color={iconColor} iconName={iconName} size="lg" />
+          {Boolean(badge) && (
+            <Box marginLeft={5} marginTop={5} position="absolute">
+              <Badge
+                maxValue={99}
+                status={SIDEBAR_BADGE_STATUS_MAP[badgeStatus ?? "error"]}
+                value={badge === true ? undefined : String(badge)}
+                variant={badge === true ? "iconOnly" : "numberOnly"}
+              />
+            </Box>
+          )}
+        </View>
+        {isExpanded && (
+          <Text bold={isActive} color={iconColor} size="md">
+            {label}
+          </Text>
         )}
-      </View>
-      {isExpanded && (
-        <Text bold={isActive} color={iconColor} size="md">
-          {item.label}
-        </Text>
-      )}
-    </Pressable>
-  );
-};
+      </Pressable>
+    );
+  }
+);
+SidebarItem.displayName = "SidebarItem";
 
 /**
  * Renders the sidebar rail + children in a row. Works without expo-router Navigator context.
@@ -120,6 +132,9 @@ export const SidebarNavigationPanel: FC<SidebarNavigationPanelProps> = ({
   const handleHoverOut = useCallback(() => {
     setIsExpanded(false);
   }, []);
+
+  // Callers pass inline handlers; a stable wrapper keeps the memoized rows from re-rendering.
+  const handleNavigate = useStableCallback(onNavigate);
 
   const width = isExpanded ? EXPANDED_WIDTH : COLLAPSED_WIDTH;
 
@@ -156,24 +171,32 @@ export const SidebarNavigationPanel: FC<SidebarNavigationPanelProps> = ({
         <View style={{gap: 4}}>
           {topItems.map((item) => (
             <SidebarItem
+              badge={item.badge}
+              badgeStatus={item.badgeStatus}
+              iconName={item.iconName}
               isActive={activeRoute === item.route}
               isExpanded={isExpanded}
-              item={item}
               itemStyle={itemStyle}
               key={item.route}
-              onNavigate={onNavigate}
+              label={item.label}
+              onNavigate={handleNavigate}
+              route={item.route}
             />
           ))}
         </View>
         <View style={{gap: 4}}>
           {bottomItems.map((item) => (
             <SidebarItem
+              badge={item.badge}
+              badgeStatus={item.badgeStatus}
+              iconName={item.iconName}
               isActive={activeRoute === item.route}
               isExpanded={isExpanded}
-              item={item}
               itemStyle={itemStyle}
               key={item.route}
-              onNavigate={onNavigate}
+              label={item.label}
+              onNavigate={handleNavigate}
+              route={item.route}
             />
           ))}
         </View>

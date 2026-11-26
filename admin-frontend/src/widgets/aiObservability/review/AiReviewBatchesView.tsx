@@ -12,7 +12,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import {DateTime} from "luxon";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {AgreementMeter, ProgressMeter} from "../shell/AgreementMeter";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
@@ -154,6 +154,15 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
   questionSetId,
   questionSetOptions,
 }) => {
+  // Callers may pass an inline open handler. The cell reads it through a ref so the cell keeps
+  // its component identity; a new map would remount every batch cell in the table.
+  const onOpenBatchRef = useRef(onOpenBatch);
+
+  // Point at the newest handler after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    onOpenBatchRef.current = onOpenBatch;
+  });
+
   const customColumnComponentMap = useMemo(
     () => ({
       batchAnswered: AnsweredCell,
@@ -167,7 +176,7 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
             gap={1}
             justifyContent="center"
             onClick={() => {
-              onOpenBatch(batch.id);
+              onOpenBatchRef.current(batch.id);
             }}
           >
             <Box testID={`ai-review-batches-open-${batch.id}`}>
@@ -187,7 +196,7 @@ export const AiReviewBatchesView: React.FC<AiReviewBatchesViewProps> = ({
         );
       },
     }),
-    [onOpenBatch]
+    []
   );
   // The question set shows in each batch subtitle, so it filters from the toolbar, not a column.
   const [questionSetFilter, setQuestionSetFilter] = useState<string[]>([]);

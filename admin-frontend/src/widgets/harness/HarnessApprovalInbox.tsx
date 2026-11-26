@@ -1,5 +1,5 @@
 import {Box, Button, Heading, Spinner, Text} from "@terreno/ui";
-import React, {useCallback, useState} from "react";
+import React, {memo, useCallback, useState} from "react";
 import type {AdminRpc} from "../../adminRpc";
 import {HarnessApprovalDetail} from "./HarnessApprovalDetail";
 import {
@@ -54,7 +54,8 @@ interface ApprovalRowProps {
   onOpen: (approval: HarnessApprovalRow) => void;
 }
 
-const ApprovalRow: React.FC<ApprovalRowProps> = ({approval, onOpen}) => {
+/** Memoized so a refresh or notice change in the inbox does not re-render every pending row. */
+const ApprovalRow: React.FC<ApprovalRowProps> = memo(({approval, onOpen}) => {
   const id = approvalId(approval);
   const requested = relativeTime(approval.created);
   const expires = formatDateTime(approval.expiresAt);
@@ -84,7 +85,8 @@ const ApprovalRow: React.FC<ApprovalRowProps> = ({approval, onOpen}) => {
       </Text>
     </Box>
   );
-};
+});
+ApprovalRow.displayName = "ApprovalRow";
 
 /**
  * Inbox of pending harness approvals the signed-in user may decide: list, detail with the

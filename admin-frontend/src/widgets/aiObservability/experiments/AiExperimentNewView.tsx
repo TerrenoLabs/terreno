@@ -11,7 +11,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
-import React from "react";
+import React, {memo} from "react";
 import type {DatasetRecord} from "../datasets/datasetTypes";
 import {
   EVALUATOR_TYPE_LABELS,
@@ -137,11 +137,12 @@ const PipelinePicker: React.FC<{
   );
 };
 
+// Memoized: typing the experiment name or toggling one evaluator must not re-render every row.
 const EvaluatorChoice: React.FC<{
   evaluator: EvaluatorRecord;
   onToggle: (id: string) => void;
   selected: boolean;
-}> = ({evaluator, onToggle, selected}) => {
+}> = memo(({evaluator, onToggle, selected}) => {
   const isJudge = evaluator.type === "llm-judge";
   const calibration = isJudge ? summarizeCalibration(evaluator.calibration) : undefined;
   return (
@@ -193,7 +194,38 @@ const EvaluatorChoice: React.FC<{
       ) : null}
     </Box>
   );
-};
+});
+EvaluatorChoice.displayName = "EvaluatorChoice";
+
+// Memoized: typing the experiment name or toggling one version must not re-render every row.
+const VersionChoice: React.FC<{
+  onToggle: (version: number) => void;
+  promptDetail: PromptDetail;
+  selected: boolean;
+  version: number;
+}> = memo(({onToggle, promptDetail, selected, version}) => {
+  const tags = promptVersionTags(version, promptDetail);
+  return (
+    <Box
+      accessibilityHint={`Toggle version ${version}`}
+      accessibilityLabel={`Version ${version}`}
+      alignItems="center"
+      direction="row"
+      gap={2}
+      onClick={() => {
+        onToggle(version);
+      }}
+      wrap
+    >
+      <CheckBox selected={selected} />
+      <Text>{`v${version}`}</Text>
+      {tags.map((tag) => (
+        <Badge key={tag} secondary status="neutral" value={tag} />
+      ))}
+    </Box>
+  );
+});
+VersionChoice.displayName = "VersionChoice";
 
 export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
   datasetId,
@@ -376,30 +408,15 @@ export const AiExperimentNewView: React.FC<AiExperimentNewViewProps> = ({
               title="Prompt"
               value={promptName}
             />
-            {promptDetail?.versions.map((version) => {
-              const tags = promptVersionTags(version.version, promptDetail);
-              const selected = versions.includes(version.version);
-              return (
-                <Box
-                  accessibilityHint={`Toggle version ${version.version}`}
-                  accessibilityLabel={`Version ${version.version}`}
-                  alignItems="center"
-                  direction="row"
-                  gap={2}
-                  key={version.version}
-                  onClick={() => {
-                    onVersionToggle(version.version);
-                  }}
-                  wrap
-                >
-                  <CheckBox selected={selected} />
-                  <Text>{`v${version.version}`}</Text>
-                  {tags.map((tag) => (
-                    <Badge key={tag} secondary status="neutral" value={tag} />
-                  ))}
-                </Box>
-              );
-            })}
+            {promptDetail?.versions.map((version) => (
+              <VersionChoice
+                key={version.version}
+                onToggle={onVersionToggle}
+                promptDetail={promptDetail}
+                selected={versions.includes(version.version)}
+                version={version.version}
+              />
+            ))}
             <Text color="secondaryLight" size="sm" testID="ai-experiment-version-help">
               {EXPERIMENT_VERSION_HELP}
             </Text>

@@ -9,7 +9,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import startCase from "lodash/startCase";
-import React, {useCallback} from "react";
+import React, {memo, useCallback, useLayoutEffect, useRef} from "react";
 import {AdminRefField} from "./AdminRefField";
 import type {RefRendererMap} from "./types";
 
@@ -52,6 +52,146 @@ const defaultForType = (itemType: string): PrimitiveItem => {
   return "";
 };
 
+interface PrimitiveArrayItemProps {
+  item: PrimitiveItem;
+  index: number;
+  itemType: string;
+  itemEnum?: string[];
+  itemRef?: string;
+  /** Name and route of the model `itemRef` resolves to, when it is a configured model. */
+  refModelName?: string;
+  refRoutePath?: string;
+  baseUrl?: string;
+  apiBase?: string;
+  routeBase?: string;
+  refRenderers?: RefRendererMap;
+  isReadOnly: boolean;
+  autocomplete: boolean;
+  onUpdate: (index: number, itemValue: PrimitiveItem) => void;
+  onRemove: (index: number) => void;
+}
+
+const renderItemInput = ({
+  item,
+  index,
+  itemType,
+  itemEnum,
+  itemRef,
+  refModelName,
+  refRoutePath,
+  baseUrl,
+  apiBase,
+  routeBase,
+  refRenderers,
+  isReadOnly,
+  autocomplete,
+  onUpdate,
+}: Omit<PrimitiveArrayItemProps, "onRemove">): React.ReactElement => {
+  if (itemType === "boolean") {
+    return (
+      <BooleanField
+        disabled={isReadOnly}
+        onChange={(val: boolean) => onUpdate(index, val)}
+        title=""
+        value={Boolean(item)}
+      />
+    );
+  }
+  if (itemEnum && itemEnum.length > 0) {
+    return (
+      <SelectField
+        disabled={isReadOnly}
+        onChange={(val: string) => onUpdate(index, val)}
+        options={itemEnum.map((v) => ({label: startCase(v), value: v}))}
+        title=""
+        value={item != null ? String(item) : ""}
+      />
+    );
+  }
+  if (itemType === "objectid" && itemRef) {
+    const CustomRenderer = refRenderers?.[itemRef];
+    if (CustomRenderer) {
+      return (
+        <CustomRenderer
+          apiBase={apiBase}
+          autocomplete={autocomplete}
+          baseUrl={baseUrl}
+          onChange={(val: string) => onUpdate(index, val)}
+          readOnly={isReadOnly}
+          refModelName={itemRef}
+          routeBase={routeBase}
+          routePath={refRoutePath ?? ""}
+          title=""
+          value={item != null ? String(item) : ""}
+        />
+      );
+    }
+    if (refModelName !== undefined && refRoutePath !== undefined) {
+      return (
+        <AdminRefField
+          apiBase={apiBase}
+          autocomplete={autocomplete}
+          baseUrl={baseUrl}
+          onChange={(val: string) => onUpdate(index, val)}
+          readOnly={isReadOnly}
+          refModelName={refModelName}
+          routeBase={routeBase}
+          routePath={refRoutePath}
+          title=""
+          value={item != null ? String(item) : ""}
+        />
+      );
+    }
+  }
+  if (itemType === "number") {
+    return (
+      <TextField
+        disabled={isReadOnly}
+        onChange={(text: string) => {
+          const num = Number(text);
+          onUpdate(index, Number.isNaN(num) ? text : num);
+        }}
+        testID={`admin-array-item-${index}`}
+        title=""
+        value={item != null ? String(item) : ""}
+      />
+    );
+  }
+  // Default: string
+  return (
+    <TextField
+      disabled={isReadOnly}
+      onChange={(val: string) => onUpdate(index, val)}
+      testID={`admin-array-item-${index}`}
+      title=""
+      value={item != null ? String(item) : ""}
+    />
+  );
+};
+
+/**
+ * One row of the list. Memoized with stable handlers so editing one item does not
+ * re-render every other row's input.
+ */
+const PrimitiveArrayItem: React.FC<PrimitiveArrayItemProps> = memo(({onRemove, ...inputProps}) => {
+  const {index, isReadOnly} = inputProps;
+  return (
+    <Box alignItems="center" direction="row" gap={2}>
+      <Box flex="grow">{renderItemInput(inputProps)}</Box>
+      {!isReadOnly ? (
+        <IconButton
+          accessibilityLabel="Remove item"
+          iconName="trash"
+          onClick={() => onRemove(index)}
+          testID={`admin-array-remove-${index}`}
+          variant="destructive"
+        />
+      ) : null}
+    </Box>
+  );
+});
+PrimitiveArrayItem.displayName = "PrimitiveArrayItem";
+
 /**
  * Renders an editable list of primitive values (string, number, boolean) or ObjectId refs.
  * Used for Mongoose schemas like `tags: [String]`, `scores: [Number]`, `flags: [Boolean]`,
@@ -81,107 +221,28 @@ export const AdminPrimitiveArrayField: React.FC<AdminPrimitiveArrayFieldProps> =
     onChange([...arrayValue, defaultForType(itemType)]);
   }, [arrayValue, itemType, onChange]);
 
-  const handleRemove = useCallback(
-    (index: number) => {
-      onChange(arrayValue.filter((_, i) => i !== index));
-    },
-    [arrayValue, onChange]
-  );
+  // Rows are memoized, so their handlers keep one identity and read the newest list and
+  // `onChange` from a ref that is refreshed after every commit.
+  const latestRef = useRef({arrayValue, onChange});
+  // Point the row handlers at the newest list and `onChange` before any event can fire.
+  useLayoutEffect(() => {
+    latestRef.current = {arrayValue, onChange};
+  });
 
-  const handleUpdate = useCallback(
-    (index: number, itemValue: PrimitiveItem) => {
-      onChange(arrayValue.map((item, i) => (i === index ? itemValue : item)));
-    },
-    [arrayValue, onChange]
-  );
+  const handleRemove = useCallback((index: number): void => {
+    const latest = latestRef.current;
+    latest.onChange(latest.arrayValue.filter((_, i) => i !== index));
+  }, []);
+
+  const handleUpdate = useCallback((index: number, itemValue: PrimitiveItem): void => {
+    const latest = latestRef.current;
+    latest.onChange(latest.arrayValue.map((item, i) => (i === index ? itemValue : item)));
+  }, []);
 
   const refModel =
     itemType === "objectid" && itemRef && modelConfigs
       ? modelConfigs.find((m) => m.name === itemRef)
       : undefined;
-
-  const renderItemInput = (item: PrimitiveItem, index: number): React.ReactElement => {
-    if (itemType === "boolean") {
-      return (
-        <BooleanField
-          disabled={isReadOnly}
-          onChange={(val: boolean) => handleUpdate(index, val)}
-          title=""
-          value={Boolean(item)}
-        />
-      );
-    }
-    if (itemEnum && itemEnum.length > 0) {
-      return (
-        <SelectField
-          disabled={isReadOnly}
-          onChange={(val: string) => handleUpdate(index, val)}
-          options={itemEnum.map((v) => ({label: startCase(v), value: v}))}
-          title=""
-          value={item != null ? String(item) : ""}
-        />
-      );
-    }
-    if (itemType === "objectid" && itemRef) {
-      const CustomRenderer = refRenderers?.[itemRef];
-      if (CustomRenderer) {
-        return (
-          <CustomRenderer
-            apiBase={apiBase}
-            autocomplete={autocomplete}
-            baseUrl={baseUrl}
-            onChange={(val: string) => handleUpdate(index, val)}
-            readOnly={isReadOnly}
-            refModelName={itemRef}
-            routeBase={routeBase}
-            routePath={refModel?.routePath ?? ""}
-            title=""
-            value={item != null ? String(item) : ""}
-          />
-        );
-      }
-      if (refModel) {
-        return (
-          <AdminRefField
-            apiBase={apiBase}
-            autocomplete={autocomplete}
-            baseUrl={baseUrl}
-            onChange={(val: string) => handleUpdate(index, val)}
-            readOnly={isReadOnly}
-            refModelName={refModel.name}
-            routeBase={routeBase}
-            routePath={refModel.routePath}
-            title=""
-            value={item != null ? String(item) : ""}
-          />
-        );
-      }
-    }
-    if (itemType === "number") {
-      return (
-        <TextField
-          disabled={isReadOnly}
-          onChange={(text: string) => {
-            const num = Number(text);
-            handleUpdate(index, Number.isNaN(num) ? text : num);
-          }}
-          testID={`admin-array-item-${index}`}
-          title=""
-          value={item != null ? String(item) : ""}
-        />
-      );
-    }
-    // Default: string
-    return (
-      <TextField
-        disabled={isReadOnly}
-        onChange={(val: string) => handleUpdate(index, val)}
-        testID={`admin-array-item-${index}`}
-        title=""
-        value={item != null ? String(item) : ""}
-      />
-    );
-  };
 
   return (
     <Box gap={2}>
@@ -216,18 +277,24 @@ export const AdminPrimitiveArrayField: React.FC<AdminPrimitiveArrayFieldProps> =
         </Box>
       ) : (
         arrayValue.map((item, index) => (
-          <Box alignItems="center" direction="row" gap={2} key={`item-${index}`}>
-            <Box flex="grow">{renderItemInput(item, index)}</Box>
-            {!isReadOnly ? (
-              <IconButton
-                accessibilityLabel="Remove item"
-                iconName="trash"
-                onClick={() => handleRemove(index)}
-                testID={`admin-array-remove-${index}`}
-                variant="destructive"
-              />
-            ) : null}
-          </Box>
+          <PrimitiveArrayItem
+            apiBase={apiBase}
+            autocomplete={autocomplete}
+            baseUrl={baseUrl}
+            index={index}
+            isReadOnly={isReadOnly}
+            item={item}
+            itemEnum={itemEnum}
+            itemRef={itemRef}
+            itemType={itemType}
+            key={`item-${index}`}
+            onRemove={handleRemove}
+            onUpdate={handleUpdate}
+            refModelName={refModel?.name}
+            refRenderers={refRenderers}
+            refRoutePath={refModel?.routePath}
+            routeBase={routeBase}
+          />
         ))
       )}
     </Box>

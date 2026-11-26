@@ -299,3 +299,32 @@ passing it a stable handler (`useStableCallback`).
 The wasted renders that remain are the component's own root re-rendering under its parent
 and the two `Pagination` arrow buttons. Wrapping those in `memo` would save one or two cheap
 renders each.
+
+### Library-wide sweep
+
+The same audit then ran over every component file in `ui/src` and `admin-frontend/src`: 85
+components were fixed, and each has an audit with a render budget. Wasted renders that do
+not multiply (a single cheap leaf under a parent) were left alone.
+
+| Component | Step | Renders before | after |
+| --- | --- | ---: | ---: |
+| `AdminModelTable` | type one search character | 808 | 128 |
+| `AddressField` (7 fields) | type in city | 390 | 24 |
+| `AIRequestExplorer` (8 rows, 9 columns) | page 1 to 2 | 789 | 283 |
+| `AdminFieldRendererCore` | type one character | 219 | 53 |
+| `AdminShell` (18 nav items) | navigate | 128 | 37 |
+
+Admin audits live in `admin-frontend/benchmarks/renderAudit/` and reuse the collector from
+`ui/benchmarks/renderAudit/`:
+
+```bash
+cd admin-frontend
+bun run performance:renders   # one bun process per audit file
+```
+
+Each admin audit runs in its own process because module mocks leak between files in one
+`bun test` run.
+
+Components whose content sits inside a `Modal` or action sheet (for example
+`DateTimeActionSheet`) render nothing in the test renderer and cannot be audited this way;
+use `pageAudit.ts` against a running page instead.

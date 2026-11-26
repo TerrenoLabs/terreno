@@ -1,6 +1,6 @@
 import {DateTime} from "luxon";
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {memo, useCallback, useEffect, useRef, useState} from "react";
 import {ScrollView, useWindowDimensions} from "react-native";
 
 import {Badge} from "./Badge";
@@ -16,6 +16,7 @@ import {
 } from "./conflictFieldDiff";
 import {Modal} from "./Modal";
 import {Text} from "./Text";
+import {useStableCallback} from "./useStableCallback";
 
 /** Resolution strategy for a sync conflict. */
 export type SyncConflictResolutionStrategy = "useServer" | "keepMine";
@@ -202,10 +203,12 @@ const VersionColumn: React.FC<VersionColumnProps> = ({
   </Box>
 );
 
-const ConflictItem: React.FC<{
+interface ConflictItemProps {
   conflict: SyncConflictItem;
   onResolve: (args: {mutationId: string; strategy: SyncConflictResolutionStrategy}) => void;
-}> = ({conflict, onResolve}) => {
+}
+
+const ConflictItemComponent: React.FC<ConflictItemProps> = ({conflict, onResolve}) => {
   const [showDiff, setShowDiff] = useState<boolean>(false);
   const local = parseConflictPayload(conflict.localData);
   const server = parseConflictPayload(conflict.serverData);
@@ -292,6 +295,11 @@ const ConflictItem: React.FC<{
   );
 };
 
+ConflictItemComponent.displayName = "ConflictItem";
+
+// Memoized so resolving one conflict does not re-parse and re-render every other one.
+const ConflictItem = memo(ConflictItemComponent);
+
 /**
  * Presentational modal listing unresolved sync conflicts. Copy is written for
  * non-technical users: "Your change" (this device) vs "Other version" (elsewhere
@@ -337,6 +345,9 @@ export const ConflictSheet: React.FC<ConflictSheetProps> = ({
       onDismiss();
     }
   }, [conflicts.length, onDismiss, visible]);
+
+  // Stable identity so an inline `onResolve` from the caller does not re-render every conflict.
+  const handleResolve = useStableCallback(onResolve);
 
   const handleUseServerForAll = useCallback((): void => {
     for (const conflict of conflicts) {
@@ -388,7 +399,11 @@ export const ConflictSheet: React.FC<ConflictSheetProps> = ({
                 />
               </Box>
               {conflicts.map((conflict) => (
-                <ConflictItem conflict={conflict} key={conflict.mutationId} onResolve={onResolve} />
+                <ConflictItem
+                  conflict={conflict}
+                  key={conflict.mutationId}
+                  onResolve={handleResolve}
+                />
               ))}
             </>
           )}

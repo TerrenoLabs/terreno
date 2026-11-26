@@ -11,7 +11,7 @@ import {
   Spinner,
   Text,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useMemo, useRef, useState} from "react";
 import {resolveAdminBases} from "./types";
 import {useAdminModelApi} from "./useAdminModelApi";
 
@@ -88,10 +88,16 @@ export const ConsentFormList: React.FC<ConsentFormListProps> = ({
     sort: sortString,
   });
 
+  // Callers pass an inline `onRowClick`. The cell reads it through a ref so the cell component
+  // keeps its identity; a new component type would remount every action cell in the table.
+  const onRowClickRef = useRef(onRowClick);
+  onRowClickRef.current = onRowClick;
+  const hasRowClick = Boolean(onRowClick);
+
   const ActionsCell: React.FC<{column: DataTableColumn; cellData: DataTableCellData}> = useCallback(
     ({cellData}: {column: DataTableColumn; cellData: DataTableCellData}) => {
       const {id} = cellData.value as {id: string};
-      if (!onRowClick) {
+      if (!hasRowClick) {
         return null;
       }
       return (
@@ -99,14 +105,14 @@ export const ConsentFormList: React.FC<ConsentFormListProps> = ({
           <IconButton
             accessibilityLabel="Edit"
             iconName="pen-to-square"
-            onClick={() => onRowClick(id)}
+            onClick={() => onRowClickRef.current?.(id)}
             tooltipText="Edit"
             variant="muted"
           />
         </Box>
       );
     },
-    [onRowClick]
+    [hasRowClick]
   );
 
   const customColumnComponentMap: DataTableCustomComponentMap = useMemo(
@@ -114,29 +120,38 @@ export const ConsentFormList: React.FC<ConsentFormListProps> = ({
     [ActionsCell]
   );
 
-  const columns: DataTableColumn[] = [
-    ...DATA_COLUMNS,
-    ...(onRowClick
-      ? [{columnType: ACTIONS_COLUMN_TYPE, sortable: false, title: "", width: 60}]
-      : []),
-  ];
+  const columns: DataTableColumn[] = useMemo(
+    () => [
+      ...DATA_COLUMNS,
+      ...(hasRowClick
+        ? [{columnType: ACTIONS_COLUMN_TYPE, sortable: false, title: "", width: 60}]
+        : []),
+    ],
+    [hasRowClick]
+  );
 
-  const rows = ((listData?.data ?? []) as ConsentFormListItem[]).map((item) => {
-    const dataCells = DATA_COLUMN_KEYS.map((key) => {
-      const value = item[key];
-      if (key === "active") {
-        return {value: Boolean(value)};
-      }
-      if (key === "version" || key === "order") {
-        return {value: typeof value === "number" ? String(value) : (value ?? "0")};
-      }
-      return {value: value ?? ""};
-    });
-    if (onRowClick) {
-      dataCells.push({value: {id: item._id}});
-    }
-    return dataCells;
-  });
+  // Built once per fetched page so the table's memoized rows and cells keep their props.
+  const listItems = listData?.data;
+  const rows = useMemo(
+    () =>
+      ((listItems ?? []) as ConsentFormListItem[]).map((item) => {
+        const dataCells = DATA_COLUMN_KEYS.map((key) => {
+          const value = item[key];
+          if (key === "active") {
+            return {value: Boolean(value)};
+          }
+          if (key === "version" || key === "order") {
+            return {value: typeof value === "number" ? String(value) : (value ?? "0")};
+          }
+          return {value: value ?? ""};
+        });
+        if (hasRowClick) {
+          dataCells.push({value: {id: item._id}});
+        }
+        return dataCells;
+      }),
+    [hasRowClick, listItems]
+  );
 
   const totalPages = listData ? Math.ceil(listData.total / DEFAULT_LIMIT) : 1;
 

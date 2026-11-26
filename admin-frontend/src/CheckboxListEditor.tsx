@@ -1,5 +1,5 @@
 import {BooleanField, Box, Button, IconButton, Text, TextField} from "@terreno/ui";
-import React, {useCallback} from "react";
+import React, {memo, useCallback, useRef} from "react";
 
 interface CheckboxItem {
   label: string;
@@ -15,6 +15,85 @@ interface CheckboxListEditorProps {
   errorText?: string;
 }
 
+interface CheckboxItemEditorProps {
+  index: number;
+  label: string;
+  required: boolean;
+  confirmationPrompt: string;
+  onRemove: (index: number) => void;
+  onUpdate: (index: number, field: keyof CheckboxItem, fieldValue: string | boolean) => void;
+}
+
+/** One checkbox's fields. Memoized so typing in one checkbox leaves the others alone. */
+const CheckboxItemEditor = memo(
+  ({
+    index,
+    label,
+    required,
+    confirmationPrompt,
+    onRemove,
+    onUpdate,
+  }: CheckboxItemEditorProps): React.ReactElement => {
+    const handleRemove = useCallback((): void => {
+      onRemove(index);
+    }, [index, onRemove]);
+
+    const handleLabelChange = useCallback(
+      (val: string): void => {
+        onUpdate(index, "label", val);
+      },
+      [index, onUpdate]
+    );
+
+    const handleRequiredChange = useCallback(
+      (val: boolean): void => {
+        onUpdate(index, "required", val);
+      },
+      [index, onUpdate]
+    );
+
+    const handlePromptChange = useCallback(
+      (val: string): void => {
+        onUpdate(index, "confirmationPrompt", val);
+      },
+      [index, onUpdate]
+    );
+
+    return (
+      <Box border="default" gap={2} padding={3} rounding="md">
+        <Box alignItems="center" direction="row" justifyContent="between">
+          <Text bold size="sm">
+            Checkbox {index + 1}
+          </Text>
+          <IconButton
+            accessibilityLabel="Remove checkbox"
+            iconName="trash"
+            onClick={handleRemove}
+            testID={`checkbox-remove-${index}`}
+            variant="destructive"
+          />
+        </Box>
+        <TextField
+          onChange={handleLabelChange}
+          placeholder="Checkbox label"
+          testID={`checkbox-label-${index}`}
+          title="Label"
+          value={label}
+        />
+        <BooleanField onChange={handleRequiredChange} title="Required" value={required} />
+        <TextField
+          onChange={handlePromptChange}
+          placeholder="Optional confirmation prompt"
+          testID={`checkbox-prompt-${index}`}
+          title="Confirmation Prompt"
+          value={confirmationPrompt}
+        />
+      </Box>
+    );
+  }
+);
+CheckboxItemEditor.displayName = "CheckboxItemEditor";
+
 export const CheckboxListEditor: React.FC<CheckboxListEditorProps> = ({
   value = [],
   onChange,
@@ -24,23 +103,29 @@ export const CheckboxListEditor: React.FC<CheckboxListEditorProps> = ({
 }) => {
   const items: CheckboxItem[] = Array.isArray(value) ? value : [];
 
-  const handleAdd = useCallback(() => {
-    onChange([...items, {label: "", required: false}]);
-  }, [items, onChange]);
+  // The handlers read the newest list and `onChange` through refs so their identity, and so
+  // the memoized rows, stay stable while the caller passes a new array on every edit.
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  const handleRemove = useCallback(
-    (index: number) => {
-      onChange(items.filter((_, i) => i !== index));
-    },
-    [items, onChange]
-  );
+  const handleAdd = useCallback((): void => {
+    onChangeRef.current([...itemsRef.current, {label: "", required: false}]);
+  }, []);
+
+  const handleRemove = useCallback((index: number): void => {
+    onChangeRef.current(itemsRef.current.filter((_, i) => i !== index));
+  }, []);
 
   const handleUpdate = useCallback(
-    (index: number, field: keyof CheckboxItem, fieldValue: string | boolean) => {
-      const updated = items.map((item, i) => (i === index ? {...item, [field]: fieldValue} : item));
-      onChange(updated);
+    (index: number, field: keyof CheckboxItem, fieldValue: string | boolean): void => {
+      const updated = itemsRef.current.map((item, i) =>
+        i === index ? {...item, [field]: fieldValue} : item
+      );
+      onChangeRef.current(updated);
     },
-    [items, onChange]
+    []
   );
 
   return (
@@ -56,39 +141,15 @@ export const CheckboxListEditor: React.FC<CheckboxListEditorProps> = ({
         </Text>
       )}
       {items.map((item, index) => (
-        <Box border="default" gap={2} key={`checkbox-${index}`} padding={3} rounding="md">
-          <Box alignItems="center" direction="row" justifyContent="between">
-            <Text bold size="sm">
-              Checkbox {index + 1}
-            </Text>
-            <IconButton
-              accessibilityLabel="Remove checkbox"
-              iconName="trash"
-              onClick={() => handleRemove(index)}
-              testID={`checkbox-remove-${index}`}
-              variant="destructive"
-            />
-          </Box>
-          <TextField
-            onChange={(val: string) => handleUpdate(index, "label", val)}
-            placeholder="Checkbox label"
-            testID={`checkbox-label-${index}`}
-            title="Label"
-            value={item.label}
-          />
-          <BooleanField
-            onChange={(val: boolean) => handleUpdate(index, "required", val)}
-            title="Required"
-            value={item.required}
-          />
-          <TextField
-            onChange={(val: string) => handleUpdate(index, "confirmationPrompt", val)}
-            placeholder="Optional confirmation prompt"
-            testID={`checkbox-prompt-${index}`}
-            title="Confirmation Prompt"
-            value={item.confirmationPrompt ?? ""}
-          />
-        </Box>
+        <CheckboxItemEditor
+          confirmationPrompt={item.confirmationPrompt ?? ""}
+          index={index}
+          key={`checkbox-${index}`}
+          label={item.label}
+          onRemove={handleRemove}
+          onUpdate={handleUpdate}
+          required={item.required}
+        />
       ))}
       <Button
         iconName="plus"

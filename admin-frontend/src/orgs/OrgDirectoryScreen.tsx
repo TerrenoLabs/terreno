@@ -10,7 +10,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useMemo, useRef, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
 import {normalizeListData} from "./normalizeListData";
 import {useOrganizationsApi} from "./useOrganizationsApi";
@@ -55,13 +55,16 @@ export const OrgDirectoryScreen: React.FC<OrgDirectoryScreenProps> = ({
   const [updateOrganization, {isLoading: isUpdating}] = useUpdateMutation();
   const organizations = normalizeListData<OrganizationSummary>(data);
   const orgContext = useOptionalOrgContext();
-  const handleEnterOrganization = useCallback(
-    (organization: OrganizationSummary): void => {
-      orgContext?.selectOrganization(organization);
-      onEnterOrganization(organization);
-    },
-    [onEnterOrganization, orgContext]
-  );
+
+  // The update mutation hook and callers' inline `onEnterOrganization` hand back new identities
+  // on every render. The row handlers read them through a ref so the actions cell keeps its
+  // component identity and the table rows do not remount on every keystroke in the create modal.
+  const latestRef = useRef({onEnterOrganization, orgContext, updateOrganization});
+  latestRef.current = {onEnterOrganization, orgContext, updateOrganization};
+  const handleEnterOrganization = useCallback((organization: OrganizationSummary): void => {
+    latestRef.current.orgContext?.selectOrganization(organization);
+    latestRef.current.onEnterOrganization(organization);
+  }, []);
 
   const handleDismissCreate = useCallback((): void => {
     setIsCreateOpen(false);
@@ -87,17 +90,19 @@ export const OrgDirectoryScreen: React.FC<OrgDirectoryScreenProps> = ({
     async (organization: OrganizationSummary, disabled: boolean): Promise<void> => {
       try {
         setActionError(undefined);
-        await updateOrganization({
-          body: {disabled},
-          id: organization._id,
-        }).unwrap();
+        await latestRef.current
+          .updateOrganization({
+            body: {disabled},
+            id: organization._id,
+          })
+          .unwrap();
       } catch {
         setActionError(
           disabled ? "Could not disable organization." : "Could not re-enable organization."
         );
       }
     },
-    [updateOrganization]
+    []
   );
 
   const ActionsCell: React.FC<{
@@ -133,12 +138,16 @@ export const OrgDirectoryScreen: React.FC<OrgDirectoryScreenProps> = ({
     () => ({[ACTION_COLUMN]: ActionsCell}),
     [ActionsCell]
   );
-  const rows = organizations.map((organization) => [
-    {value: organization.name},
-    {value: organization.slug ?? ""},
-    {value: organization.disabled ? "Disabled" : "Active"},
-    {value: organization},
-  ]);
+  const rows = useMemo(
+    (): DataTableCellData[][] =>
+      organizations.map((organization) => [
+        {value: organization.name},
+        {value: organization.slug ?? ""},
+        {value: organization.disabled ? "Disabled" : "Active"},
+        {value: organization},
+      ]),
+    [organizations]
+  );
 
   if (!isOperator) {
     return null;

@@ -1,5 +1,5 @@
 import type {FC} from "react";
-import {useCallback, useState} from "react";
+import {memo, useCallback, useState} from "react";
 import {Path, Svg} from "react-native-svg";
 
 import {Box} from "./Box";
@@ -45,67 +45,47 @@ const getSliceAngles = (
   });
 };
 
-export const DonutChart: FC<DonutChartProps> = ({
-  accessibilityLabel,
-  centerTitle,
-  centerValue,
-  data,
-  emptyText = "No data",
-  formatShare = formatDefaultShare,
-  formatValue = String,
-  height = DEFAULT_SIZE,
-  loading = false,
-  loadingAnimation,
-  loadingComponent,
-  loadingLabel,
-  onPeriodPress,
-  periodLabel,
-  testID,
-  title,
-}) => {
-  const {theme} = useTheme();
-  const paint = getChartPaint(theme);
-  const [chartWidth, setChartWidth] = useState(DEFAULT_SIZE);
-  const [activePointIndex, setActivePointIndex] = useState<number | undefined>(undefined);
+interface DonutChartPlotProps {
+  centerTitle?: string;
+  centerValue?: string;
+  chartWidth: number;
+  data: ChartPoint[];
+  formatShare: (value: number, total: number) => string;
+  formatValue: (value: number) => string;
+  height: number;
+  onLayout: (event: LayoutChangeEvent) => void;
+  onMarkPress: (pointIndex: number) => void;
+  testID?: string;
+}
 
-  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
-    const nextWidth = event.nativeEvent.layout.width;
-    if (nextWidth > 0) {
-      setChartWidth(nextWidth);
-    }
-  }, []);
+// Memoized so hovering or pressing a slice, which only changes the tooltip text, does not
+// re-render every slice, hit target, and legend row.
+const DonutChartPlot: FC<DonutChartPlotProps> = memo(
+  ({
+    centerTitle,
+    centerValue,
+    chartWidth,
+    data,
+    formatShare,
+    formatValue,
+    height,
+    onLayout,
+    onMarkPress,
+    testID,
+  }) => {
+    const {theme} = useTheme();
+    const paint = getChartPaint(theme);
+    const size = getDonutSize({chartWidth, height, legendRowCount: data.length});
+    const center = size / 2;
+    const outerRadius = Math.max(size / 2 - 8, 1);
+    const innerRadius = outerRadius * 0.55;
+    const slices = getSliceAngles(data);
+    const total = data.reduce((sum, point) => sum + Math.max(point.value, 0), 0);
 
-  const handleMarkPress = useCallback((pointIndex: number): void => {
-    setActivePointIndex(pointIndex);
-  }, []);
-
-  const size = getDonutSize({chartWidth, height, legendRowCount: data.length});
-  const center = size / 2;
-  const outerRadius = Math.max(size / 2 - 8, 1);
-  const innerRadius = outerRadius * 0.55;
-  const slices = getSliceAngles(data);
-  const total = data.reduce((sum, point) => sum + Math.max(point.value, 0), 0);
-  const activePoint = activePointIndex === undefined ? undefined : data[activePointIndex];
-  const tooltipText = activePoint
-    ? formatChartTooltip({formatValue, point: activePoint})
-    : undefined;
-  const summaryLabel = accessibilityLabel ?? "Donut chart";
-
-  const chart = (
-    <ChartFrame
-      accessibilityLabel={summaryLabel}
-      emptyText={emptyText}
-      isEmpty={data.length === 0}
-      loading={loading}
-      loadingAnimation={loadingAnimation}
-      loadingComponent={loadingComponent}
-      loadingLabel={loadingLabel}
-      testID={testID}
-      tooltipText={tooltipText}
-    >
+    return (
       <Box
         minWidth={0}
-        onLayout={handleLayout}
+        onLayout={onLayout}
         overflow="hidden"
         testID={resolveTestID(testID, "plot")}
         width="100%"
@@ -157,7 +137,7 @@ export const DonutChart: FC<DonutChartProps> = ({
           ) : null}
           {slices.map((slice, index) => {
             const onPress = (): void => {
-              handleMarkPress(index);
+              onMarkPress(index);
             };
             const mid = (slice.start + slice.end) / 2;
             const hitRadius = (innerRadius + outerRadius) / 2;
@@ -220,6 +200,73 @@ export const DonutChart: FC<DonutChartProps> = ({
           ))}
         </Box>
       </Box>
+    );
+  }
+);
+DonutChartPlot.displayName = "DonutChartPlot";
+
+export const DonutChart: FC<DonutChartProps> = ({
+  accessibilityLabel,
+  centerTitle,
+  centerValue,
+  data,
+  emptyText = "No data",
+  formatShare = formatDefaultShare,
+  formatValue = String,
+  height = DEFAULT_SIZE,
+  loading = false,
+  loadingAnimation,
+  loadingComponent,
+  loadingLabel,
+  onPeriodPress,
+  periodLabel,
+  testID,
+  title,
+}) => {
+  const [chartWidth, setChartWidth] = useState(DEFAULT_SIZE);
+  const [activePointIndex, setActivePointIndex] = useState<number | undefined>(undefined);
+
+  const handleLayout = useCallback((event: LayoutChangeEvent): void => {
+    const nextWidth = event.nativeEvent.layout.width;
+    if (nextWidth > 0) {
+      setChartWidth(nextWidth);
+    }
+  }, []);
+
+  const handleMarkPress = useCallback((pointIndex: number): void => {
+    setActivePointIndex(pointIndex);
+  }, []);
+
+  const activePoint = activePointIndex === undefined ? undefined : data[activePointIndex];
+  const tooltipText = activePoint
+    ? formatChartTooltip({formatValue, point: activePoint})
+    : undefined;
+  const summaryLabel = accessibilityLabel ?? "Donut chart";
+
+  const chart = (
+    <ChartFrame
+      accessibilityLabel={summaryLabel}
+      emptyText={emptyText}
+      isEmpty={data.length === 0}
+      loading={loading}
+      loadingAnimation={loadingAnimation}
+      loadingComponent={loadingComponent}
+      loadingLabel={loadingLabel}
+      testID={testID}
+      tooltipText={tooltipText}
+    >
+      <DonutChartPlot
+        centerTitle={centerTitle}
+        centerValue={centerValue}
+        chartWidth={chartWidth}
+        data={data}
+        formatShare={formatShare}
+        formatValue={formatValue}
+        height={height}
+        onLayout={handleLayout}
+        onMarkPress={handleMarkPress}
+        testID={testID}
+      />
     </ChartFrame>
   );
 

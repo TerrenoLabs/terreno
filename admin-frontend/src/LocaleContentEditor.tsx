@@ -1,5 +1,5 @@
 import {Box, Button, MarkdownEditorField, SelectField, Text} from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 
 interface LocaleContentEditorProps {
   value: Record<string, string>;
@@ -21,6 +21,28 @@ const COMMON_LOCALES = [
   {label: "Arabic", value: "ar"},
   {label: "Hindi", value: "hi"},
 ];
+
+interface LocaleTabProps {
+  isActive: boolean;
+  locale: string;
+  onSelect: (locale: string) => void;
+}
+
+// Memoized so typing in the editor does not re-render every locale tab on each keystroke.
+const LocaleTab: React.FC<LocaleTabProps> = memo(({isActive, locale, onSelect}) => {
+  const handleClick = useCallback((): void => {
+    onSelect(locale);
+  }, [locale, onSelect]);
+
+  return (
+    <Button
+      onClick={handleClick}
+      text={COMMON_LOCALES.find((l) => l.value === locale)?.label ?? locale.toUpperCase()}
+      variant={isActive ? "primary" : "outline"}
+    />
+  );
+});
+LocaleTab.displayName = "LocaleTab";
 
 export const LocaleContentEditor: React.FC<LocaleContentEditorProps> = ({
   value = {},
@@ -86,11 +108,11 @@ export const LocaleContentEditor: React.FC<LocaleContentEditorProps> = ({
       {locales.length > 0 && (
         <Box direction="row" gap={1} wrap>
           {locales.map((locale) => (
-            <Button
+            <LocaleTab
+              isActive={locale === activeLocale}
               key={locale}
-              onClick={() => setActiveLocale(locale)}
-              text={COMMON_LOCALES.find((l) => l.value === locale)?.label ?? locale.toUpperCase()}
-              variant={locale === activeLocale ? "primary" : "outline"}
+              locale={locale}
+              onSelect={setActiveLocale}
             />
           ))}
         </Box>

@@ -1,5 +1,5 @@
 import {Accordion, Box, Button, Text, TextField} from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 import {
   formatPlaygroundMetrics,
   type PlaygroundRunResult,
@@ -18,6 +18,29 @@ export interface AiPromptPlaygroundViewProps {
   runError: string | undefined;
   selectedVersion: PromptVersionDetail;
 }
+
+// Memoized: typing in one variable must not re-render every other variable's field.
+const VariableField: React.FC<{
+  name: string;
+  onChange: (name: string, text: string) => void;
+  value: string;
+}> = memo(({name, onChange, value}) => {
+  const handleChangeText = useCallback(
+    (text: string): void => {
+      onChange(name, text);
+    },
+    [name, onChange]
+  );
+  return (
+    <TextField
+      onChange={handleChangeText}
+      testID={`ai-prompt-var-${name}`}
+      title={name}
+      value={value}
+    />
+  );
+});
+VariableField.displayName = "VariableField";
 
 export const AiPromptPlaygroundView: React.FC<AiPromptPlaygroundViewProps> = ({
   blockedMessage,
@@ -68,13 +91,10 @@ export const AiPromptPlaygroundView: React.FC<AiPromptPlaygroundViewProps> = ({
         <Text color="secondaryDark">This version has no template variables.</Text>
       ) : (
         names.map((name) => (
-          <TextField
+          <VariableField
             key={name}
-            onChange={(text) => {
-              handleChange(name, text);
-            }}
-            testID={`ai-prompt-var-${name}`}
-            title={name}
+            name={name}
+            onChange={handleChange}
             value={values[name] ?? ""}
           />
         ))

@@ -14,7 +14,7 @@ import {
   TextField,
   useToast,
 } from "@terreno/ui";
-import React, {useCallback, useEffect, useMemo, useState} from "react";
+import React, {memo, useCallback, useEffect, useMemo, useState} from "react";
 import {resolveAdminBases} from "./types";
 import {useAdminModelApi} from "./useAdminModelApi";
 import {useAdminRpc, useAdminRpcMutation} from "./useAdminRpc";
@@ -75,6 +75,10 @@ const TYPE_OPTIONS = [
   {label: "Custom", value: "custom"},
 ];
 
+// A module constant, not an inline default: the hydration effect depends on the array's
+// identity, and a new array on every render re-ran it after each render in edit mode.
+const DEFAULT_SUPPORTED_LOCALES = ["en"];
+
 const slugify = (text: string): string => {
   return text
     .toLowerCase()
@@ -83,12 +87,100 @@ const slugify = (text: string): string => {
     .replace(/^-+|-+$/g, "");
 };
 
+interface ConsentCheckboxEditorProps {
+  index: number;
+  label: string;
+  required: boolean;
+  confirmationPrompt: string;
+  onChange: (index: number, field: keyof CheckboxConfig, value: string | boolean) => void;
+  onRemove: (index: number) => void;
+}
+
+/** One checkbox's fields. Memoized so typing anywhere else in the form leaves it alone. */
+const ConsentCheckboxEditor = memo(
+  ({
+    index,
+    label,
+    required,
+    confirmationPrompt,
+    onChange,
+    onRemove,
+  }: ConsentCheckboxEditorProps): React.ReactElement => {
+    const handleRemove = useCallback((): void => {
+      onRemove(index);
+    }, [index, onRemove]);
+
+    const handleLabelChange = useCallback(
+      (value: string): void => {
+        onChange(index, "label", value);
+      },
+      [index, onChange]
+    );
+
+    const handleRequiredChange = useCallback(
+      (value: boolean): void => {
+        onChange(index, "required", value);
+      },
+      [index, onChange]
+    );
+
+    const handlePromptChange = useCallback(
+      (value: string): void => {
+        onChange(index, "confirmationPrompt", value);
+      },
+      [index, onChange]
+    );
+
+    return (
+      <Box
+        border="default"
+        gap={3}
+        padding={3}
+        rounding="md"
+        testID={`consent-form-checkbox-${index}`}
+      >
+        <Box alignItems="center" direction="row" justifyContent="between">
+          <Heading size="sm">Checkbox {index + 1}</Heading>
+          <Button
+            iconName="trash"
+            onClick={handleRemove}
+            testID={`consent-form-checkbox-${index}-remove-button`}
+            text="Remove"
+            variant="destructive"
+          />
+        </Box>
+        <TextField
+          onChange={handleLabelChange}
+          placeholder="Checkbox label"
+          testID={`consent-form-checkbox-${index}-label-input`}
+          title="Label"
+          value={label}
+        />
+        <BooleanField
+          onChange={handleRequiredChange}
+          title="Required"
+          value={required}
+          variant="title"
+        />
+        <TextField
+          onChange={handlePromptChange}
+          placeholder="Optional confirmation prompt"
+          testID={`consent-form-checkbox-${index}-prompt-input`}
+          title="Confirmation Prompt (optional)"
+          value={confirmationPrompt}
+        />
+      </Box>
+    );
+  }
+);
+ConsentCheckboxEditor.displayName = "ConsentCheckboxEditor";
+
 export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
   baseUrl,
   apiBase,
   routeBase,
   id,
-  supportedLocales = ["en"],
+  supportedLocales = DEFAULT_SUPPORTED_LOCALES,
   hasAiSupport = false,
   onSave,
   onCancel,
@@ -611,45 +703,15 @@ export const ConsentFormEditor: React.FC<ConsentFormEditorProps> = ({
           </Box>
           {checkboxes.length === 0 && <Text color="secondaryDark">No checkboxes configured.</Text>}
           {checkboxes.map((checkbox, index) => (
-            <Box
-              border="default"
-              gap={3}
+            <ConsentCheckboxEditor
+              confirmationPrompt={checkbox.confirmationPrompt ?? ""}
+              index={index}
               key={index}
-              padding={3}
-              rounding="md"
-              testID={`consent-form-checkbox-${index}`}
-            >
-              <Box alignItems="center" direction="row" justifyContent="between">
-                <Heading size="sm">Checkbox {index + 1}</Heading>
-                <Button
-                  iconName="trash"
-                  onClick={() => handleRemoveCheckbox(index)}
-                  testID={`consent-form-checkbox-${index}-remove-button`}
-                  text="Remove"
-                  variant="destructive"
-                />
-              </Box>
-              <TextField
-                onChange={(value) => handleCheckboxChange(index, "label", value)}
-                placeholder="Checkbox label"
-                testID={`consent-form-checkbox-${index}-label-input`}
-                title="Label"
-                value={checkbox.label}
-              />
-              <BooleanField
-                onChange={(value) => handleCheckboxChange(index, "required", value)}
-                title="Required"
-                value={checkbox.required}
-                variant="title"
-              />
-              <TextField
-                onChange={(value) => handleCheckboxChange(index, "confirmationPrompt", value)}
-                placeholder="Optional confirmation prompt"
-                testID={`consent-form-checkbox-${index}-prompt-input`}
-                title="Confirmation Prompt (optional)"
-                value={checkbox.confirmationPrompt ?? ""}
-              />
-            </Box>
+              label={checkbox.label}
+              onChange={handleCheckboxChange}
+              onRemove={handleRemoveCheckbox}
+              required={checkbox.required}
+            />
           ))}
         </Box>
       </Box>

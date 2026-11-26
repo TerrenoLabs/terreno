@@ -1,4 +1,4 @@
-import type {FC, ReactNode} from "react";
+import {type FC, memo, type ReactNode} from "react";
 
 import {Box} from "../Box";
 import type {LoadingProps} from "../Common";
@@ -18,6 +18,38 @@ export interface ChartFrameProps extends LoadingProps {
   testID?: string;
   tooltipText?: string;
 }
+
+const LEGEND_ITEM_STYLE = {__style: {flexBasis: 0, flexGrow: 1, flexShrink: 1}} as const;
+
+interface ChartLegendItemProps {
+  color: string;
+  index: number;
+  label: string;
+  testID?: string;
+}
+
+// Memoized on primitives so a tooltip change while hovering the plot does not re-render the legend.
+const ChartLegendItem: FC<ChartLegendItemProps> = memo(({color, index, label, testID}) => (
+  <Box
+    alignItems="center"
+    dangerouslySetInlineStyle={LEGEND_ITEM_STYLE}
+    direction="row"
+    gap={1}
+    minWidth={0}
+    testID={resolveTestID(testID, `legend.${index}.item`)}
+  >
+    <Box
+      dangerouslySetInlineStyle={{
+        __style: {backgroundColor: color, height: 8, width: 8},
+      }}
+      testID={resolveTestID(testID, `legend.${index}.swatch`)}
+    />
+    <Text size="sm" skipLinking testID={resolveTestID(testID, `legend.${index}`)} truncate>
+      {label}
+    </Text>
+  </Box>
+));
+ChartLegendItem.displayName = "ChartLegendItem";
 
 export const ChartFrame: FC<ChartFrameProps> = ({
   accessibilityLabel,
@@ -77,30 +109,13 @@ export const ChartFrame: FC<ChartFrameProps> = ({
           overflow="hidden"
         >
           {legendItems.map((item, index) => (
-            <Box
-              alignItems="center"
-              dangerouslySetInlineStyle={{__style: {flexBasis: 0, flexGrow: 1, flexShrink: 1}}}
-              direction="row"
-              gap={1}
+            <ChartLegendItem
+              color={item.color}
+              index={index}
               key={`${item.label}-${index}`}
-              minWidth={0}
-              testID={resolveTestID(testID, `legend.${index}.item`)}
-            >
-              <Box
-                dangerouslySetInlineStyle={{
-                  __style: {backgroundColor: item.color, height: 8, width: 8},
-                }}
-                testID={resolveTestID(testID, `legend.${index}.swatch`)}
-              />
-              <Text
-                size="sm"
-                skipLinking
-                testID={resolveTestID(testID, `legend.${index}`)}
-                truncate
-              >
-                {item.label}
-              </Text>
-            </Box>
+              label={item.label}
+              testID={testID}
+            />
           ))}
         </Box>
       ) : null}

@@ -16,7 +16,14 @@ import {
   Text,
 } from "@terreno/ui";
 import {DateTime} from "luxon";
-import React, {useCallback, useMemo} from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
 import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
 import {
@@ -327,6 +334,106 @@ const traceSubline = (trace: TraceListItem): string => {
   return trace.userId ? `${steps} · user ${trace.userId}` : steps;
 };
 
+interface TraceCellHandlers {
+  onOpenTrace: (id: string) => void;
+  onToggleSelect: (id: string) => void;
+}
+
+const NO_SELECTION: ReadonlySet<string> = new Set();
+
+/**
+ * The name and select cells read their handlers and the selection from context instead of a
+ * closure, so the cell map keeps one identity. A map rebuilt per selection would remount every
+ * name and select cell and re-render every other cell in the table.
+ */
+const TraceCellHandlersContext = createContext<TraceCellHandlers>({
+  onOpenTrace: () => {},
+  onToggleSelect: () => {},
+});
+const TraceSelectionContext = createContext<ReadonlySet<string>>(NO_SELECTION);
+
+const TraceNameCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const {onOpenTrace} = useContext(TraceCellHandlersContext);
+  const trace = cellData.value as TraceListItem;
+  const handleOpen = useCallback((): void => {
+    onOpenTrace(trace.id);
+  }, [onOpenTrace, trace.id]);
+  return (
+    <Box
+      accessibilityHint="Opens the trace"
+      accessibilityLabel={`Open trace ${trace.name}`}
+      flex="grow"
+      gap={1}
+      justifyContent="center"
+      onClick={handleOpen}
+    >
+      <Box alignItems="center" direction="row" gap={2} testID={`ai-traces-open-${trace.id}`}>
+        <Text bold numberOfLines={1}>
+          {trace.name}
+        </Text>
+        {trace.sensitive ? (
+          <Badge
+            iconName="lock"
+            secondary
+            status="warning"
+            testID="ai-traces-sensitive-badge"
+            value="Sensitive"
+          />
+        ) : null}
+      </Box>
+      <Text color="secondaryLight" numberOfLines={1} size="sm">
+        {traceSubline(trace)}
+      </Text>
+    </Box>
+  );
+};
+
+const TraceSelectCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const {onToggleSelect} = useContext(TraceCellHandlersContext);
+  const selected = useContext(TraceSelectionContext);
+  const id = String(cellData.value ?? "");
+  const handleToggle = useCallback((): void => {
+    onToggleSelect(id);
+  }, [id, onToggleSelect]);
+  return (
+    <Box
+      accessibilityHint="Toggle row selection"
+      accessibilityLabel={`Select trace ${id}`}
+      justifyContent="center"
+      onClick={handleToggle}
+      testID={`ai-traces-select-${id}`}
+    >
+      <CheckBox selected={selected.has(id)} />
+    </Box>
+  );
+};
+
+const TRACE_COLUMN_COMPONENTS = {
+  number: NumberCell,
+  traceName: TraceNameCell,
+  traceSelect: TraceSelectCell,
+  traceStatus: StatusCell,
+  traceText: SingleLineCell,
+};
+
+/** Module-level elements so the memoized table does not see a new `emptyContent` per render. */
+const FILTERED_EMPTY_CONTENT = (
+  <ObservabilityEmptyState
+    description="Clear a filter to see more traces."
+    iconName="filter"
+    testID="ai-traces-empty"
+    title="No traces match these filters"
+  />
+);
+const NO_TRACES_EMPTY_CONTENT = (
+  <ObservabilityEmptyState
+    description="Traces appear here as soon as your app makes an AI call."
+    iconName="list"
+    testID="ai-traces-empty"
+    title="No traces yet"
+  />
+);
+
 export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
   addToDatasetError,
   datasetId,
@@ -381,62 +488,25 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
     });
   }, [filterValues]);
 
-  const customColumnComponentMap = useMemo(
-    () => ({
-      number: NumberCell,
-      traceName: ({cellData}: {cellData: DataTableCellData}) => {
-        const trace = cellData.value as TraceListItem;
-        return (
-          <Box
-            accessibilityHint="Opens the trace"
-            accessibilityLabel={`Open trace ${trace.name}`}
-            flex="grow"
-            gap={1}
-            justifyContent="center"
-            onClick={() => {
-              onOpenTrace(trace.id);
-            }}
-          >
-            <Box alignItems="center" direction="row" gap={2} testID={`ai-traces-open-${trace.id}`}>
-              <Text bold numberOfLines={1}>
-                {trace.name}
-              </Text>
-              {trace.sensitive ? (
-                <Badge
-                  iconName="lock"
-                  secondary
-                  status="warning"
-                  testID="ai-traces-sensitive-badge"
-                  value="Sensitive"
-                />
-              ) : null}
-            </Box>
-            <Text color="secondaryLight" numberOfLines={1} size="sm">
-              {traceSubline(trace)}
-            </Text>
-          </Box>
-        );
+  // Callers may pass inline handlers; the cells call the newest ones through this ref so the
+  // context value, and with it every name and select cell, stays put.
+  const cellHandlersRef = useRef<TraceCellHandlers>({onOpenTrace, onToggleSelect});
+
+  // Point at the newest handlers after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    cellHandlersRef.current = {onOpenTrace, onToggleSelect};
+  });
+
+  const cellHandlers = useMemo(
+    (): TraceCellHandlers => ({
+      onOpenTrace: (id: string): void => {
+        cellHandlersRef.current.onOpenTrace(id);
       },
-      traceSelect: ({cellData}: {cellData: DataTableCellData}) => {
-        const id = String(cellData.value ?? "");
-        return (
-          <Box
-            accessibilityHint="Toggle row selection"
-            accessibilityLabel={`Select trace ${id}`}
-            justifyContent="center"
-            onClick={() => {
-              onToggleSelect(id);
-            }}
-            testID={`ai-traces-select-${id}`}
-          >
-            <CheckBox selected={selected.has(id)} />
-          </Box>
-        );
+      onToggleSelect: (id: string): void => {
+        cellHandlersRef.current.onToggleSelect(id);
       },
-      traceStatus: StatusCell,
-      traceText: SingleLineCell,
     }),
-    [onOpenTrace, onToggleSelect, selected]
+    []
   );
 
   const columns = useMemo(() => buildColumns(promptOptions), [promptOptions]);
@@ -612,38 +682,26 @@ export const AiTracesListView: React.FC<AiTracesListViewProps> = ({
           <Spinner />
         </Box>
       ) : (
-        <DataTable
-          additionalFilters={ADDITIONAL_FILTERS}
-          columns={columns}
-          customColumnComponentMap={customColumnComponentMap}
-          data={rows}
-          emptyContent={
-            hasFilters ? (
-              <ObservabilityEmptyState
-                description="Clear a filter to see more traces."
-                iconName="filter"
-                testID="ai-traces-empty"
-                title="No traces match these filters"
-              />
-            ) : (
-              <ObservabilityEmptyState
-                description="Traces appear here as soon as your app makes an AI call."
-                iconName="list"
-                testID="ai-traces-empty"
-                title="No traces yet"
-              />
-            )
-          }
-          filterValues={filterValues}
-          onFilterValuesChange={onFilterValuesChange}
-          page={page}
-          rowHeight={TRACE_ROW_HEIGHT}
-          setPage={onPageChange}
-          setSortColumn={handleSortColumnChange}
-          sortColumn={sortColumn}
-          testID="ai-traces-table"
-          totalPages={totalPages}
-        />
+        <TraceCellHandlersContext.Provider value={cellHandlers}>
+          <TraceSelectionContext.Provider value={selected}>
+            <DataTable
+              additionalFilters={ADDITIONAL_FILTERS}
+              columns={columns}
+              customColumnComponentMap={TRACE_COLUMN_COMPONENTS}
+              data={rows}
+              emptyContent={hasFilters ? FILTERED_EMPTY_CONTENT : NO_TRACES_EMPTY_CONTENT}
+              filterValues={filterValues}
+              onFilterValuesChange={onFilterValuesChange}
+              page={page}
+              rowHeight={TRACE_ROW_HEIGHT}
+              setPage={onPageChange}
+              setSortColumn={handleSortColumnChange}
+              sortColumn={sortColumn}
+              testID="ai-traces-table"
+              totalPages={totalPages}
+            />
+          </TraceSelectionContext.Provider>
+        </TraceCellHandlersContext.Provider>
       )}
       {!isLoading && traces.length > 0 ? (
         <Text color="secondaryLight" size="sm" testID="ai-traces-pagination">

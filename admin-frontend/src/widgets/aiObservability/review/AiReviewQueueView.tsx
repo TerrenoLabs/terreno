@@ -7,7 +7,7 @@ import {
   Spinner,
   Text,
 } from "@terreno/ui";
-import React, {useMemo} from "react";
+import React, {useLayoutEffect, useMemo, useRef} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
 import {ObservabilityStatusBadge} from "../shell/ObservabilityStatusBadge";
@@ -167,6 +167,15 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
   questionSetNames,
   status,
 }) => {
+  // Callers may pass an inline open handler. The cell reads it through a ref so the cell keeps
+  // its component identity; a new map would remount every output cell in the table.
+  const onOpenItemRef = useRef(onOpenItem);
+
+  // Point at the newest handler after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    onOpenItemRef.current = onOpenItem;
+  });
+
   const customColumnComponentMap = useMemo(
     () => ({
       reviewOutput: ({cellData}: {cellData: DataTableCellData}) => {
@@ -178,7 +187,7 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
             gap={1}
             justifyContent="center"
             onClick={() => {
-              onOpenItem(item.id);
+              onOpenItemRef.current(item.id);
             }}
           >
             <Box testID={`ai-review-open-${item.id}`}>
@@ -194,7 +203,7 @@ export const AiReviewQueueView: React.FC<AiReviewQueueViewProps> = ({
       },
       reviewStatus: StatusCell,
     }),
-    [onOpenItem]
+    []
   );
   const columns = useMemo(
     () =>

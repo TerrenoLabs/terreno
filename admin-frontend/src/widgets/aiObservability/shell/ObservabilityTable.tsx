@@ -1,5 +1,5 @@
 import {Box, Text} from "@terreno/ui";
-import React from "react";
+import React, {memo, useCallback, useLayoutEffect, useRef} from "react";
 import {View, type ViewStyle} from "react-native";
 
 export interface ObservabilityTableColumn {
@@ -35,13 +35,13 @@ const columnCellStyle = (minWidth: number, grow = 1): ViewStyle => ({
 });
 
 const renderRowCells = ({
+  cells,
   columns,
-  row,
 }: {
+  cells: React.ReactNode[];
   columns: ObservabilityTableColumn[];
-  row: ObservabilityTableRow;
 }): React.ReactNode[] => {
-  return row.cells.map((cell, cellIndex) => {
+  return cells.map((cell, cellIndex) => {
     const column = columns[cellIndex];
     const minWidth = column?.minWidth ?? DEFAULT_MIN_WIDTH;
     return (
@@ -59,6 +59,59 @@ const renderRowCells = ({
   });
 };
 
+interface TableRowProps {
+  accessibilityLabel?: string;
+  cells: React.ReactNode[];
+  columns: ObservabilityTableColumn[];
+  isClickable: boolean;
+  onRowClick: (rowKey: string) => void;
+  rowKey: string;
+  testID: string;
+}
+
+// Memoized so a parent re-render, or one changed row, does not re-render every row's cells.
+const TableRow: React.FC<TableRowProps> = memo(
+  ({accessibilityLabel, cells, columns, isClickable, onRowClick, rowKey, testID}) => {
+    const handleClick = useCallback((): void => {
+      onRowClick(rowKey);
+    }, [onRowClick, rowKey]);
+    const renderedCells = renderRowCells({cells, columns});
+    if (isClickable) {
+      return (
+        <Box
+          accessibilityHint="Open full row details"
+          accessibilityLabel={accessibilityLabel ?? "Open row details"}
+          accessibilityRole="button"
+          alignItems="start"
+          borderTop="default"
+          direction="row"
+          gap={3}
+          onClick={handleClick}
+          paddingX={3}
+          paddingY={2}
+          testID={testID}
+        >
+          {renderedCells}
+        </Box>
+      );
+    }
+    return (
+      <Box
+        alignItems="start"
+        borderTop="default"
+        direction="row"
+        gap={3}
+        paddingX={3}
+        paddingY={2}
+        testID={testID}
+      >
+        {renderedCells}
+      </Box>
+    );
+  }
+);
+TableRow.displayName = "ObservabilityTableRow";
+
 /**
  * Flow-height table for the observability screens. `DataTable` sizes itself to a
  * height-constrained parent and clips fixed-width cells, so inside these scrolling pages its rows
@@ -66,6 +119,17 @@ const renderRowCells = ({
  * text over a few lines before truncating.
  */
 export const ObservabilityTable: React.FC<ObservabilityTableProps> = ({columns, rows, testID}) => {
+  const latestRows = useRef(rows);
+
+  // Point at the newest rows after every commit so the stable click handler calls the current onClick.
+  useLayoutEffect(() => {
+    latestRows.current = rows;
+  });
+
+  const handleRowClick = useCallback((rowKey: string): void => {
+    latestRows.current.find((row) => row.key === rowKey)?.onClick?.();
+  }, []);
+
   return (
     <Box
       alignSelf="start"
@@ -88,40 +152,17 @@ export const ObservabilityTable: React.FC<ObservabilityTableProps> = ({columns, 
         })}
       </Box>
       {rows.map((row) => {
-        const cells = renderRowCells({columns, row});
-        if (row.onClick) {
-          return (
-            <Box
-              accessibilityHint="Open full row details"
-              accessibilityLabel={row.accessibilityLabel ?? "Open row details"}
-              accessibilityRole="button"
-              alignItems="start"
-              borderTop="default"
-              direction="row"
-              gap={3}
-              key={row.key}
-              onClick={row.onClick}
-              paddingX={3}
-              paddingY={2}
-              testID={`${testID}-row-${row.key}`}
-            >
-              {cells}
-            </Box>
-          );
-        }
         return (
-          <Box
-            alignItems="start"
-            borderTop="default"
-            direction="row"
-            gap={3}
+          <TableRow
+            accessibilityLabel={row.accessibilityLabel}
+            cells={row.cells}
+            columns={columns}
+            isClickable={Boolean(row.onClick)}
             key={row.key}
-            paddingX={3}
-            paddingY={2}
+            onRowClick={handleRowClick}
+            rowKey={row.key}
             testID={`${testID}-row-${row.key}`}
-          >
-            {cells}
-          </Box>
+          />
         );
       })}
     </Box>

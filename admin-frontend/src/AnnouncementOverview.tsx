@@ -13,7 +13,7 @@ import {
   Spinner,
   Text,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useMemo, useRef, useState} from "react";
 import {CommsStatCard} from "./comms/CommsStatCard";
 import {unwrapAdminEnvelope, useAdminRpc, useAdminRpcQuery} from "./useAdminRpc";
 
@@ -122,10 +122,16 @@ export const AnnouncementOverview: React.FC<AnnouncementOverviewProps> = ({
     url: `${ANNOUNCEMENT_OVERVIEW_ROUTE}?page=${page}&limit=${DEFAULT_LIMIT}`,
   });
 
+  // Callers pass an inline `onEdit`. The cell reads it through a ref so the cell component
+  // keeps its identity; a new component type would remount every action cell in the table.
+  const onEditRef = useRef(onEdit);
+  onEditRef.current = onEdit;
+  const hasEdit = Boolean(onEdit);
+
   const ActionsCell: React.FC<{column: DataTableColumn; cellData: DataTableCellData}> = useCallback(
     ({cellData}: {column: DataTableColumn; cellData: DataTableCellData}) => {
       const {id} = cellData.value as {id: string};
-      if (!onEdit) {
+      if (!hasEdit) {
         return null;
       }
       return (
@@ -133,14 +139,14 @@ export const AnnouncementOverview: React.FC<AnnouncementOverviewProps> = ({
           <IconButton
             accessibilityLabel="Edit announcement"
             iconName="pen-to-square"
-            onClick={() => onEdit(id)}
+            onClick={() => onEditRef.current?.(id)}
             tooltipText="Edit"
             variant="muted"
           />
         </Box>
       );
     },
-    [onEdit]
+    [hasEdit]
   );
 
   const customColumnComponentMap: DataTableCustomComponentMap = useMemo(
@@ -148,30 +154,41 @@ export const AnnouncementOverview: React.FC<AnnouncementOverviewProps> = ({
     [ActionsCell]
   );
 
-  const columns: DataTableColumn[] = [
-    ...DATA_COLUMNS,
-    ...(onEdit ? [{columnType: ACTIONS_COLUMN_TYPE, sortable: false, title: "", width: 60}] : []),
-  ];
+  const columns: DataTableColumn[] = useMemo(
+    () => [
+      ...DATA_COLUMNS,
+      ...(hasEdit
+        ? [{columnType: ACTIONS_COLUMN_TYPE, sortable: false, title: "", width: 60}]
+        : []),
+    ],
+    [hasEdit]
+  );
 
-  const rows = ((overview?.data ?? []) as AnnouncementOverviewRow[]).map((row) => {
-    const metrics = row.metrics ?? {acknowledgements: 0, clicks: 0, impressions: 0};
-    const dataCells: DataTableCellData[] = DATA_COLUMN_KEYS.map((key) => {
-      if (key === "impressions") {
-        return {value: formatCount(metrics.impressions)};
-      }
-      if (key === "acknowledgements") {
-        return {value: formatCount(metrics.acknowledgements)};
-      }
-      if (key === "clicks") {
-        return {value: formatCount(metrics.clicks)};
-      }
-      return {value: row[key] ?? ""};
-    });
-    if (onEdit) {
-      dataCells.push({value: {id: row._id}});
-    }
-    return dataCells;
-  });
+  // Built once per fetched page so the table's memoized rows and cells keep their props.
+  const overviewRows = overview?.data;
+  const rows = useMemo(
+    () =>
+      ((overviewRows ?? []) as AnnouncementOverviewRow[]).map((row) => {
+        const metrics = row.metrics ?? {acknowledgements: 0, clicks: 0, impressions: 0};
+        const dataCells: DataTableCellData[] = DATA_COLUMN_KEYS.map((key) => {
+          if (key === "impressions") {
+            return {value: formatCount(metrics.impressions)};
+          }
+          if (key === "acknowledgements") {
+            return {value: formatCount(metrics.acknowledgements)};
+          }
+          if (key === "clicks") {
+            return {value: formatCount(metrics.clicks)};
+          }
+          return {value: row[key] ?? ""};
+        });
+        if (hasEdit) {
+          dataCells.push({value: {id: row._id}});
+        }
+        return dataCells;
+      }),
+    [hasEdit, overviewRows]
+  );
 
   const totalPages = overview ? Math.ceil(overview.total / DEFAULT_LIMIT) : 1;
   const totals = overview?.totals;

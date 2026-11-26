@@ -147,6 +147,13 @@ const toColumnFilter = (
 const MEMBERSHIP_SETTLE_ATTEMPTS = 3;
 const MEMBERSHIP_SETTLE_RETRY_MS = 700;
 
+/** One table row prebuilt for both checkbox states; the rest of its cells are shared. */
+interface AdminTableRowVariants {
+  id: string;
+  selected: DataTableCellData[];
+  unselected: DataTableCellData[];
+}
+
 interface AdminListEnvelope {
   data: Array<Record<string, AdminFieldValue>>;
   total: number;
@@ -475,6 +482,10 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
   listParamsRef.current = listParams;
   const refreshGenerationRef = useRef(0);
   const [deleteItem] = useDeleteMutation();
+  // The mutation triggers and the toast API are new functions on every render. Row handlers
+  // read them through refs so their identity, and so the memoized row cells, stay stable.
+  const deleteItemRef = useRef(deleteItem);
+  deleteItemRef.current = deleteItem;
 
   // Invalidate in-flight Refresh when membership query params change or the table unmounts.
   useEffect(() => {
@@ -483,8 +494,14 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     };
   }, [listParams]);
   const [patchItem] = useUpdateMutation();
+  const patchItemRef = useRef(patchItem);
+  patchItemRef.current = patchItem;
   const [bulkPatch] = useBulkPatchMutation();
+  const bulkPatchRef = useRef(bulkPatch);
+  bulkPatchRef.current = bulkPatch;
   const [enqueueBackground] = useAdminBackgroundTaskMutation(resolvedApiBase);
+  const enqueueBackgroundRef = useRef(enqueueBackground);
+  enqueueBackgroundRef.current = enqueueBackground;
 
   const membershipRows = useMemo((): Array<Record<string, AdminFieldValue>> => {
     const envelope = listData as AdminListEnvelope | undefined;
@@ -709,35 +726,29 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     void settleMembership();
   }, [isWindowed, membershipStale, syncCollection]);
 
-  const handleDelete = useCallback(
-    async (id: string) => {
-      try {
-        await deleteItem(id).unwrap();
-      } catch (err) {
-        console.error("Failed to delete:", err);
-      }
-    },
-    [deleteItem]
-  );
+  const handleDelete = useCallback(async (id: string): Promise<void> => {
+    try {
+      await deleteItemRef.current(id).unwrap();
+    } catch (err) {
+      console.error("Failed to delete:", err);
+    }
+  }, []);
 
-  const toggleSelected = useCallback(
-    (id: string, next: boolean) => {
-      setSelectedIds((prev) => {
-        const n = new Set(prev);
-        if (next) {
-          if (n.size >= ADMIN_LIST_MAX_SELECTION) {
-            toast.warn(`You can select at most ${ADMIN_LIST_MAX_SELECTION} rows.`);
-            return prev;
-          }
-          n.add(id);
-        } else {
-          n.delete(id);
+  const toggleSelected = useCallback((id: string, next: boolean): void => {
+    setSelectedIds((prev) => {
+      const n = new Set(prev);
+      if (next) {
+        if (n.size >= ADMIN_LIST_MAX_SELECTION) {
+          toastRef.current.warn(`You can select at most ${ADMIN_LIST_MAX_SELECTION} rows.`);
+          return prev;
         }
-        return n;
-      });
-    },
-    [toast]
-  );
+        n.add(id);
+      } else {
+        n.delete(id);
+      }
+      return n;
+    });
+  }, []);
 
   const toggleSelectPage = useCallback(() => {
     const ids = tableItems.map((row) => String(row._id));
@@ -783,6 +794,8 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     });
   }, [membershipRows, tableItems]);
 
+  // Reads the mutation triggers and toast through refs so the memoized action menu only
+  // re-renders when the selection or the model changes, not on every search keystroke.
   const runBulkAction = useCallback(
     async (actionId: string) => {
       if (!modelConfig) {
@@ -797,44 +810,48 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
         return;
       }
       if (action.background) {
-        await enqueueBackground({
-          ids,
-          kind: action.id,
-          metadata: {actionId: action.id},
-          resourceRoute: modelConfig.routePath,
-        }).unwrap();
-        toast.success("Background task queued");
+        await enqueueBackgroundRef
+          .current({
+            ids,
+            kind: action.id,
+            metadata: {actionId: action.id},
+            resourceRoute: modelConfig.routePath,
+          })
+          .unwrap();
+        toastRef.current.success("Background task queued");
       } else if (action.patchKeys && action.patchKeys.length > 0) {
         const patch: Record<string, unknown> = {};
         for (const k of action.patchKeys) {
           patch[k] = true;
         }
-        const result = (await bulkPatch({ids, patch}).unwrap()) as {
+        const result = (await bulkPatchRef.current({ids, patch}).unwrap()) as {
           failures?: {id: string; title: string}[];
           updated?: number;
         };
         if (Array.isArray(result.failures) && result.failures.length > 0) {
-          toast.error(`Updated ${result.updated ?? 0}; ${result.failures.length} failed`);
+          toastRef.current.error(
+            `Updated ${result.updated ?? 0}; ${result.failures.length} failed`
+          );
           return;
         }
-        toast.success("Bulk update applied");
+        toastRef.current.success("Bulk update applied");
       } else {
-        toast.warn("This action has no bulk handler configured.");
+        toastRef.current.warn("This action has no bulk handler configured.");
       }
       setSelectedIds(new Set());
     },
-    [bulkPatch, enqueueBackground, modelConfig, selectedIds, toast, visibleActions]
+    [modelConfig, selectedIds, visibleActions]
   );
 
   const handleInlineBooleanToggle = useCallback(
-    async (rowId: string, fieldKey: string, next: boolean) => {
+    async (rowId: string, fieldKey: string, next: boolean): Promise<void> => {
       try {
-        await patchItem({body: {[fieldKey]: next}, id: rowId}).unwrap();
+        await patchItemRef.current({body: {[fieldKey]: next}, id: rowId}).unwrap();
       } catch (err) {
-        toast.catch(err, "Update failed");
+        toastRef.current.catch(err, "Update failed");
       }
     },
-    [patchItem, toast]
+    []
   );
 
   useEffect(() => {
@@ -862,6 +879,152 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
       .filter((filter): filter is DataTableColumnFilter => Boolean(filter));
   }, [displayFields, modelConfig, modelConfigs]);
 
+  // Memoized so typing in the search box or selecting a row hands DataTable the same columns,
+  // which keeps its header and every untouched row from re-rendering.
+  const columns = useMemo((): DataTableColumn[] => {
+    if (!modelConfig) {
+      return [];
+    }
+    const adminFilters = modelConfig.filters ?? [];
+    const dataColumns: DataTableColumn[] = displayFields.map((fieldKey) => {
+      const fieldConfig = modelConfig.fields[fieldKey];
+      const columnType = getColumnType(fieldKey, fieldConfig);
+      const widthOverride = columnWidths?.[fieldKey] ?? modelConfig.listColumnWidths?.[fieldKey];
+      const sortable =
+        sortableFieldSet === undefined ? true : Boolean(sortableFieldSet.has(fieldKey));
+      const isLink = linkFieldSet.has(fieldKey);
+      const isInlineBool =
+        fieldConfig?.type === "boolean" && modelConfig.permissions?.update !== false;
+      const declaredFilter = adminFilters.find((filter) => filter.field === fieldKey);
+      const filter = declaredFilter
+        ? toColumnFilter(declaredFilter, modelConfig.fields, modelConfigs)
+        : undefined;
+      return {
+        columnType: isInlineBool ? INLINE_BOOL_COLUMN_TYPE : isLink ? LINK_COLUMN_TYPE : columnType,
+        filter,
+        sortable,
+        title: startCase(fieldKey),
+        width: Math.max(
+          widthOverride ?? getColumnWidth(fieldKey, columnType),
+          declaredFilter ? 180 : 0
+        ),
+      };
+    });
+
+    const selectColumns: DataTableColumn[] = showSelectColumn
+      ? [
+          {
+            columnType: SELECT_COLUMN_TYPE,
+            sortable: false,
+            title: "",
+            width: 48,
+          },
+        ]
+      : [];
+
+    return [
+      ...selectColumns,
+      ...dataColumns,
+      {
+        columnType: ACTIONS_COLUMN_TYPE,
+        sortable: false,
+        title: "",
+        width: deleteEnabled ? 140 : 100,
+      },
+    ];
+  }, [
+    columnWidths,
+    deleteEnabled,
+    displayFields,
+    linkFieldSet,
+    modelConfig,
+    modelConfigs,
+    showSelectColumn,
+    sortableFieldSet,
+  ]);
+
+  // Each row is built once per list load in both selection states, so toggling one checkbox
+  // swaps a single row array and DataTable re-renders only that row.
+  const rowVariants = useMemo((): AdminTableRowVariants[] => {
+    if (!modelConfig) {
+      return [];
+    }
+    return tableItems.map((item) => {
+      const id = String(item._id ?? "");
+
+      const fieldCells = displayFields.map((fieldKey) => {
+        const fieldConfig = modelConfig.fields[fieldKey];
+        const columnType = getColumnType(fieldKey, fieldConfig);
+        const formatted = formatCellValue(item[fieldKey], columnType);
+        const isLink = linkFieldSet.has(fieldKey);
+        const isInlineBool =
+          fieldConfig?.type === "boolean" && modelConfig.permissions?.update !== false;
+
+        if (isInlineBool) {
+          const recordCapabilities = item._adminCapabilities as {update?: boolean} | undefined;
+          return {
+            value: {
+              disabled:
+                recordCapabilities?.update === false || modelConfig.permissions?.update === false,
+              onToggle: () => handleInlineBooleanToggle(id, fieldKey, !item[fieldKey]),
+              value: Boolean(item[fieldKey]),
+            },
+          };
+        }
+
+        if (isLink) {
+          return {
+            value: {
+              href: `${resolvedRouteBase}/${modelName}/${item._id}`,
+              text: formatted,
+            },
+          };
+        }
+
+        return {
+          value: formatted,
+        };
+      });
+
+      const actionsCell = {
+        value: {
+          baseUrl: resolvedRouteBase,
+          deleteEnabled,
+          id,
+          modelName,
+          onDelete: handleDelete,
+        },
+      };
+      const cells: DataTableCellData[] = [...fieldCells, actionsCell];
+      if (!showSelectColumn) {
+        return {id, selected: cells, unselected: cells};
+      }
+      return {
+        id,
+        selected: [{value: {id, onToggle: toggleSelected, selected: true}}, ...cells],
+        unselected: [{value: {id, onToggle: toggleSelected, selected: false}}, ...cells],
+      };
+    });
+  }, [
+    deleteEnabled,
+    displayFields,
+    handleDelete,
+    handleInlineBooleanToggle,
+    linkFieldSet,
+    modelConfig,
+    modelName,
+    resolvedRouteBase,
+    showSelectColumn,
+    tableItems,
+    toggleSelected,
+  ]);
+
+  const data = useMemo(
+    (): DataTableCellData[][] =>
+      rowVariants.map((row) => (selectedIds.has(row.id) ? row.selected : row.unselected)),
+    [rowVariants, selectedIds]
+  );
+
   if (isConfigLoading || !modelConfig) {
     return (
       <Page color="transparent" maxWidth="100%" padding={0}>
@@ -870,103 +1033,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
     );
   }
 
-  const adminFilters = modelConfig.filters ?? [];
-  const dataColumns: DataTableColumn[] = displayFields.map((fieldKey) => {
-    const fieldConfig = modelConfig.fields[fieldKey];
-    const columnType = getColumnType(fieldKey, fieldConfig);
-    const widthOverride = columnWidths?.[fieldKey] ?? modelConfig.listColumnWidths?.[fieldKey];
-    const sortable =
-      sortableFieldSet === undefined ? true : Boolean(sortableFieldSet.has(fieldKey));
-    const isLink = linkFieldSet.has(fieldKey);
-    const isInlineBool =
-      fieldConfig?.type === "boolean" && modelConfig.permissions?.update !== false;
-    const declaredFilter = adminFilters.find((filter) => filter.field === fieldKey);
-    const filter = declaredFilter
-      ? toColumnFilter(declaredFilter, modelConfig.fields, modelConfigs)
-      : undefined;
-    return {
-      columnType: isInlineBool ? INLINE_BOOL_COLUMN_TYPE : isLink ? LINK_COLUMN_TYPE : columnType,
-      filter,
-      sortable,
-      title: startCase(fieldKey),
-      width: Math.max(
-        widthOverride ?? getColumnWidth(fieldKey, columnType),
-        declaredFilter ? 180 : 0
-      ),
-    };
-  });
-
-  const selectColumn: DataTableColumn | null = showSelectColumn
-    ? {
-        columnType: SELECT_COLUMN_TYPE,
-        sortable: false,
-        title: "",
-        width: 48,
-      }
-    : null;
-
-  const columns: DataTableColumn[] = [
-    ...(selectColumn ? [selectColumn] : []),
-    ...dataColumns,
-    {
-      columnType: ACTIONS_COLUMN_TYPE,
-      sortable: false,
-      title: "",
-      width: deleteEnabled ? 140 : 100,
-    },
-  ];
-
   const listItems = tableItems;
-  const data = listItems.map((item) => {
-    const id = String(item._id ?? "");
-    const selected = selectedIds.has(id);
-    const selectCell = selectColumn ? [{value: {id, onToggle: toggleSelected, selected}}] : [];
-
-    const fieldCells = displayFields.map((fieldKey) => {
-      const fieldConfig = modelConfig.fields[fieldKey];
-      const columnType = getColumnType(fieldKey, fieldConfig);
-      const formatted = formatCellValue(item[fieldKey], columnType);
-      const isLink = linkFieldSet.has(fieldKey);
-      const isInlineBool =
-        fieldConfig?.type === "boolean" && modelConfig.permissions?.update !== false;
-
-      if (isInlineBool) {
-        const recordCapabilities = item._adminCapabilities as {update?: boolean} | undefined;
-        return {
-          value: {
-            disabled:
-              recordCapabilities?.update === false || modelConfig.permissions?.update === false,
-            onToggle: () => handleInlineBooleanToggle(id, fieldKey, !item[fieldKey]),
-            value: Boolean(item[fieldKey]),
-          },
-        };
-      }
-
-      if (isLink) {
-        return {
-          value: {
-            href: `${resolvedRouteBase}/${modelName}/${item._id}`,
-            text: formatted,
-          },
-        };
-      }
-
-      return {
-        value: formatted,
-      };
-    });
-
-    const actionsCell = {
-      value: {
-        baseUrl: resolvedRouteBase,
-        deleteEnabled,
-        id,
-        modelName,
-        onDelete: handleDelete,
-      },
-    };
-    return [...selectCell, ...fieldCells, actionsCell];
-  });
 
   const totalPages = membershipTotal ? Math.ceil(membershipTotal / pageLimit) : 1;
 
@@ -1049,7 +1116,7 @@ export const AdminModelTable: React.FC<AdminModelTableProps> = ({
                     : undefined
                 }
                 page={page}
-                pinnedColumns={selectColumn ? 1 : 0}
+                pinnedColumns={showSelectColumn ? 1 : 0}
                 search={searchText}
                 searchFields={modelConfig.searchFields}
                 setPage={setPage}

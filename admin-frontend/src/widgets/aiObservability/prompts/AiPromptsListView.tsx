@@ -11,7 +11,7 @@ import {
   TextField,
 } from "@terreno/ui";
 import {DateTime} from "luxon";
-import React, {useCallback, useMemo} from "react";
+import React, {useCallback, useLayoutEffect, useMemo, useRef} from "react";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {ObservabilityEmptyState, ObservabilityErrorState} from "../shell/ObservabilityStates";
 import {
@@ -259,6 +259,16 @@ const NewestCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
   );
 };
 
+/** Shown when column filters hide every prompt; one element so the memoized table can skip. */
+const FILTERED_EMPTY_CONTENT = (
+  <ObservabilityEmptyState
+    description="Clear a column filter to see more prompts."
+    iconName="filter"
+    testID="ai-prompts-no-matches"
+    title="No prompts match these filters"
+  />
+);
+
 const NumberCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => (
   <Box flex="grow" justifyContent="center" width="100%">
     <Text align="right">{String(cellData.value ?? "")}</Text>
@@ -357,12 +367,25 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
   }, [browsing, currentDirectory]);
   const tags = useMemo(() => promptTags(prompts), [prompts]);
 
+  // Callers may pass inline open handlers. The cells read them through a ref so the cells keep
+  // their component identity; a new map would remount every prompt and folder cell in the table.
+  const openHandlersRef = useRef({onFolderChange, onOpenPrompt});
+
+  // Point at the newest handlers after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    openHandlersRef.current = {onFolderChange, onOpenPrompt};
+  });
+
+  const handleOpenFolder = useCallback((path: string): void => {
+    openHandlersRef.current.onFolderChange(path);
+  }, []);
+
   const customColumnComponentMap = useMemo(
     () => ({
       number: NumberCell,
       promptName: ({cellData}: {cellData: DataTableCellData}) => {
         if (isNavigationCell(cellData.value)) {
-          return <FolderNameCell cell={cellData.value} onOpen={onFolderChange} />;
+          return <FolderNameCell cell={cellData.value} onOpen={handleOpenFolder} />;
         }
         const prompt = cellData.value as PromptListRow;
         return (
@@ -373,7 +396,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
             gap={1}
             justifyContent="center"
             onClick={() => {
-              onOpenPrompt(prompt.name);
+              openHandlersRef.current.onOpenPrompt(prompt.name);
             }}
           >
             <Box testID={`ai-prompt-open-${prompt.name}`}>
@@ -391,7 +414,7 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
       promptProduction: ProductionCell,
       promptType: TypeBadgeCell,
     }),
-    [onFolderChange, onOpenPrompt]
+    [handleOpenFolder]
   );
 
   const navigationRows = useMemo((): DataTableCellData[][] => {
@@ -418,6 +441,11 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
     columns: tableColumnsInput,
     rows: visible,
   });
+
+  const tableData = useMemo(
+    (): DataTableCellData[][] => [...navigationRows, ...table.data],
+    [navigationRows, table.data]
+  );
 
   const renderBody = (): React.ReactNode => {
     if (isLoading) {
@@ -457,15 +485,8 @@ export const AiPromptsListView: React.FC<AiPromptsListViewProps> = ({
       <DataTable
         {...table}
         customColumnComponentMap={customColumnComponentMap}
-        data={[...navigationRows, ...table.data]}
-        emptyContent={
-          <ObservabilityEmptyState
-            description="Clear a column filter to see more prompts."
-            iconName="filter"
-            testID="ai-prompts-no-matches"
-            title="No prompts match these filters"
-          />
-        }
+        data={tableData}
+        emptyContent={FILTERED_EMPTY_CONTENT}
         rowHeight={PROMPT_ROW_HEIGHT}
         testID="ai-prompts-table"
       />

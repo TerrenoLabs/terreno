@@ -16,7 +16,7 @@ import {
 } from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useRef, useState} from "react";
 import {AdminScreenPage} from "../AdminScreenPage";
 import {CommsStatCard} from "../comms/CommsStatCard";
 import {JobsStatusBadge} from "./JobsStatusBadge";
@@ -80,13 +80,21 @@ const SummaryCards: React.FC<{
   );
 };
 
-const ScheduleRow: React.FC<{
+interface ScheduleRowProps {
   onPause: (name: string) => Promise<void>;
   onResume: (name: string) => Promise<void>;
   pauseLoading: boolean;
   resumeLoading: boolean;
   schedule: JobScheduleRow;
-}> = ({onPause, onResume, pauseLoading, resumeLoading, schedule}) => {
+}
+
+const ScheduleRowComponent: React.FC<ScheduleRowProps> = ({
+  onPause,
+  onResume,
+  pauseLoading,
+  resumeLoading,
+  schedule,
+}) => {
   const handleToggle = useCallback(async (): Promise<void> => {
     if (schedule.enabled) {
       await onPause(schedule.name);
@@ -126,6 +134,10 @@ const ScheduleRow: React.FC<{
   );
 };
 
+// Memoized so typing in a filter does not re-render every schedule and its confirmation button.
+const ScheduleRow = memo(ScheduleRowComponent);
+ScheduleRow.displayName = "ScheduleRow";
+
 export const JobsDashboardScreen: React.FC<JobsDashboardScreenProps> = ({
   filters,
   onFiltersChange,
@@ -163,6 +175,12 @@ export const JobsDashboardScreen: React.FC<JobsDashboardScreenProps> = ({
   } = useSchedulesQuery();
   const [pauseSchedule, pauseState] = usePauseScheduleMutation();
   const [resumeSchedule, resumeState] = useResumeScheduleMutation();
+
+  // `useToast`, the schedule mutation hooks, and callers' inline `onFiltersChange` hand back new
+  // identities on every render. The schedule and pager handlers read them through a ref so the
+  // memoized schedule rows and the table do not re-render with the screen.
+  const latestRef = useRef({filters, onFiltersChange, pauseSchedule, resumeSchedule, toast});
+  latestRef.current = {filters, onFiltersChange, pauseSchedule, resumeSchedule, toast};
   const rows = data?.data ?? [];
   const total = data?.total ?? 0;
   const schedules = schedulesData ?? [];
@@ -209,35 +227,33 @@ export const JobsDashboardScreen: React.FC<JobsDashboardScreenProps> = ({
     onFiltersChange({page: 1});
   }, [onFiltersChange]);
 
-  const handlePauseSchedule = useCallback(
-    async (name: string): Promise<void> => {
-      setScheduleAction(name);
-      try {
-        await pauseSchedule(name).unwrap();
-        toast.success(`Paused schedule ${name}`);
-      } catch (pauseError: unknown) {
-        toast.catch(pauseError, "Pause schedule failed");
-      } finally {
-        setScheduleAction(undefined);
-      }
-    },
-    [pauseSchedule, toast]
-  );
+  const handlePauseSchedule = useCallback(async (name: string): Promise<void> => {
+    setScheduleAction(name);
+    try {
+      await latestRef.current.pauseSchedule(name).unwrap();
+      latestRef.current.toast.success(`Paused schedule ${name}`);
+    } catch (pauseError: unknown) {
+      latestRef.current.toast.catch(pauseError, "Pause schedule failed");
+    } finally {
+      setScheduleAction(undefined);
+    }
+  }, []);
 
-  const handleResumeSchedule = useCallback(
-    async (name: string): Promise<void> => {
-      setScheduleAction(name);
-      try {
-        await resumeSchedule(name).unwrap();
-        toast.success(`Resumed schedule ${name}`);
-      } catch (resumeError: unknown) {
-        toast.catch(resumeError, "Resume schedule failed");
-      } finally {
-        setScheduleAction(undefined);
-      }
-    },
-    [resumeSchedule, toast]
-  );
+  const handleResumeSchedule = useCallback(async (name: string): Promise<void> => {
+    setScheduleAction(name);
+    try {
+      await latestRef.current.resumeSchedule(name).unwrap();
+      latestRef.current.toast.success(`Resumed schedule ${name}`);
+    } catch (resumeError: unknown) {
+      latestRef.current.toast.catch(resumeError, "Resume schedule failed");
+    } finally {
+      setScheduleAction(undefined);
+    }
+  }, []);
+
+  const handleSetPage = useCallback((nextPage: number): void => {
+    latestRef.current.onFiltersChange({...latestRef.current.filters, page: nextPage});
+  }, []);
 
   const tableData = useMemo((): DataTableCellData[][] => {
     return rows.map((row: JobRow) => [
@@ -447,7 +463,7 @@ export const JobsDashboardScreen: React.FC<JobsDashboardScreenProps> = ({
             customColumnComponentMap={customColumnComponentMap}
             data={tableData}
             page={page}
-            setPage={(nextPage) => onFiltersChange({...filters, page: nextPage})}
+            setPage={handleSetPage}
             testID="jobs-dashboard-table"
             totalPages={Math.max(1, Math.ceil(total / LIST_LIMIT))}
           />

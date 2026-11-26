@@ -134,6 +134,20 @@ const objectMove = (object: Positions, from: number, to: number): Positions => {
   return newObject;
 };
 
+interface DragItemContentProps {
+  item: string;
+  renderItem: (props: {item: string}) => React.ReactElement;
+}
+
+/**
+ * The caller's content for one row. Memoized so measuring, dragging, or reordering rows,
+ * which re-renders every row shell, does not call `renderItem` again for every row.
+ */
+const DragItemContent: React.FC<DragItemContentProps> = React.memo(({item, renderItem}) => {
+  return renderItem({item});
+});
+DragItemContent.displayName = "DragItemContent";
+
 /**
  * Individual draggable item component
  * Handles the drag gesture and animations for a single item in the list
@@ -300,7 +314,9 @@ export const DragItem: React.FC<DragItemProps> = (props) => {
           </Box>
         )}
       </GestureDetector>
-      <View style={{flex: 1}}>{renderItem({item})}</View>
+      <View style={{flex: 1}}>
+        <DragItemContent item={item} renderItem={renderItem} />
+      </View>
     </Animated.View>
   );
 };
@@ -494,7 +510,9 @@ const VariableDragRow: React.FC<VariableDragRowProps> = ({
             </Box>
           )}
         </GestureDetector>
-        <View style={{flex: 1, minWidth: 0}}>{renderItem({item: id})}</View>
+        <View style={{flex: 1, minWidth: 0}}>
+          <DragItemContent item={id} renderItem={renderItem} />
+        </View>
       </View>
     </Animated.View>
   );

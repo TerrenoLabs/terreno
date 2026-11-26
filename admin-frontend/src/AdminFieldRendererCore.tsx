@@ -1,11 +1,39 @@
 import {BooleanField, DateTimeField, SelectField, TextField} from "@terreno/ui";
 import startCase from "lodash/startCase";
-import React from "react";
+import React, {memo, useCallback, useMemo} from "react";
 import {AdminPrimitiveArrayField} from "./AdminPrimitiveArrayField";
 import {useFieldWidget} from "./AdminProvider";
 import {AdminRefField} from "./AdminRefField";
 import {AdminRolesField} from "./AdminRolesField";
 import type {AdminFieldConfig, AdminFieldValue, AdminScreenProps, RefRendererMap} from "./types";
+
+// A form passes its whole state to every field as `parentFormState`, so each keystroke
+// re-renders every field renderer. Memoized inputs stop that at the renderer: only the input
+// whose own props changed renders again.
+const MemoBooleanField = memo(BooleanField);
+MemoBooleanField.displayName = "AdminBooleanField";
+const MemoDateTimeField = memo(DateTimeField);
+MemoDateTimeField.displayName = "AdminDateTimeField";
+const MemoSelectField = memo(SelectField);
+MemoSelectField.displayName = "AdminSelectField";
+const MemoTextField = memo(TextField);
+MemoTextField.displayName = "AdminTextField";
+
+interface EnumOption {
+  label: string;
+  value: string;
+}
+
+const buildEnumOptions = (enumValues: AdminFieldConfig["enum"]): EnumOption[] => {
+  if (!enumValues) {
+    return [];
+  }
+  const includesNullOption = enumValues.some((enumValue) => enumValue == null);
+  const enumOptions = enumValues
+    .filter((enumValue): enumValue is string => typeof enumValue === "string")
+    .map((v: string) => ({label: startCase(v), value: v}));
+  return includesNullOption ? [{label: "None", value: ""}, ...enumOptions] : enumOptions;
+};
 
 const USER_REF_MODEL_NAME = "User";
 const USER_TARGET_FIELD_KEYS = new Set([
@@ -116,6 +144,39 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   const isReadOnly = Boolean(readOnly);
   const useAutocomplete = Boolean(autocompleteFields?.includes(fieldKey));
   const FieldWidget = useFieldWidget(fieldConfig.widget);
+
+  // Handlers and options keep their identity between renders so the memoized inputs can skip.
+  const enumOptions = useMemo(
+    (): EnumOption[] => buildEnumOptions(fieldConfig.enum),
+    [fieldConfig.enum]
+  );
+  const handleEnumChange = useCallback(
+    (nextValue: string): void => onChange(nextValue === "" ? undefined : nextValue),
+    [onChange]
+  );
+  const handleNumberChange = useCallback(
+    (text: string): void => {
+      const num = Number(text);
+      onChange(Number.isNaN(num) ? text : num);
+    },
+    [onChange]
+  );
+  const handleJsonChange = useCallback(
+    (text: string): void => {
+      onChange(parseJsonValue(text));
+    },
+    [onChange]
+  );
+  const handleJsonArrayChange = useCallback(
+    (text: string): void => {
+      try {
+        onChange(JSON.parse(text));
+      } catch {
+        onChange(text);
+      }
+    },
+    [onChange]
+  );
 
   if (FieldWidget && fieldConfig.widget) {
     return (
@@ -289,7 +350,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
 
   if (fieldConfig.type === "boolean") {
     return (
-      <BooleanField
+      <MemoBooleanField
         disabled={isReadOnly}
         errorText={errorText}
         helperText={helperText}
@@ -302,18 +363,13 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   }
 
   if (fieldConfig.enum && fieldConfig.enum.length > 0) {
-    const includesNullOption = fieldConfig.enum.some((enumValue) => enumValue == null);
-    const enumOptions = fieldConfig.enum
-      .filter((enumValue): enumValue is string => typeof enumValue === "string")
-      .map((v: string) => ({label: startCase(v), value: v}));
-    const options = includesNullOption ? [{label: "None", value: ""}, ...enumOptions] : enumOptions;
     return (
-      <SelectField
+      <MemoSelectField
         disabled={isReadOnly}
         errorText={errorText}
         helperText={helperText}
-        onChange={(nextValue: string) => onChange(nextValue === "" ? undefined : nextValue)}
-        options={options}
+        onChange={handleEnumChange}
+        options={enumOptions}
         title={label}
         value={typeof value === "string" ? value : ""}
       />
@@ -326,7 +382,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
     (fieldConfig.type === "string" && leafKey.toLowerCase().includes("date"))
   ) {
     return (
-      <DateTimeField
+      <MemoDateTimeField
         disabled={isReadOnly}
         errorText={errorText}
         helperText={helperText}
@@ -341,14 +397,11 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
 
   if (fieldConfig.type === "number") {
     return (
-      <TextField
+      <MemoTextField
         disabled={isReadOnly}
         errorText={errorText}
         helperText={helperText}
-        onChange={(text: string) => {
-          const num = Number(text);
-          onChange(Number.isNaN(num) ? text : num);
-        }}
+        onChange={handleNumberChange}
         testID={`admin-field-${fieldKey}`}
         title={label}
         value={value != null ? String(value) : ""}
@@ -359,13 +412,11 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
   if (fieldConfig.type === "object" || fieldConfig.type === "mixed") {
     const displayValue = serializeJsonValue(value);
     return (
-      <TextField
+      <MemoTextField
         disabled={isReadOnly}
         errorText={errorText}
         helperText={helperText ?? "JSON value (string, number, boolean, object, or array)"}
-        onChange={(text: string) => {
-          onChange(parseJsonValue(text));
-        }}
+        onChange={handleJsonChange}
         testID={`admin-field-${fieldKey}`}
         title={label}
         value={displayValue}
@@ -399,19 +450,13 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
     const jsonValue =
       value != null ? (typeof value === "string" ? value : JSON.stringify(value, null, 2)) : "[]";
     return (
-      <TextField
+      <MemoTextField
         disabled={isReadOnly}
         errorText={errorText}
         grow
         helperText={helperText ?? "Enter valid JSON array"}
         multiline
-        onChange={(text: string) => {
-          try {
-            onChange(JSON.parse(text));
-          } catch {
-            onChange(text);
-          }
-        }}
+        onChange={handleJsonArrayChange}
         rows={4}
         testID={`admin-field-${fieldKey}`}
         title={label}
@@ -422,7 +467,7 @@ export const AdminFieldRendererCore: React.FC<AdminFieldRendererCoreProps> = ({
 
   // Default: string -> TextField
   return (
-    <TextField
+    <MemoTextField
       disabled={isReadOnly}
       errorText={errorText}
       helperText={helperText}

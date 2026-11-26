@@ -1,5 +1,5 @@
 import {DateTime} from "luxon";
-import React, {useCallback, useRef, useState} from "react";
+import React, {memo, useCallback, useRef, useState} from "react";
 import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
@@ -20,6 +20,7 @@ import {Page} from "./Page";
 import {SignatureField} from "./SignatureField";
 import {Text} from "./Text";
 import {applyConsentVariables, type ConsentFormPublic} from "./useConsentForms";
+import {useStableCallback} from "./useStableCallback";
 
 interface ConsentFormScreenProps {
   form: ConsentFormPublic;
@@ -29,6 +30,38 @@ interface ConsentFormScreenProps {
   onDecline?: () => void;
   variables?: Record<string, string>;
 }
+
+interface ConsentCheckboxRowProps {
+  index: number;
+  isChecked: boolean;
+  label: string;
+  onPress: (index: number) => void;
+  required: boolean;
+}
+
+// Memoized so ticking one checkbox (or signing, or scrolling) re-renders only the row that changed.
+const ConsentCheckboxRow: React.FC<ConsentCheckboxRowProps> = memo(
+  ({index, isChecked, label, onPress, required}) => {
+    const handlePress = useCallback((): void => {
+      onPress(index);
+    }, [index, onPress]);
+
+    return (
+      <Pressable onPress={handlePress} testID={`consent-form-checkbox-${index}`}>
+        <Box alignItems="center" direction="row" gap={2}>
+          <CheckBox selected={isChecked} size="md" />
+          <Box flex="grow">
+            <Text size="md">
+              {label}
+              {required && " *"}
+            </Text>
+          </Box>
+        </Box>
+      </Pressable>
+    );
+  }
+);
+ConsentCheckboxRow.displayName = "ConsentCheckboxRow";
 
 export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
   form,
@@ -151,7 +184,7 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
     [hasScrolledToBottom, isMarkdownLoaded]
   );
 
-  const handleCheckboxPress = (index: number) => {
+  const handleCheckboxPress = useStableCallback((index: number): void => {
     const checkbox = form.checkboxes[index];
     const key = index.toString();
     const currentValue = checkboxValues[key] ?? false;
@@ -163,7 +196,7 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
     } else {
       setCheckboxValues((prev) => ({...prev, [key]: !currentValue}));
     }
-  };
+  });
 
   const handleConfirmModalConfirm = () => {
     if (confirmModalCheckboxIndex !== null) {
@@ -283,21 +316,14 @@ export const ConsentFormScreen: React.FC<ConsentFormScreenProps> = ({
                 const isChecked = checkboxValues[key] ?? false;
 
                 return (
-                  <Pressable
+                  <ConsentCheckboxRow
+                    index={index}
+                    isChecked={isChecked}
                     key={key}
-                    onPress={() => handleCheckboxPress(index)}
-                    testID={`consent-form-checkbox-${index}`}
-                  >
-                    <Box alignItems="center" direction="row" gap={2}>
-                      <CheckBox selected={isChecked} size="md" />
-                      <Box flex="grow">
-                        <Text size="md">
-                          {checkbox.label}
-                          {checkbox.required && " *"}
-                        </Text>
-                      </Box>
-                    </Box>
-                  </Pressable>
+                    label={checkbox.label}
+                    onPress={handleCheckboxPress}
+                    required={checkbox.required}
+                  />
                 );
               })}
             </Box>

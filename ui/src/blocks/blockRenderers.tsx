@@ -3,6 +3,7 @@ import {
   type BlockAction,
   type ButtonElement,
   blockPlainText,
+  type ChartBlock,
   type ChecklistBlock,
   type ChecklistItem,
   type CopyAction,
@@ -20,7 +21,7 @@ import {
 } from "@terreno/blocks";
 import * as Clipboard from "expo-clipboard";
 import type React from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {memo, useCallback, useEffect, useRef, useState} from "react";
 
 import {Accordion} from "../Accordion";
 import {AreaChart} from "../AreaChart";
@@ -201,12 +202,15 @@ const renderStepper = (
   );
 };
 
-/** One row: the tick, then the bold text, the small muted meta (such as a time), and the detail. */
+/**
+ * One row: the tick, then the bold text, the small muted meta (such as a time), and the detail.
+ * Memoized so ticking one item re-renders that row, not every row of the checklist.
+ */
 const ChecklistRowContent: React.FC<{
   isChecked: boolean;
   item: ChecklistItem;
   itemPath: string;
-}> = ({isChecked, item, itemPath}) => (
+}> = memo(({isChecked, item, itemPath}) => (
   <>
     <Box paddingY={1}>
       <CheckBox selected={isChecked} testID={`${itemPath}-checkbox`} />
@@ -227,7 +231,8 @@ const ChecklistRowContent: React.FC<{
       ) : null}
     </Box>
   </>
-);
+));
+ChecklistRowContent.displayName = "ChecklistRowContent";
 
 /**
  * Ticks go to the host when the checklist names a callback, the host listens with `onAction`,
@@ -360,19 +365,20 @@ const TABLE_BORDER_HEIGHT = 2;
 const tableFrameHeight = (rowCount: number): number =>
   (Math.min(rowCount, TABLE_MAX_VISIBLE_ROWS) + 1) * TABLE_ROW_HEIGHT + TABLE_BORDER_HEIGHT;
 
+/**
+ * Takes the resolved dataset instead of the render context, which is rebuilt on every render, so
+ * the memo holds and the table is not rebuilt when another block changes.
+ */
 const TableBlockView: React.FC<{
   block: TableBlock;
-  context: BlockRenderContext;
+  dataset: InlineDataset | undefined;
   path: string;
-}> = ({block, context, path}) => {
+}> = memo(({block, dataset, path}) => {
   const [containerWidth, setContainerWidth] = useState<number | undefined>(undefined);
   const handleLayout = useCallback((event: LayoutChangeEvent): void => {
     const {width} = event.nativeEvent.layout;
     setContainerWidth((previous) => (previous === width ? previous : width));
   }, []);
-  const dataName =
-    (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
-  const dataset = dataName === undefined ? undefined : context.resolved[dataName];
   const names = block.columns ?? dataset?.columns.map((column) => column.name) ?? [];
   const indexes = names.map(
     (name) => dataset?.columns.findIndex((column) => column.name === name) ?? -1
@@ -400,7 +406,41 @@ const TableBlockView: React.FC<{
       </Box>
     </Box>
   );
-};
+});
+TableBlockView.displayName = "TableBlockView";
+
+/**
+ * One chart block. Memoized on the block and its resolved dataset so the points keep their
+ * identity and the chart is not redrawn when another block changes.
+ */
+const ChartBlockView: React.FC<{
+  block: ChartBlock;
+  dataset: InlineDataset | undefined;
+  isLoading: boolean;
+  path: string;
+}> = memo(({block, dataset, isLoading, path}) => {
+  const Chart = chartFor[block.kind];
+  const points =
+    block.points !== undefined
+      ? chartPoints(block.points)
+      : dataset !== undefined && block.x !== undefined && block.y !== undefined
+        ? datasetToPoints({dataset, x: block.x, y: block.y})
+        : [];
+  return (
+    <Box gap={2} testID={path}>
+      {block.title ? <Heading size="sm">{block.title}</Heading> : null}
+      <Chart
+        data={points}
+        emptyText={block.emptyText}
+        height={chartHeight(block.height)}
+        legendLabel={block.legend ? block.title : undefined}
+        loading={isLoading}
+        testID={`${path}-chart`}
+      />
+    </Box>
+  );
+});
+ChartBlockView.displayName = "ChartBlockView";
 
 /** Most tiles in one gallery row; more images wrap into further rows. */
 const GALLERY_COLUMNS = 3;
@@ -453,7 +493,7 @@ const GalleryTile: React.FC<{
   testID: string;
   url?: string;
   width: number;
-}> = ({height, image, testID, url, width}) => (
+}> = memo(({height, image, testID, url, width}) => (
   <Box gap={1} testID={testID} width={width}>
     {url ? (
       <Box overflow="hidden" rounding="md" testID={`${testID}-image`}>
@@ -488,7 +528,8 @@ const GalleryTile: React.FC<{
       </Text>
     ) : null}
   </Box>
-);
+));
+GalleryTile.displayName = "GalleryTile";
 
 /**
  * Up to three tiles share one row; more wrap into a three-column grid. When the measured width
@@ -881,32 +922,30 @@ export const renderBlock = (
         </Card>
       );
     case "chart": {
-      const Chart = chartFor[block.kind];
       const dataName =
         (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
-      const dataset = dataName === undefined ? undefined : context.resolved[dataName];
-      const points =
-        block.points !== undefined
-          ? chartPoints(block.points)
-          : dataset !== undefined && block.x !== undefined && block.y !== undefined
-            ? datasetToPoints({dataset, x: block.x, y: block.y})
-            : [];
       return (
-        <Box gap={2} key={path} testID={path}>
-          {block.title ? <Heading size="sm">{block.title}</Heading> : null}
-          <Chart
-            data={points}
-            emptyText={block.emptyText}
-            height={chartHeight(block.height)}
-            legendLabel={block.legend ? block.title : undefined}
-            loading={dataName !== undefined && context.loadingIds.has(dataName)}
-            testID={`${path}-chart`}
-          />
-        </Box>
+        <ChartBlockView
+          block={block}
+          dataset={dataName === undefined ? undefined : context.resolved[dataName]}
+          isLoading={dataName !== undefined && context.loadingIds.has(dataName)}
+          key={path}
+          path={path}
+        />
       );
     }
-    case "table":
-      return <TableBlockView block={block} context={context} key={path} path={path} />;
+    case "table": {
+      const dataName =
+        (block.id !== undefined ? context.selections[block.id] : undefined) ?? block.data;
+      return (
+        <TableBlockView
+          block={block}
+          dataset={dataName === undefined ? undefined : context.resolved[dataName]}
+          key={path}
+          path={path}
+        />
+      );
+    }
     case "gallery":
       return <GalleryBlockView block={block} context={context} key={path} path={path} />;
     case "list":

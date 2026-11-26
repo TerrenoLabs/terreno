@@ -1,5 +1,5 @@
 import type React from "react";
-import {type Context, createContext, useContext} from "react";
+import {type Context, createContext, useContext, useMemo} from "react";
 
 import type {TableContextProviderProps, TableContextType} from "../Common";
 
@@ -27,22 +27,32 @@ export const TableContextProvider = ({
   alternateRowBackground,
   page,
 }: TableContextProviderProps): React.ReactElement<typeof Provider> => {
-  return (
-    <Provider
-      value={{
-        alternateRowBackground,
-        borderStyle,
-        columns,
-        hasDrawerContents,
-        page,
-        setSortColumn,
-        sortColumn,
-        stickyHeader,
-      }}
-    >
-      {children}
-    </Provider>
+  // Memoized so a table re-render that changes none of these values does not re-render every
+  // row and cell that reads the context.
+  const value = useMemo(
+    (): TableContextType => ({
+      alternateRowBackground,
+      borderStyle,
+      columns,
+      hasDrawerContents,
+      page,
+      setSortColumn,
+      sortColumn,
+      stickyHeader,
+    }),
+    [
+      alternateRowBackground,
+      borderStyle,
+      columns,
+      hasDrawerContents,
+      page,
+      setSortColumn,
+      sortColumn,
+      stickyHeader,
+    ]
   );
+
+  return <Provider value={value}>{children}</Provider>;
 };
 
 export const useTableContext = (): TableContextType => {

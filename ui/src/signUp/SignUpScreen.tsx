@@ -1,5 +1,5 @@
 import type {FC} from "react";
-import {useCallback, useRef, useState} from "react";
+import {memo, useCallback, useRef, useState} from "react";
 import type {TextInputInstance} from "react-native";
 
 import {Box} from "../Box";
@@ -29,6 +29,76 @@ const getFieldAutoComplete = (field: SignUpFieldConfig): TextFieldProps["autoCom
   }
   return field.type === "password" ? "new-password" : undefined;
 };
+
+interface SignUpFieldProps {
+  field: SignUpFieldConfig;
+  /** The field Enter moves to; undefined on the last field, where Enter submits. */
+  nextFieldName?: string;
+  disabled: boolean;
+  value: string;
+  /** The screen's testID. */
+  testID: string;
+  onChange: (fieldName: string, value: string) => void;
+  onFocusField: (fieldName: string) => void;
+  /** Passed to the last field only. */
+  onRequestSubmit?: () => void | Promise<void>;
+  onInputRef: (fieldName: string, ref: TextInputInstance | null) => void;
+}
+
+// Memoized so typing in one field re-renders that field, not every field in the form.
+const SignUpField: FC<SignUpFieldProps> = memo(
+  ({
+    field,
+    nextFieldName,
+    disabled,
+    value,
+    testID,
+    onChange,
+    onFocusField,
+    onRequestSubmit,
+    onInputRef,
+  }) => {
+    const {name} = field;
+    const handleChange = useCallback(
+      (newValue: string): void => {
+        onChange(name, newValue);
+      },
+      [name, onChange]
+    );
+    const handleInputRef = useCallback(
+      (ref: TextInputInstance | null): void => {
+        onInputRef(name, ref);
+      },
+      [name, onInputRef]
+    );
+    const handleFocusNext = useCallback((): void => {
+      if (nextFieldName !== undefined) {
+        onFocusField(nextFieldName);
+      }
+    }, [nextFieldName, onFocusField]);
+    const hasNextField = nextFieldName !== undefined;
+
+    return (
+      <TextField
+        accessibilityLabel={field.label}
+        autoComplete={getFieldAutoComplete(field)}
+        blurOnSubmit={!hasNextField}
+        disabled={disabled}
+        id={`${testID}-${name}-input`}
+        inputRef={handleInputRef}
+        onChange={handleChange}
+        onEnter={hasNextField ? handleFocusNext : onRequestSubmit}
+        placeholder={field.placeholder ?? field.label}
+        returnKeyType={hasNextField ? "next" : "go"}
+        testID={`${testID}-${name}-input`}
+        title={field.label}
+        type={field.type === "email" ? "email" : field.type === "password" ? "password" : "text"}
+        value={value}
+      />
+    );
+  }
+);
+SignUpField.displayName = "SignUpField";
 
 /**
  * A configurable sign-up screen component with support for custom fields,
@@ -75,7 +145,7 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
     return initial;
   });
 
-  const handleFieldChange = useCallback((fieldName: string, value: string) => {
+  const handleFieldChange = useCallback((fieldName: string, value: string): void => {
     setFormValues((prev) => ({...prev, [fieldName]: value}));
   }, []);
 
@@ -123,6 +193,10 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
     inputRefs.current[fieldName]?.focus();
   }, []);
 
+  const handleInputRef = useCallback((fieldName: string, ref: TextInputInstance | null): void => {
+    inputRefs.current[fieldName] = ref;
+  }, []);
+
   return (
     <Page navigation={undefined}>
       <Box
@@ -159,25 +233,16 @@ export const SignUpScreen: FC<SignUpScreenProps> = ({
             // Enter moves to the next field; in the last field it submits.
             const nextField = fields[index + 1];
             return (
-              <TextField
-                accessibilityLabel={field.label}
-                autoComplete={getFieldAutoComplete(field)}
-                blurOnSubmit={!nextField}
+              <SignUpField
                 disabled={loading}
-                id={`${testID}-${field.name}-input`}
-                inputRef={(ref) => {
-                  inputRefs.current[field.name] = ref;
-                }}
+                field={field}
                 key={field.name}
-                onChange={(value: string) => handleFieldChange(field.name, value)}
-                onEnter={nextField ? () => focusField(nextField.name) : requestSubmit}
-                placeholder={field.placeholder ?? field.label}
-                returnKeyType={nextField ? "next" : "go"}
-                testID={`${testID}-${field.name}-input`}
-                title={field.label}
-                type={
-                  field.type === "email" ? "email" : field.type === "password" ? "password" : "text"
-                }
+                nextFieldName={nextField?.name}
+                onChange={handleFieldChange}
+                onFocusField={focusField}
+                onInputRef={handleInputRef}
+                onRequestSubmit={nextField ? undefined : requestSubmit}
+                testID={testID}
                 value={formValues[field.name]}
               />
             );

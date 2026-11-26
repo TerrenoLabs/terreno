@@ -1,16 +1,19 @@
 import {Box, Card, Heading, IconButton, Spinner, Text} from "@terreno/ui";
 import type {Href} from "expo-router";
 import {router} from "expo-router";
-import React, {useCallback} from "react";
+import React, {memo, useCallback} from "react";
 import {shouldSkipOrgScopedAdminQuery} from "../orgs/shouldSkipOrgScopedAdminQuery";
 import {useOptionalOrgContext} from "../orgs/useOrgContext";
 import type {AdminHomeWidgetProps, AdminModelConfig} from "../types";
 import {useAdminModelApi} from "../useAdminModelApi";
 
-const ModelGridCard: React.FC<{
+interface ModelGridCardProps {
   model: AdminModelConfig;
   routeBase: string;
-}> = ({model, routeBase}) => {
+}
+
+// Memoized so a home re-render does not re-render every model card.
+const ModelGridCard: React.FC<ModelGridCardProps> = memo(({model, routeBase}) => {
   const organizationId = useOptionalOrgContext()?.organizationId;
   const skipOrgScopedQuery = shouldSkipOrgScopedAdminQuery({
     organizationId,
@@ -87,7 +90,8 @@ const ModelGridCard: React.FC<{
       </Box>
     </Box>
   );
-};
+});
+ModelGridCard.displayName = "ModelGridCard";
 
 export const ModelsGridWidget: React.FC<AdminHomeWidgetProps> = ({models, routeBase}) => {
   return (

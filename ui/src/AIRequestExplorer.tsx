@@ -1,5 +1,5 @@
 import {DateTime} from "luxon";
-import React from "react";
+import React, {useMemo} from "react";
 
 import {Box} from "./Box";
 import type {DataTableColumn} from "./Common";
@@ -91,6 +91,10 @@ export const AIRequestExplorer = ({
   totalCount,
   totalPages,
 }: AIRequestExplorerProps): React.ReactElement => {
+  // DataTable is memoized on `data`; formatting inline would hand it new rows on every
+  // render and re-render every cell when only a filter or the page changed.
+  const rows = useMemo(() => data.map(formatRow), [data]);
+
   return (
     <Box direction="column" flex="grow" gap={4} padding={4} testID={testID}>
       <Heading size="lg">AI Request Explorer</Heading>
@@ -138,7 +142,7 @@ export const AIRequestExplorer = ({
           <Spinner />
         </Box>
       ) : (
-        <DataTable alternateRowBackground columns={COLUMNS} data={data.map(formatRow)} />
+        <DataTable alternateRowBackground columns={COLUMNS} data={rows} />
       )}
 
       {/* Pagination */}

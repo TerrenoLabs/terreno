@@ -1,5 +1,5 @@
 import {Box, Button, CheckBox, Heading, SelectField, Text, TextArea, TextField} from "@terreno/ui";
-import React, {useCallback, useState} from "react";
+import React, {memo, useCallback, useLayoutEffect, useRef, useState} from "react";
 import {
   appendListItem,
   type FormFieldNode,
@@ -31,12 +31,13 @@ const fieldTestId = (prefix: string, path: ValuePath): string => {
 };
 
 const NumberField: React.FC<{
+  description?: string;
   disabled?: boolean;
-  field: FormFieldNode;
+  label: string;
   onCommit: (next: number | null) => void;
   testID: string;
   value: unknown;
-}> = ({disabled, field, onCommit, testID, value}) => {
+}> = ({description, disabled, label, onCommit, testID, value}) => {
   const [draft, setDraft] = useState<string | undefined>(undefined);
   const shown = draft !== undefined ? draft : typeof value === "number" ? String(value) : "";
 
@@ -66,15 +67,123 @@ const NumberField: React.FC<{
   return (
     <TextField
       disabled={disabled}
-      helperText={field.description}
+      helperText={description}
       onBlur={handleBlur}
       onChange={handleChange}
       testID={testID}
-      title={field.label}
+      title={label}
       value={shown}
     />
   );
 };
+
+interface FieldInputProps {
+  current: unknown;
+  description?: string;
+  disabled?: boolean;
+  enumValues?: string[];
+  kind: FormFieldNode["kind"];
+  label: string;
+  multiline: boolean;
+  onCommit: (next: unknown) => void;
+  testID: string;
+}
+
+/**
+ * The control for one field. It takes the field's own value and a stable commit handler, so
+ * typing in one field does not re-render the controls of every other field in the form.
+ */
+const FieldInput: React.FC<FieldInputProps> = memo(
+  ({current, description, disabled, enumValues, kind, label, multiline, onCommit, testID}) => {
+    if (kind === "boolean") {
+      const selected = current === true;
+      const handleToggle = (): void => {
+        onCommit(!selected);
+      };
+      return (
+        <Box gap={1}>
+          <Box
+            accessibilityHint="Toggles this expected value"
+            accessibilityLabel={label}
+            accessibilityRole="checkbox"
+            alignItems="center"
+            direction="row"
+            gap={2}
+            onClick={disabled ? undefined : handleToggle}
+            testID={testID}
+          >
+            <CheckBox selected={selected} />
+            <Text>{label}</Text>
+          </Box>
+          {description ? (
+            <Text color="secondaryDark" size="sm">
+              {description}
+            </Text>
+          ) : null}
+        </Box>
+      );
+    }
+
+    if (enumValues) {
+      return (
+        <SelectField
+          disabled={disabled}
+          helperText={description}
+          onChange={(next) => {
+            onCommit(next);
+          }}
+          options={enumValues.map((option) => ({label: option, value: option}))}
+          testID={testID}
+          title={label}
+          value={typeof current === "string" ? current : ""}
+        />
+      );
+    }
+
+    if (kind === "number") {
+      return (
+        <NumberField
+          description={description}
+          disabled={disabled}
+          label={label}
+          onCommit={onCommit}
+          testID={testID}
+          value={current}
+        />
+      );
+    }
+
+    const text = typeof current === "string" ? current : current == null ? "" : String(current);
+    if (multiline) {
+      return (
+        <TextArea
+          disabled={disabled}
+          helperText={description}
+          onChange={(next) => {
+            onCommit(next);
+          }}
+          rows={6}
+          testID={testID}
+          title={label}
+          value={text}
+        />
+      );
+    }
+    return (
+      <TextField
+        disabled={disabled}
+        helperText={description}
+        onChange={(next) => {
+          onCommit(next);
+        }}
+        testID={testID}
+        title={label}
+        value={text}
+      />
+    );
+  }
+);
+FieldInput.displayName = "FieldInput";
 
 const FieldControl: React.FC<{
   disabled?: boolean;
@@ -86,96 +195,31 @@ const FieldControl: React.FC<{
   const current = readPath(value, field.path);
   const testID = fieldTestId(idPrefix, field.path);
 
-  const commit = useCallback(
-    (next: unknown): void => {
-      onChange(setAtPath(value, field.path, next));
-    },
-    [field.path, onChange, value]
-  );
+  // Every edit replaces the root value and rebuilds the form nodes. The commit handler reads them
+  // through a ref so its identity stays the same and the memoized control can skip the render.
+  const latestRef = useRef({onChange, path: field.path, value});
 
-  if (field.kind === "boolean") {
-    const selected = current === true;
-    const handleToggle = (): void => {
-      commit(!selected);
-    };
-    return (
-      <Box gap={1}>
-        <Box
-          accessibilityHint="Toggles this expected value"
-          accessibilityLabel={field.label}
-          accessibilityRole="checkbox"
-          alignItems="center"
-          direction="row"
-          gap={2}
-          onClick={disabled ? undefined : handleToggle}
-          testID={testID}
-        >
-          <CheckBox selected={selected} />
-          <Text>{field.label}</Text>
-        </Box>
-        {field.description ? (
-          <Text color="secondaryDark" size="sm">
-            {field.description}
-          </Text>
-        ) : null}
-      </Box>
-    );
-  }
+  // Point at the newest value, path and handler after every commit, before any event can fire.
+  useLayoutEffect(() => {
+    latestRef.current = {onChange, path: field.path, value};
+  });
 
-  if (field.enumValues) {
-    return (
-      <SelectField
-        disabled={disabled}
-        helperText={field.description}
-        onChange={(next) => {
-          commit(next);
-        }}
-        options={field.enumValues.map((option) => ({label: option, value: option}))}
-        testID={testID}
-        title={field.label}
-        value={typeof current === "string" ? current : ""}
-      />
-    );
-  }
+  const commit = useCallback((next: unknown): void => {
+    const latest = latestRef.current;
+    latest.onChange(setAtPath(latest.value, latest.path, next));
+  }, []);
 
-  if (field.kind === "number") {
-    return (
-      <NumberField
-        disabled={disabled}
-        field={field}
-        onCommit={commit}
-        testID={testID}
-        value={current}
-      />
-    );
-  }
-
-  const text = typeof current === "string" ? current : current == null ? "" : String(current);
-  if (field.multiline) {
-    return (
-      <TextArea
-        disabled={disabled}
-        helperText={field.description}
-        onChange={(next) => {
-          commit(next);
-        }}
-        rows={6}
-        testID={testID}
-        title={field.label}
-        value={text}
-      />
-    );
-  }
   return (
-    <TextField
+    <FieldInput
+      current={current}
+      description={field.description}
       disabled={disabled}
-      helperText={field.description}
-      onChange={(next) => {
-        commit(next);
-      }}
+      enumValues={field.enumValues}
+      kind={field.kind}
+      label={field.label}
+      multiline={field.multiline}
+      onCommit={commit}
       testID={testID}
-      title={field.label}
-      value={text}
     />
   );
 };
@@ -308,6 +352,7 @@ const FormNodeView: React.FC<ExpectedOutputFormProps> = ({
 };
 
 /** Fields for one JSON value. A schema supplies missing keys, choices, and helper text. */
-export const ExpectedOutputForm: React.FC<ExpectedOutputFormProps> = (props) => {
+export const ExpectedOutputForm: React.FC<ExpectedOutputFormProps> = memo((props) => {
   return <FormNodeView {...props} />;
-};
+});
+ExpectedOutputForm.displayName = "ExpectedOutputForm";

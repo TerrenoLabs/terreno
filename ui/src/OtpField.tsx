@@ -1,5 +1,5 @@
-import type {FC, ReactElement} from "react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import type {FC} from "react";
+import {memo, useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {
   Platform,
   type StyleProp,
@@ -15,6 +15,7 @@ import {FieldError} from "./fieldElements/FieldError";
 import {FieldHelperText} from "./fieldElements/FieldHelperText";
 import {FieldTitle} from "./fieldElements/FieldTitle";
 import {useTheme} from "./Theme";
+import {useStableCallback} from "./useStableCallback";
 
 const DEFAULT_LENGTH = 6;
 const CELL_WIDTH = 48;
@@ -121,6 +122,127 @@ const applyCellText = ({
   return {code: next, focusIndex: Math.min(start + incoming.length, length - 1)};
 };
 
+interface OtpCellProps {
+  digit: string;
+  disabled: boolean;
+  hasError: boolean;
+  index: number;
+  isActive: boolean;
+  isFocused: boolean;
+  length: number;
+  onBlur: (index: number) => void;
+  onChangeText: (index: number, text: string) => void;
+  onFocus: (index: number) => void;
+  onKeyPress: (index: number, event: TextInputKeyPressEvent) => void;
+  onRegisterRef: (index: number, ref: TextInputInstance | null) => void;
+  onSubmit: () => void;
+  testID: string;
+}
+
+// Memoized so typing a digit re-renders the cells whose digit, focus, or tab stop changed, not
+// every cell.
+const OtpCell: FC<OtpCellProps> = memo(
+  ({
+    digit,
+    disabled,
+    hasError,
+    index,
+    isActive,
+    isFocused,
+    length,
+    onBlur,
+    onChangeText,
+    onFocus,
+    onKeyPress,
+    onRegisterRef,
+    onSubmit,
+    testID,
+  }) => {
+    const {theme} = useTheme();
+
+    const handleBlur = useCallback((): void => {
+      onBlur(index);
+    }, [index, onBlur]);
+    const handleChangeText = useCallback(
+      (text: string): void => {
+        onChangeText(index, text);
+      },
+      [index, onChangeText]
+    );
+    const handleFocus = useCallback((): void => {
+      onFocus(index);
+    }, [index, onFocus]);
+    const handleKeyPress = useCallback(
+      (event: TextInputKeyPressEvent): void => {
+        onKeyPress(index, event);
+      },
+      [index, onKeyPress]
+    );
+    const handleRef = useCallback(
+      (ref: TextInputInstance | null): void => {
+        onRegisterRef(index, ref);
+      },
+      [index, onRegisterRef]
+    );
+    const accessibilityState = useMemo(() => ({disabled}), [disabled]);
+
+    let borderColor = theme.field.border;
+    let borderWidth = 1;
+    if (hasError) {
+      borderColor = theme.field.borderError;
+      borderWidth = 2;
+    }
+    if (isFocused) {
+      borderColor = theme.field.borderFocus;
+      borderWidth = 3;
+    }
+    return (
+      <TextInput
+        {...ONE_TIME_CODE_PROPS}
+        accessibilityLabel={`Digit ${index + 1} of ${length}`}
+        accessibilityState={accessibilityState}
+        aria-invalid={hasError}
+        aria-label={`Digit ${index + 1} of ${length}`}
+        autoCapitalize="none"
+        autoCorrect={false}
+        editable={!disabled}
+        enterKeyHint="done"
+        inputMode="numeric"
+        keyboardType="number-pad"
+        nativeID={`${testID}-cell-${index + 1}`}
+        onBlur={handleBlur}
+        onChangeText={handleChangeText}
+        onFocus={handleFocus}
+        onKeyPress={handleKeyPress}
+        onSubmitEditing={onSubmit}
+        ref={handleRef}
+        selectTextOnFocus
+        style={
+          {
+            backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
+            borderColor,
+            borderRadius: 4,
+            borderWidth,
+            color: theme.text.primary,
+            fontSize: 24,
+            fontWeight: "700",
+            height: CELL_HEIGHT,
+            padding: 0,
+            textAlign: "center",
+            width: CELL_WIDTH,
+            ...(Platform.OS === "web" ? {outline: "none"} : {}),
+          } as StyleProp<TextStyleWithOutline>
+        }
+        tabIndex={isActive ? 0 : -1}
+        testID={`${testID}-cell-${index + 1}`}
+        underlineColorAndroid="transparent"
+        value={digit}
+      />
+    );
+  }
+);
+OtpCell.displayName = "OtpCell";
+
 /**
  * A one-time code input: one cell per digit, a numeric keyboard, paste and SMS / one-time-code
  * autofill of the whole code, and backspace that steps back a cell. `onComplete` fires when every
@@ -150,7 +272,6 @@ export const OtpField: FC<OtpFieldProps> = ({
   autoFocus = false,
   testID = "otp-field",
 }) => {
-  const {theme} = useTheme();
   const isControlled = value !== undefined;
   const [internalCode, setInternalCode] = useState("");
   const code = toDigits(isControlled ? value : internalCode).slice(0, length);
@@ -175,45 +296,37 @@ export const OtpField: FC<OtpFieldProps> = ({
     }
   }, []);
 
-  const commit = useCallback(
-    (next: string): void => {
-      activeIndexRef.current = Math.min(next.length, length - 1);
-      if (next === code) {
-        return;
-      }
-      if (!isControlled) {
-        setInternalCode(next);
-      }
-      onChange?.(next);
-      if (next.length === length) {
-        onComplete?.(next);
-      }
-    },
-    [code, isControlled, length, onChange, onComplete]
-  );
+  const commit = (next: string): void => {
+    activeIndexRef.current = Math.min(next.length, length - 1);
+    if (next === code) {
+      return;
+    }
+    if (!isControlled) {
+      setInternalCode(next);
+    }
+    onChange?.(next);
+    if (next.length === length) {
+      onComplete?.(next);
+    }
+  };
 
-  const handleChangeText = useCallback(
-    (index: number, text: string): void => {
-      const result = applyCellText({code, index, length, text});
-      commit(result.code);
-      if (result.focusIndex !== index) {
-        focusCell(result.focusIndex);
-      }
-    },
-    [code, commit, focusCell, length]
-  );
+  // Stable identities so a memoized cell re-renders only when its own digit or state changes.
+  const handleChangeText = useStableCallback((index: number, text: string): void => {
+    const result = applyCellText({code, index, length, text});
+    commit(result.code);
+    if (result.focusIndex !== index) {
+      focusCell(result.focusIndex);
+    }
+  });
 
-  const handleKeyPress = useCallback(
-    (index: number, event: TextInputKeyPressEvent): void => {
-      if (event.nativeEvent.key !== "Backspace" || code[index] || index === 0) {
-        return;
-      }
-      // Backspace in an empty cell deletes the previous digit and moves there.
-      commit(code.slice(0, index - 1) + code.slice(index));
-      focusCell(index - 1);
-    },
-    [code, commit, focusCell]
-  );
+  const handleKeyPress = useStableCallback((index: number, event: TextInputKeyPressEvent): void => {
+    if (event.nativeEvent.key !== "Backspace" || code[index] || index === 0) {
+      return;
+    }
+    // Backspace in an empty cell deletes the previous digit and moves there.
+    commit(code.slice(0, index - 1) + code.slice(index));
+    focusCell(index - 1);
+  });
 
   const handleFocus = useCallback(
     (index: number): void => {
@@ -232,65 +345,15 @@ export const OtpField: FC<OtpFieldProps> = ({
     setFocusedIndex((current) => (current === index ? null : current));
   }, []);
 
-  const renderCell = (index: number): ReactElement => {
-    const isFocused = focusedIndex === index;
-    let borderColor = theme.field.border;
-    let borderWidth = 1;
-    if (errorText || invalid) {
-      borderColor = theme.field.borderError;
-      borderWidth = 2;
-    }
-    if (isFocused) {
-      borderColor = theme.field.borderFocus;
-      borderWidth = 3;
-    }
-    return (
-      <TextInput
-        {...ONE_TIME_CODE_PROPS}
-        accessibilityLabel={`Digit ${index + 1} of ${length}`}
-        accessibilityState={{disabled}}
-        aria-invalid={Boolean(errorText) || invalid}
-        aria-label={`Digit ${index + 1} of ${length}`}
-        autoCapitalize="none"
-        autoCorrect={false}
-        editable={!disabled}
-        enterKeyHint="done"
-        inputMode="numeric"
-        key={index}
-        keyboardType="number-pad"
-        nativeID={`${testID}-cell-${index + 1}`}
-        onBlur={() => handleBlur(index)}
-        onChangeText={(text: string) => handleChangeText(index, text)}
-        onFocus={() => handleFocus(index)}
-        onKeyPress={(event: TextInputKeyPressEvent) => handleKeyPress(index, event)}
-        onSubmitEditing={() => onEnter?.(code)}
-        ref={(ref) => {
-          inputRefs.current[index] = ref;
-        }}
-        selectTextOnFocus
-        style={
-          {
-            backgroundColor: disabled ? theme.field.backgroundDisabled : theme.field.background,
-            borderColor,
-            borderRadius: 4,
-            borderWidth,
-            color: theme.text.primary,
-            fontSize: 24,
-            fontWeight: "700",
-            height: CELL_HEIGHT,
-            padding: 0,
-            textAlign: "center",
-            width: CELL_WIDTH,
-            ...(Platform.OS === "web" ? {outline: "none"} : {}),
-          } as StyleProp<TextStyleWithOutline>
-        }
-        tabIndex={index === activeIndex ? 0 : -1}
-        testID={`${testID}-cell-${index + 1}`}
-        underlineColorAndroid="transparent"
-        value={code[index] ?? ""}
-      />
-    );
-  };
+  const handleSubmit = useStableCallback((): void => {
+    onEnter?.(code);
+  });
+
+  const registerRef = useCallback((index: number, ref: TextInputInstance | null): void => {
+    inputRefs.current[index] = ref;
+  }, []);
+
+  const hasError = Boolean(errorText) || invalid;
 
   return (
     <View style={{flexDirection: "column", gap: 4}}>
@@ -302,7 +365,25 @@ export const OtpField: FC<OtpFieldProps> = ({
         style={{flexDirection: "row", flexWrap: "wrap", gap: 8}}
         testID={testID}
       >
-        {Array.from({length}, (_, index) => renderCell(index))}
+        {Array.from({length}, (_, index) => (
+          <OtpCell
+            digit={code[index] ?? ""}
+            disabled={disabled}
+            hasError={hasError}
+            index={index}
+            isActive={index === activeIndex}
+            isFocused={focusedIndex === index}
+            key={index}
+            length={length}
+            onBlur={handleBlur}
+            onChangeText={handleChangeText}
+            onFocus={handleFocus}
+            onKeyPress={handleKeyPress}
+            onRegisterRef={registerRef}
+            onSubmit={handleSubmit}
+            testID={testID}
+          />
+        ))}
       </View>
       {Boolean(errorText) && <FieldError testID={`${testID}-error`} text={errorText!} />}
       {Boolean(helperText) && <FieldHelperText testID={`${testID}-helper`} text={helperText!} />}

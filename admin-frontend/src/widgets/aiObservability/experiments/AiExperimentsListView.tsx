@@ -7,7 +7,7 @@ import {
   Spinner,
   Text,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {useCallback, useLayoutEffect, useMemo, useRef, useState} from "react";
 import {ProgressMeter} from "../shell/AgreementMeter";
 import {type ClientTableColumn, distinctChoiceOptions, useClientTable} from "../shell/clientTable";
 import {EvalPipelineOverview} from "../shell/EvalPipelineOverview";
@@ -179,6 +179,52 @@ const buildColumns = ({
   },
 ];
 
+const ResultCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const value = cellData.value as ResultCellValue;
+  if (!value.text) {
+    return (
+      <Box justifyContent="center">
+        <Text color="secondaryLight">—</Text>
+      </Box>
+    );
+  }
+  return (
+    <Box alignItems="start" justifyContent="center">
+      <Badge
+        iconName={value.passed ? "check" : "xmark"}
+        secondary
+        status={value.passed ? "success" : "error"}
+        testID={`ai-experiment-result-${value.id}`}
+        value={value.text}
+      />
+    </Box>
+  );
+};
+
+const StatusCell: React.FC<{cellData: DataTableCellData}> = ({cellData}) => {
+  const value = cellData.value as StatusCellValue;
+  if (value.status === "running") {
+    return (
+      <Box gap={1} justifyContent="center" width="100%">
+        <ObservabilityStatusBadge
+          label={`Running ${value.completed} of ${value.total}`}
+          status="running"
+        />
+        <ProgressMeter
+          done={value.completed}
+          testID={`ai-experiments-progress-${value.id}`}
+          total={value.total}
+        />
+      </Box>
+    );
+  }
+  return (
+    <Box alignItems="start" justifyContent="center">
+      <ObservabilityStatusBadge status={value.status} />
+    </Box>
+  );
+};
+
 export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
   canCreate = true,
   datasetNames,
@@ -203,6 +249,15 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
     return experiments.filter((experiment) => experimentKind(experiment) === kindFilter);
   }, [experiments, kindFilter]);
 
+  // Callers may pass an inline `onOpenResults`. The name cell reads it through a ref so the cell
+  // keeps its component identity; a new map would remount every custom cell in the table.
+  const onOpenResultsRef = useRef(onOpenResults);
+
+  // Point at the newest handler after every commit, before any press can fire.
+  useLayoutEffect(() => {
+    onOpenResultsRef.current = onOpenResults;
+  });
+
   const customColumnComponentMap = useMemo(
     () => ({
       experimentName: ({cellData}: {cellData: DataTableCellData}) => {
@@ -213,7 +268,7 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
             accessibilityLabel={`Open ${value.name}`}
             justifyContent="center"
             onClick={() => {
-              onOpenResults(value.id);
+              onOpenResultsRef.current(value.id);
             }}
           >
             <Box gap={1} testID={`ai-experiment-open-${value.id}`}>
@@ -227,52 +282,10 @@ export const AiExperimentsListView: React.FC<AiExperimentsListViewProps> = ({
           </Box>
         );
       },
-      experimentResult: ({cellData}: {cellData: DataTableCellData}) => {
-        const value = cellData.value as ResultCellValue;
-        if (!value.text) {
-          return (
-            <Box justifyContent="center">
-              <Text color="secondaryLight">—</Text>
-            </Box>
-          );
-        }
-        return (
-          <Box alignItems="start" justifyContent="center">
-            <Badge
-              iconName={value.passed ? "check" : "xmark"}
-              secondary
-              status={value.passed ? "success" : "error"}
-              testID={`ai-experiment-result-${value.id}`}
-              value={value.text}
-            />
-          </Box>
-        );
-      },
-      experimentStatus: ({cellData}: {cellData: DataTableCellData}) => {
-        const value = cellData.value as StatusCellValue;
-        if (value.status === "running") {
-          return (
-            <Box gap={1} justifyContent="center" width="100%">
-              <ObservabilityStatusBadge
-                label={`Running ${value.completed} of ${value.total}`}
-                status="running"
-              />
-              <ProgressMeter
-                done={value.completed}
-                testID={`ai-experiments-progress-${value.id}`}
-                total={value.total}
-              />
-            </Box>
-          );
-        }
-        return (
-          <Box alignItems="start" justifyContent="center">
-            <ObservabilityStatusBadge status={value.status} />
-          </Box>
-        );
-      },
+      experimentResult: ResultCell,
+      experimentStatus: StatusCell,
     }),
-    [onOpenResults]
+    []
   );
 
   const columns = useMemo(

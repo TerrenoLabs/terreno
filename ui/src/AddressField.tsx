@@ -1,4 +1,4 @@
-import type {FC} from "react";
+import {type FC, memo, useCallback} from "react";
 import {View} from "react-native";
 
 import type {AddressFieldProps, AddressInterface} from "./Common";
@@ -6,6 +6,59 @@ import {USSTATESLIST} from "./Constants";
 import {SelectField} from "./SelectField";
 import {TextField} from "./TextField";
 import {UnifiedAddressAutoCompleteField} from "./UnifiedAddressAutoComplete";
+import {useStableCallback} from "./useStableCallback";
+
+interface AddressTextFieldProps {
+  disabled?: boolean;
+  field: string;
+  onFieldChange: (field: string, newValue: string) => void;
+  testID: string;
+  title: string;
+  value: string;
+}
+
+// Memoized so typing in one address field re-renders that field, not all of them.
+const AddressTextField: FC<AddressTextFieldProps> = memo(
+  ({disabled, field, onFieldChange, testID, title, value}) => {
+    const handleChange = useCallback(
+      (result: string): void => {
+        onFieldChange(field, result);
+      },
+      [field, onFieldChange]
+    );
+
+    return (
+      <TextField
+        disabled={disabled}
+        id={field}
+        onChange={handleChange}
+        testID={testID}
+        title={title}
+        type="text"
+        value={value}
+      />
+    );
+  }
+);
+AddressTextField.displayName = "AddressTextField";
+
+interface AddressStateFieldProps {
+  onFieldChange: (field: string, newValue: string) => void;
+  value: string;
+}
+
+// Memoized so the state picker and its option list skip keystrokes in the other fields.
+const AddressStateField: FC<AddressStateFieldProps> = memo(({onFieldChange, value}) => {
+  const handleChange = useCallback(
+    (result: string | undefined): void => {
+      onFieldChange("state", result!);
+    },
+    [onFieldChange]
+  );
+
+  return <SelectField onChange={handleChange} options={USSTATESLIST} title="State" value={value} />;
+});
+AddressStateField.displayName = "AddressStateField";
 
 export const AddressField: FC<AddressFieldProps> = ({
   disabled,
@@ -17,14 +70,21 @@ export const AddressField: FC<AddressFieldProps> = ({
   onChange,
   onBlur,
 }) => {
-  const handleAddressChange = (field: string, newValue: string) => {
+  const handleAddressChange = useStableCallback((field: string, newValue: string): void => {
     onChange({...value, [field]: newValue});
     onBlur?.({...value, [field]: newValue});
-  };
+  });
 
-  const handleAutoCompleteChange = (newValue: AddressInterface) => {
+  const handleAutoCompleteChange = useStableCallback((newValue: AddressInterface): void => {
     onChange({...value, ...newValue});
-  };
+  });
+
+  const handleAddress1Change = useCallback(
+    (result: string): void => {
+      handleAddressChange("address1", result);
+    },
+    [handleAddressChange]
+  );
 
   const {
     address1 = "",
@@ -43,75 +103,65 @@ export const AddressField: FC<AddressFieldProps> = ({
           disabled={disabled}
           googleMapsApiKey={googleMapsApiKey}
           googlePlacesMobileStyles={googlePlacesMobileStyles}
-          handleAddressChange={(result) => handleAddressChange("address1", result)}
-          handleAutoCompleteChange={(result) => handleAutoCompleteChange(result)}
+          handleAddressChange={handleAddress1Change}
+          handleAutoCompleteChange={handleAutoCompleteChange}
           includeCounty={includeCounty}
           inputValue={address1}
           testID={`${testID}-address1`}
         />
       </View>
       <View style={{marginBottom: 16}}>
-        <TextField
+        <AddressTextField
           disabled={disabled}
-          id="address2"
-          onChange={(result) => handleAddressChange("address2", result)}
+          field="address2"
+          onFieldChange={handleAddressChange}
           testID={`${testID}-address2`}
           title="Apt, suite, etc"
-          type="text"
           value={address2}
         />
       </View>
       <View style={{marginBottom: 16}}>
-        <TextField
+        <AddressTextField
           disabled={disabled}
-          id="city"
-          onChange={(result) => handleAddressChange("city", result)}
+          field="city"
+          onFieldChange={handleAddressChange}
           testID={`${testID}-city`}
           title="City"
-          type="text"
           value={city}
         />
       </View>
       <View style={{marginBottom: 16}}>
-        <SelectField
-          onChange={(result) => handleAddressChange("state", result!)}
-          options={USSTATESLIST}
-          title="State"
-          value={state}
-        />
+        <AddressStateField onFieldChange={handleAddressChange} value={state} />
       </View>
       <View style={{marginBottom: 16}}>
-        <TextField
+        <AddressTextField
           disabled={disabled}
-          id="zipcode"
-          onChange={(result) => handleAddressChange("zipcode", result)}
+          field="zipcode"
+          onFieldChange={handleAddressChange}
           testID={`${testID}-zip`}
           title="Zipcode"
-          type="text"
           value={zipcode}
         />
       </View>
       {includeCounty && (
         <>
           <View style={{marginBottom: 16}}>
-            <TextField
+            <AddressTextField
               disabled={disabled}
-              id="countyName"
-              onChange={(result) => handleAddressChange("countyName", result)}
+              field="countyName"
+              onFieldChange={handleAddressChange}
               testID={`${testID}-county`}
               title="County Name"
-              type="text"
               value={countyName}
             />
           </View>
           <View style={{marginBottom: 16}}>
-            <TextField
+            <AddressTextField
               disabled={disabled}
-              id="countyCode"
-              onChange={(result) => handleAddressChange("countyCode", result)}
+              field="countyCode"
+              onFieldChange={handleAddressChange}
               testID={`${testID}-county-code`}
               title="County Code"
-              type="text"
               value={countyCode}
             />
           </View>

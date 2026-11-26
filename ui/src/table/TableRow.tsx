@@ -1,18 +1,25 @@
-import React, {Children, useRef} from "react";
+import React, {Children, memo, useRef} from "react";
 
 import {Box} from "../Box";
 import type {TableRowProps} from "../Common";
 import {IconButton} from "../IconButton";
 import {useTableContext} from "./tableContext";
 
-const TableCell = ({children, index}: {children: React.ReactNode; index: number}) => {
+interface TableCellProps {
+  children: React.ReactNode;
+  index: number;
+}
+
+// Memoized so expanding a row's drawer does not re-render every cell in that row.
+const TableCell: React.FC<TableCellProps> = memo(({children, index}) => {
   const {columns} = useTableContext();
   return (
     <Box justifyContent="center" marginRight={2} paddingX={3} paddingY={4} width={columns[index]}>
       {children}
     </Box>
   );
-};
+});
+TableCell.displayName = "TableCell";
 
 /**
  * Use TableRow to define a row in Table.

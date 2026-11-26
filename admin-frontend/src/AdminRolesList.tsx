@@ -10,7 +10,7 @@ import {
   Text,
   TextField,
 } from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 
 import type {AdminScreenProps} from "./types";
 import {resolveAdminBases} from "./types";
@@ -233,12 +233,19 @@ export const PermissionActionLabel: React.FC<PermissionActionLabelProps> = ({
  * Custom permissions first, then model permissions. Each group has one row per resource with
  * color-coded action badges (read green, write amber, delete red), unless badges are hidden.
  */
-const PermissionRows: React.FC<{
+interface PermissionRowsProps {
   descriptions: StatementDescriptions;
   permissions: Record<string, readonly string[]>;
   showActionBadges: boolean;
   testIDPrefix: string;
-}> = ({descriptions, permissions, showActionBadges, testIDPrefix}) => {
+}
+
+const PermissionRowsComponent: React.FC<PermissionRowsProps> = ({
+  descriptions,
+  permissions,
+  showActionBadges,
+  testIDPrefix,
+}) => {
   const grouped = groupPermissions(permissions);
   const groups = PERMISSION_GROUPS.filter((group) => grouped[group.key].length > 0);
   if (groups.length === 0) {
@@ -284,6 +291,10 @@ const PermissionRows: React.FC<{
   );
 };
 
+// Memoized so editing the role form does not re-render every permission badge on the page.
+const PermissionRows = memo(PermissionRowsComponent);
+PermissionRows.displayName = "PermissionRows";
+
 const editorActionsForResource = ({
   actions,
   hasStandardAccess,
@@ -324,6 +335,155 @@ const clonePermissions = (permissions?: Record<string, string[]>): Record<string
   );
 };
 
+interface RoleCardProps {
+  descriptions: StatementDescriptions;
+  isActionVisible?: RoleActionVisibility;
+  onEdit: (role: RbacRoleRow) => void;
+  role: RbacRoleRow;
+  showActionBadges: boolean;
+}
+
+/** One role in the list. Memoized so editing the role form leaves every card alone. */
+const RoleCard: React.FC<RoleCardProps> = memo(
+  ({descriptions, isActionVisible, onEdit, role, showActionBadges}) => {
+    const permissions = useMemo(
+      (): Record<string, readonly string[]> =>
+        shownPermissions({isActionVisible, permissions: role.permissions ?? {}}),
+      [isActionVisible, role.permissions]
+    );
+    return (
+      <Box
+        border="default"
+        direction="column"
+        gap={2}
+        padding={3}
+        rounding="md"
+        testID={`admin-roles-item-${role.name}`}
+      >
+        <Box alignItems="center" direction="row" gap={2} justifyContent="between">
+          <Box alignItems="center" direction="row" gap={2}>
+            <Text bold size="md">
+              {role.displayName}
+            </Text>
+            {role.isLocked ? <Badge secondary status="info" value="locked" /> : null}
+            {role.isSealed ? <Badge secondary status="warning" value="sealed" /> : null}
+          </Box>
+          <Button
+            disabled={role.isSealed}
+            iconName="pen"
+            onClick={() => onEdit(role)}
+            testID={`admin-roles-edit-${role.name}`}
+            text="Edit"
+            variant="outline"
+          />
+        </Box>
+        <Text color="secondaryLight" size="sm">
+          {role.name}
+        </Text>
+        {role.description ? <Text size="sm">{role.description}</Text> : null}
+        <PermissionRows
+          descriptions={descriptions}
+          permissions={permissions}
+          showActionBadges={showActionBadges}
+          testIDPrefix={`admin-roles-item-${role.name}-permission`}
+        />
+      </Box>
+    );
+  }
+);
+RoleCard.displayName = "RoleCard";
+
+interface RolePermissionEditorProps {
+  descriptions: StatementDescriptions;
+  isActionVisible?: RoleActionVisibility;
+  onPermissionToggle: (resource: string, action: string) => void;
+  onStandardAccessChange: (resource: string, value: string) => void;
+  resource: string;
+  /** Actions the form currently grants on this resource. */
+  selectedActions?: string[];
+  /** Every action the resource declares. */
+  statementActions?: readonly string[];
+}
+
+/**
+ * One resource's access selector and custom-permission checkboxes in the role form.
+ * Memoized so typing in the form or toggling another resource does not re-render it.
+ */
+const RolePermissionEditor: React.FC<RolePermissionEditorProps> = memo(
+  ({
+    descriptions,
+    isActionVisible,
+    onPermissionToggle,
+    onStandardAccessChange,
+    resource,
+    selectedActions,
+    statementActions,
+  }) => {
+    const actions = (statementActions ?? []).filter((action) =>
+      isStatementActionVisible({action, isActionVisible, resource})
+    );
+    if (actions.length === 0) {
+      return null;
+    }
+    const hasStandardAccess = STANDARD_ACCESS_ACTIONS.every((action) => actions.includes(action));
+    const customActions = editorActionsForResource({
+      actions,
+      hasStandardAccess,
+      resource,
+    });
+    if (!hasStandardAccess && customActions.length === 0) {
+      return null;
+    }
+    return (
+      <Box gap={1}>
+        <Text bold>{resource}</Text>
+        {hasStandardAccess ? (
+          <SelectField
+            onChange={(value: string) => onStandardAccessChange(resource, value)}
+            options={STANDARD_ACCESS_OPTIONS}
+            testID={`admin-role-access-${resource}`}
+            title="Access level"
+            value={standardAccessValue(selectedActions ?? [])}
+          />
+        ) : null}
+        <Box direction="row" gap={3} wrap>
+          {customActions.map((action) => {
+            const isSelected = selectedActions?.includes(action) ?? false;
+            const description = descriptionFor(descriptions, resource, action);
+            return (
+              <Box
+                accessibilityHint={`Toggles the ${action} permission for ${resource}`}
+                accessibilityLabel={`${resource} ${action}`}
+                alignItems="center"
+                direction="row"
+                gap={1}
+                key={`${resource}:${action}`}
+                onClick={() => onPermissionToggle(resource, action)}
+                testID={`admin-role-permission-${resource}-${action}`}
+              >
+                <CheckBox selected={isSelected} />
+                <Box>
+                  <Text>{action}</Text>
+                  {description ? (
+                    <Text
+                      color="secondaryDark"
+                      size="sm"
+                      testID={`admin-role-permission-${resource}-${action}-description`}
+                    >
+                      {description}
+                    </Text>
+                  ) : null}
+                </Box>
+              </Box>
+            );
+          })}
+        </Box>
+      </Box>
+    );
+  }
+);
+RolePermissionEditor.displayName = "RolePermissionEditor";
+
 export const AdminRolesList: React.FC<AdminRolesListProps> = ({
   apiBase,
   baseUrl,
@@ -348,6 +508,11 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
     [statementsData]
   );
   const resources = useMemo(() => Object.keys(statements).sort(), [statements]);
+  const availablePermissions = useMemo(
+    (): Record<string, readonly string[]> =>
+      shownPermissions({isActionVisible, permissions: statements}),
+    [isActionVisible, statements]
+  );
   const hasAdminPageStatement =
     statements[ADMIN_PAGE_RESOURCE]?.includes(ADMIN_PAGE_ACTION) ?? false;
   const [editingRole, setEditingRole] = useState<RbacRoleRow | null>(null);
@@ -498,46 +663,14 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
             <Text>No roles found.</Text>
           ) : (
             roles.map((role) => (
-              <Box
-                border="default"
-                direction="column"
-                gap={2}
+              <RoleCard
+                descriptions={statementDescriptions}
+                isActionVisible={isActionVisible}
                 key={role.name}
-                padding={3}
-                rounding="md"
-                testID={`admin-roles-item-${role.name}`}
-              >
-                <Box alignItems="center" direction="row" gap={2} justifyContent="between">
-                  <Box alignItems="center" direction="row" gap={2}>
-                    <Text bold size="md">
-                      {role.displayName}
-                    </Text>
-                    {role.isLocked ? <Badge secondary status="info" value="locked" /> : null}
-                    {role.isSealed ? <Badge secondary status="warning" value="sealed" /> : null}
-                  </Box>
-                  <Button
-                    disabled={role.isSealed}
-                    iconName="pen"
-                    onClick={() => handleEdit(role)}
-                    testID={`admin-roles-edit-${role.name}`}
-                    text="Edit"
-                    variant="outline"
-                  />
-                </Box>
-                <Text color="secondaryLight" size="sm">
-                  {role.name}
-                </Text>
-                {role.description ? <Text size="sm">{role.description}</Text> : null}
-                <PermissionRows
-                  descriptions={statementDescriptions}
-                  permissions={shownPermissions({
-                    isActionVisible,
-                    permissions: role.permissions ?? {},
-                  })}
-                  showActionBadges={showActionBadges}
-                  testIDPrefix={`admin-roles-item-${role.name}-permission`}
-                />
-              </Box>
+                onEdit={handleEdit}
+                role={role}
+                showActionBadges={showActionBadges}
+              />
             ))
           )}
 
@@ -548,7 +681,7 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
             {!areStatementsLoading && !statementsError ? (
               <PermissionRows
                 descriptions={statementDescriptions}
-                permissions={shownPermissions({isActionVisible, permissions: statements})}
+                permissions={availablePermissions}
                 showActionBadges={showActionBadges}
                 testIDPrefix="admin-permissions"
               />
@@ -628,71 +761,18 @@ export const AdminRolesList: React.FC<AdminRolesListProps> = ({
                   </Box>
                 </Box>
               ) : null}
-              {resources.map((resource) => {
-                const actions = (statements[resource] ?? []).filter((action) =>
-                  isStatementActionVisible({action, isActionVisible, resource})
-                );
-                if (actions.length === 0) {
-                  return null;
-                }
-                const hasStandardAccess = STANDARD_ACCESS_ACTIONS.every((action) =>
-                  actions.includes(action)
-                );
-                const customActions = editorActionsForResource({
-                  actions,
-                  hasStandardAccess,
-                  resource,
-                });
-                if (!hasStandardAccess && customActions.length === 0) {
-                  return null;
-                }
-                return (
-                  <Box gap={1} key={resource}>
-                    <Text bold>{resource}</Text>
-                    {hasStandardAccess ? (
-                      <SelectField
-                        onChange={(value: string) => handleStandardAccessChange(resource, value)}
-                        options={STANDARD_ACCESS_OPTIONS}
-                        testID={`admin-role-access-${resource}`}
-                        title="Access level"
-                        value={standardAccessValue(form.permissions[resource] ?? [])}
-                      />
-                    ) : null}
-                    <Box direction="row" gap={3} wrap>
-                      {customActions.map((action) => {
-                        const isSelected = form.permissions[resource]?.includes(action) ?? false;
-                        const description = descriptionFor(statementDescriptions, resource, action);
-                        return (
-                          <Box
-                            accessibilityHint={`Toggles the ${action} permission for ${resource}`}
-                            accessibilityLabel={`${resource} ${action}`}
-                            alignItems="center"
-                            direction="row"
-                            gap={1}
-                            key={`${resource}:${action}`}
-                            onClick={() => handlePermissionToggle(resource, action)}
-                            testID={`admin-role-permission-${resource}-${action}`}
-                          >
-                            <CheckBox selected={isSelected} />
-                            <Box>
-                              <Text>{action}</Text>
-                              {description ? (
-                                <Text
-                                  color="secondaryDark"
-                                  size="sm"
-                                  testID={`admin-role-permission-${resource}-${action}-description`}
-                                >
-                                  {description}
-                                </Text>
-                              ) : null}
-                            </Box>
-                          </Box>
-                        );
-                      })}
-                    </Box>
-                  </Box>
-                );
-              })}
+              {resources.map((resource) => (
+                <RolePermissionEditor
+                  descriptions={statementDescriptions}
+                  isActionVisible={isActionVisible}
+                  key={resource}
+                  onPermissionToggle={handlePermissionToggle}
+                  onStandardAccessChange={handleStandardAccessChange}
+                  resource={resource}
+                  selectedActions={form.permissions[resource]}
+                  statementActions={statements[resource]}
+                />
+              ))}
             </Box>
           </Box>
         </Box>

@@ -93,6 +93,13 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
   const [createFolder] = useCreateFolderMutation();
   const [downloadFile] = useLazyDownloadQuery();
 
+  // The mutation hooks return a new trigger on every render and callers pass an inline
+  // `onFileSelect`. The row handlers read them through a ref so the table's cell components
+  // keep their identity; a new component type would remount every cell on each render.
+  const latestRef = useRef({deleteFile, deleteFolder, downloadFile, onFileSelect});
+  latestRef.current = {deleteFile, deleteFolder, downloadFile, onFileSelect};
+  const hasFileSelect = Boolean(onFileSelect);
+
   // Detect 503 "not configured" responses
   useEffect(() => {
     if (isError && error) {
@@ -121,62 +128,53 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
     setCurrentPrefix(prefix);
   }, []);
 
-  const handleDownload = useCallback(
-    async (filePath: string) => {
-      console.info("[DocumentStorageBrowser] handleDownload filePath:", filePath);
-      try {
-        const blob = await downloadFile(filePath).unwrap();
-        console.info("[DocumentStorageBrowser] got blob:", blob);
-        if (Platform.OS === "web" && blob) {
-          const blobObj = blob as Blob;
-          const url = URL.createObjectURL(blobObj);
-          const filename = filePath.split("/").filter(Boolean).pop() ?? "download";
-          console.info(
-            "[DocumentStorageBrowser] creating download link, filename:",
-            filename,
-            "blobSize:",
-            blobObj.size,
-            "blobType:",
-            blobObj.type,
-            "url:",
-            url
-          );
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = filename;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-        }
-      } catch (err) {
-        console.error("Failed to download file:", err);
+  const handleDownload = useCallback(async (filePath: string) => {
+    console.info("[DocumentStorageBrowser] handleDownload filePath:", filePath);
+    try {
+      const blob = await latestRef.current.downloadFile(filePath).unwrap();
+      console.info("[DocumentStorageBrowser] got blob:", blob);
+      if (Platform.OS === "web" && blob) {
+        const blobObj = blob as Blob;
+        const url = URL.createObjectURL(blobObj);
+        const filename = filePath.split("/").filter(Boolean).pop() ?? "download";
+        console.info(
+          "[DocumentStorageBrowser] creating download link, filename:",
+          filename,
+          "blobSize:",
+          blobObj.size,
+          "blobType:",
+          blobObj.type,
+          "url:",
+          url
+        );
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
       }
-    },
-    [downloadFile]
-  );
+    } catch (err) {
+      console.error("Failed to download file:", err);
+    }
+  }, []);
 
-  const handleDelete = useCallback(
-    async (filePath: string) => {
-      try {
-        await deleteFile(filePath).unwrap();
-      } catch (err) {
-        console.error("Failed to delete file:", err);
-      }
-    },
-    [deleteFile]
-  );
+  const handleDelete = useCallback(async (filePath: string) => {
+    try {
+      await latestRef.current.deleteFile(filePath).unwrap();
+    } catch (err) {
+      console.error("Failed to delete file:", err);
+    }
+  }, []);
 
-  const handleDeleteFolder = useCallback(
-    async (folderPath: string) => {
-      try {
-        await deleteFolder(folderPath).unwrap();
-      } catch (err) {
-        console.error("Failed to delete folder:", err);
-      }
-    },
-    [deleteFolder]
-  );
+  const handleDeleteFolder = useCallback(async (folderPath: string) => {
+    try {
+      await latestRef.current.deleteFolder(folderPath).unwrap();
+    } catch (err) {
+      console.error("Failed to delete folder:", err);
+    }
+  }, []);
 
   const handleUploadClick = useCallback(() => {
     fileInputRef.current?.click();
@@ -262,12 +260,12 @@ export const DocumentStorageBrowser: React.FC<DocumentStorageBrowserProps> = ({
       if (isFolderItem && folder) {
         return <Link onClick={() => handleFolderClick(folder)} text={name} />;
       }
-      if (file && onFileSelect) {
-        return <Link onClick={() => onFileSelect(file)} text={name} />;
+      if (file && hasFileSelect) {
+        return <Link onClick={() => latestRef.current.onFileSelect?.(file)} text={name} />;
       }
       return <Text>{name}</Text>;
     },
-    [handleFolderClick, onFileSelect]
+    [handleFolderClick, hasFileSelect]
   );
 
   const DocumentActionsCell: React.FC<{

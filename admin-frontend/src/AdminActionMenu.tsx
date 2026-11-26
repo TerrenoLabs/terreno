@@ -1,5 +1,5 @@
 import {Box, Modal, SelectField, Text, useToast} from "@terreno/ui";
-import React, {useCallback, useMemo, useState} from "react";
+import React, {memo, useCallback, useMemo, useState} from "react";
 import type {AdminModelConfig} from "./types";
 
 type AdminAction = NonNullable<AdminModelConfig["actions"]>[number];
@@ -11,11 +11,7 @@ interface AdminActionMenuProps {
   selectedCount: number;
 }
 
-/**
- * Bulk action dropdown for admin model tables. Supports confirmation modals and
- * hides actions marked with `allowed: false`.
- */
-export const AdminActionMenu: React.FC<AdminActionMenuProps> = ({
+const AdminActionMenuComponent: React.FC<AdminActionMenuProps> = ({
   actions,
   disabled = false,
   onRunAction,
@@ -104,3 +100,13 @@ export const AdminActionMenu: React.FC<AdminActionMenuProps> = ({
     </Box>
   );
 };
+
+AdminActionMenuComponent.displayName = "AdminActionMenu";
+
+/**
+ * Bulk action dropdown for admin model tables. Supports confirmation modals and
+ * hides actions marked with `allowed: false`.
+ *
+ * Memoized so typing in the table search does not re-render the dropdown and its modal.
+ */
+export const AdminActionMenu = memo(AdminActionMenuComponent);

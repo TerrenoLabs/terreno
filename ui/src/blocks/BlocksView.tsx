@@ -1,5 +1,6 @@
 import {type Block, parseBlocks, validateBlocks, wrapAsTextDocument} from "@terreno/blocks";
 import type React from "react";
+import {useMemo} from "react";
 
 import {Box} from "../Box";
 import type {BlocksViewProps} from "../Common";
@@ -55,14 +56,21 @@ export const BlocksView: React.FC<BlocksViewProps> = ({
   streaming = false,
   testID,
 }) => {
-  const parsed =
-    typeof document === "string" ? parseBlocks(document) : {ok: true as const, value: document};
-  const validated = parsed.ok
-    ? validateBlocks(parsed.value, {
-        allowHtml: true,
-        ...(imageHosts ? {imageHosts} : {}),
-      })
-    : undefined;
+  // Parsed once per document, so a re-render with the same document hands every block renderer
+  // the same block objects and the memoized ones skip.
+  const {parsed, validated} = useMemo(() => {
+    const parsedDocument =
+      typeof document === "string" ? parseBlocks(document) : {ok: true as const, value: document};
+    return {
+      parsed: parsedDocument,
+      validated: parsedDocument.ok
+        ? validateBlocks(parsedDocument.value, {
+            allowHtml: true,
+            ...(imageHosts ? {imageHosts} : {}),
+          })
+        : undefined,
+    };
+  }, [document, imageHosts]);
   const {loadingIds, resolved} = useResolvedDatasets({
     datasets: validated?.ok ? validated.doc.datasets : undefined,
     resolveDataset,

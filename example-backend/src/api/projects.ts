@@ -36,7 +36,7 @@ export const projectRouter = modelRouter("/projects", Project, {
         organizationId: String(contextOrganizationId),
       } as ProjectDocument;
     }
-    const user = req.user as unknown as {_id?: unknown; id?: string} | undefined;
+    const user = req.user;
     const userId = user?.id ?? (user?._id ? String(user._id) : undefined);
     if (!userId) {
       throw new APIError({

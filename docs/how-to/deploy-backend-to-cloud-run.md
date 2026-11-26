@@ -54,7 +54,7 @@ echo -n 'mongodb+srv://user:pass@cluster.example/terreno?retryWrites=true&w=majo
   gcloud secrets versions add "$SERVICE_NAME-mongodb-uri" --data-file=- --project="$PROJECT_ID"
 ```
 
-Repeat for `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, and `SESSION_SECRET`.
+Apps scaffolded by `create-terreno-app` use Better Auth with `legacyAuth: false` and need none of the JWT secrets. Only an app that keeps `legacyAuth` on needs `TOKEN_SECRET`, `TOKEN_ISSUER`, `REFRESH_TOKEN_SECRET`, and `SESSION_SECRET`; repeat the step above for each (legacyAuth only).
 
 For Better Auth, also create `better-auth-secret` and set `AUTH_PROVIDER=better-auth` plus `BETTER_AUTH_URL` at deploy time. See [Configure Better Auth](configure-better-auth.md). The example backend uses Better Auth when `AUTH_PROVIDER` is unset, and with `NODE_ENV=production` it refuses to start unless `BETTER_AUTH_SECRET` is set to a value other than its published development secret.
 
@@ -84,8 +84,9 @@ gcloud run deploy "$SERVICE_NAME" \
   --min-instances=1 \
   --allow-unauthenticated \
   --service-account="$SERVICE_NAME-runtime@$PROJECT_ID.iam.gserviceaccount.com" \
-  --set-secrets="MONGO_URI=$SERVICE_NAME-mongodb-uri:latest,TOKEN_SECRET=$SERVICE_NAME-token-secret:latest,TOKEN_ISSUER=$SERVICE_NAME-token-issuer:latest,REFRESH_TOKEN_SECRET=$SERVICE_NAME-refresh-token-secret:latest,SESSION_SECRET=$SERVICE_NAME-session-secret:latest" \
+  --set-secrets="MONGO_URI=$SERVICE_NAME-mongodb-uri:latest" \
   --set-env-vars="NODE_ENV=production"
+# legacyAuth only: append TOKEN_SECRET, TOKEN_ISSUER, REFRESH_TOKEN_SECRET and SESSION_SECRET to --set-secrets.
 ```
 
 Adjust `min-instances` to `0` for dev sandboxes (websockets will churn on cold start).

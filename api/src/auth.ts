@@ -49,7 +49,16 @@ export interface User {
   emailVerified?: boolean;
 }
 
-export interface UserModel extends Model<User> {
+/**
+ * Any Mongoose model of an app user document (`_id`, `admin`, optional `email`). Plain
+ * models and `passport-local-mongoose` models both satisfy it; only the legacy Passport
+ * helpers need `PassportUserModel`.
+ */
+// noExplicitAny: Mongoose model generics are invariant; an app's own document, statics and methods types must all be accepted
+// biome-ignore lint/suspicious/noExplicitAny: Mongoose model generics are invariant; an app's own document, statics and methods types must all be accepted
+export type TerrenoUserModel = Model<any>;
+
+export interface PassportUserModel extends TerrenoUserModel {
   createAnonymousUser?: (id?: string) => Promise<User>;
   // Allows additional setup during signup. This will be passed the rest of req.body from the signup
   postCreate?: (body: Record<string, unknown>) => Promise<void>;
@@ -64,9 +73,29 @@ export interface UserModel extends Model<User> {
   ): Query<User | null, User>;
 }
 
+/** @deprecated Use `PassportUserModel` (Passport helpers) or `TerrenoUserModel` (any app user model). */
+export type UserModel = PassportUserModel;
+
 export interface GenerateTokensOptions {
   sessionId?: string;
 }
+
+// Apps that ran `setupAuth` have Passport strategies registered. Passport's registry is
+// process-wide, so the decision to call it is made per Express app.
+const passportApps = new WeakSet<object>();
+
+// Express sets req.app to a mounted sub-app and records its mount point as `parent`, so a
+// sub-app of an app that ran setupAuth is found by walking up. Express apps are functions.
+const isPassportApp = (app: unknown): boolean => {
+  let current = app;
+  while ((typeof current === "object" || typeof current === "function") && current !== null) {
+    if (passportApps.has(current)) {
+      return true;
+    }
+    current = "parent" in current ? current.parent : undefined;
+  }
+  return false;
+};
 
 export const authenticateMiddleware = (anonymous = false) => {
   const strategies = ["jwt"];
@@ -76,6 +105,13 @@ export const authenticateMiddleware = (anonymous = false) => {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (req.user) {
       return next();
+    }
+    // Without setupAuth (legacyAuth: false) there is no jwt strategy: never call Passport.
+    if (!isPassportApp(req.app)) {
+      if (anonymous) {
+        return next();
+      }
+      return next(new Error("Unauthorized"));
     }
     // Failures use a custom callback rather than passport's `failWithError`:
     // passport's internal AuthenticationError touches `arguments.callee`,
@@ -532,6 +568,7 @@ export const setupAuth = (app: express.Application, userModel: UserModel): void 
   if (!userModel.createStrategy) {
     throw new APIError({status: 500, title: "setupAuth userModel must have .createStrategy()"});
   }
+  passportApps.add(app);
 
   passport.use(new AnonymousStrategy());
   passport.use(userModel.createStrategy());
@@ -853,9 +890,9 @@ const ME_PATCH_EXCLUDED_FIELDS = ["_id", "id", "__v", "created", "updated", "del
  * so they are left out of the documented shape.
  */
 const getMeUserOpenApiSpec = (
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): {properties: Record<string, OpenApiSchemaProperty>; required: string[]} => {
-  const {properties, required} = getOpenApiSpecForModel(userModel as unknown as Model<unknown>);
+  const {properties, required} = getOpenApiSpecForModel(userModel);
   const visible: Record<string, OpenApiSchemaProperty> = {};
   for (const [key, value] of Object.entries(properties)) {
     const schemaPath = userModel.schema.path(key) as {options?: {select?: unknown}} | undefined;
@@ -874,7 +911,7 @@ const buildMeOpenApi = ({
 }: {
   accessControl?: import("./rbac/types").AnyTerrenoAccess;
   openApi?: OpenApiMiddleware;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): {get: express.RequestHandler; patch: express.RequestHandler} => {
   const noop: express.RequestHandler = (_req, _res, next) => next();
   if (!openApi?.path) {
@@ -951,7 +988,7 @@ const buildMeOpenApi = ({
 
 export const addMeRoutes = (
   app: express.Application,
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   authOptions?: AuthOptions,
   accessControl?: import("./rbac/types").AnyTerrenoAccess,
   openApi?: OpenApiMiddleware

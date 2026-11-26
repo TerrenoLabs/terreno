@@ -11,7 +11,7 @@ import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
 import {asyncHandler, type OpenApiMiddleware} from "../api";
-import {authenticateMiddleware, type User, type UserModel} from "../auth";
+import {authenticateMiddleware, type TerrenoUserModel, type User} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {isBetterAuthTwoFactorEnabled} from "../betterAuthTwoFactor";
 import {
@@ -73,7 +73,7 @@ export interface McpOAuthRoutesOptions {
   betterAuth?: BetterAuthInstance;
   oauth: ResolvedMcpOAuthOptions;
   openApi?: OpenApiMiddleware;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }
 
 /** An RFC 6749 §5.2-shaped error, sent as `{error, error_description}` instead of JSON:API. */
@@ -845,7 +845,7 @@ const exchangeAuthorizationCode = async (
   body: Record<string, unknown>,
   clientId: string,
   oauth: ResolvedMcpOAuthOptions,
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): Promise<TokenResponse> => {
   const code = stringParam(body.code);
   const redirectUri = stringParam(body.redirect_uri);
@@ -939,7 +939,7 @@ const exchangeRefreshToken = async (
   body: Record<string, unknown>,
   clientId: string,
   oauth: ResolvedMcpOAuthOptions,
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): Promise<TokenResponse> => {
   const refreshToken = stringParam(body.refresh_token);
   if (!refreshToken) {
@@ -1078,7 +1078,7 @@ const exchangeClientCredentials = async (
   body: Record<string, unknown>,
   client: McpOAuthClientDocument,
   oauth: ResolvedMcpOAuthOptions,
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): Promise<Record<string, unknown>> => {
   if (!client.userId || (client.tokenEndpointAuthMethod ?? "none") === "none") {
     throw new OAuthProtocolError("invalid_client", "Client authentication failed", 401);
@@ -1121,7 +1121,7 @@ const exchangeClientCredentials = async (
 const addTokenRoutes = (
   app: Application,
   oauth: ResolvedMcpOAuthOptions,
-  userModel: UserModel
+  userModel: TerrenoUserModel
 ): void => {
   app.post(
     "/oauth/token",

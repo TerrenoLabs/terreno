@@ -8,6 +8,7 @@
     "api/src/api.test.ts": 75,
     "api/src/api.ts": 11,
     "api/src/auth.test.ts": 33,
+    "api/src/auth.ts": 1,
     "api/src/betterAuthSetup.test.ts": 22,
     "api/src/expressServer.test.ts": 68,
     "api/src/githubAuth.test.ts": 43,

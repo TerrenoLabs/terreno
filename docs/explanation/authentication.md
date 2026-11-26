@@ -105,6 +105,10 @@ a strict Content-Security-Policy. See
 
 ### Email/Password (JWT / Local Strategy — legacy)
 
+### Which user model type each path needs
+
+`userModel` options (`TerrenoApp`, `BetterAuthApp`, `createAccess`, `rbacRouter`, `AccountSecurityApp`, `RealtimeApp`, `CommsApp`) take `TerrenoUserModel`: any Mongoose model whose document has `_id`, `admin`, and an optional `email`. A plain model with its own statics and methods needs no cast. The legacy Passport setup (`setupAuth`, `addAuthRoutes`, `setupGitHubAuth`, `addGitHubAuthRoutes`) needs `PassportUserModel`, a model with the `passport-local-mongoose` plugin; `TerrenoApp` checks for it when it mounts those routes. `UserModel` is a deprecated alias of `PassportUserModel`.
+
 Traditional username/password authentication using `passport-local-mongoose`.
 
 **Flow:**
@@ -117,6 +121,35 @@ Traditional username/password authentication using `passport-local-mongoose`.
 **Endpoints:**
 - `POST /auth/signup` — Create new user account
 - `POST /auth/login` — Authenticate and receive tokens
+
+### Turning legacy auth off (`legacyAuth: false`)
+
+`new TerrenoApp({legacyAuth: false, userModel})` mounts no Passport strategies and none of
+the legacy routes. The user model needs no Passport plugin, and `TOKEN_SECRET` and
+`REFRESH_TOKEN_SECRET` are not read. Omitting the option keeps legacy auth on and logs one
+warning; the default becomes `false` in Terreno 60.
+
+| Route | Mounted by | Better Auth replacement |
+| --- | --- | --- |
+| `POST /auth/login` | `addAuthRoutes` | `POST {basePath}/sign-in/email` |
+| `POST /auth/signup` | `addAuthRoutes` | `POST {basePath}/sign-up/email` |
+| `POST /auth/refresh_token` | `addAuthRoutes` | Better Auth session |
+| `POST /auth/forgotPassword` | `addAuthRecoveryRoutes` | `sendResetPassword` hook |
+| `POST /auth/resetPassword`, `POST /resetPassword` | `addAuthRecoveryRoutes` | Better Auth reset-password |
+| `POST /auth/sendVerification` | `addAuthRecoveryRoutes` | `sendVerificationEmail` hook |
+| `POST /auth/verifyEmail` | `addAuthRecoveryRoutes` | Better Auth verify-email |
+
+`GET` and `PATCH /auth/me` stay mounted. `authenticateMiddleware` decides per Express app:
+without `setupAuth` it never calls Passport, so an unauthenticated request gets 401 (or
+continues anonymously when allowed) and a legacy JWT is not accepted. `githubAuth` together
+with `legacyAuth: false` throws at `build()`. `legacyAuth: false` with no `BetterAuthApp`
+logs one warning and still builds.
+
+Sockets and MCP follow the same switch. A `RealtimeApp` registered on a
+`legacyAuth: false` app builds its validator chain without the legacy JWT validator, even
+when `TOKEN_SECRET` is set, and an explicit `RealtimeApp` `tokenSecret` option throws at
+start (`RealtimeApp tokenSecret requires legacyAuth`). `POST /mcp` does not verify a
+`TOKEN_SECRET` JWT; Better Auth sessions, MCP OAuth tokens, and service tokens still work.
 
 ### GitHub OAuth Strategy (JWT — legacy)
 

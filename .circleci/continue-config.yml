@@ -726,6 +726,9 @@ jobs:
       - checkout
       - install_bun_and_deps
       - wait_for_mongo
+      # The api type fixtures compile a consumer against comms/dist (CommsApp takes a userModel).
+      - compile_packages:
+          packages: api comms
       - run:
           name: Lint / compile / test api
           working_directory: ~/project/api

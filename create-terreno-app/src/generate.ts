@@ -374,7 +374,6 @@ const generateBackendPackageJson = (args: BootstrapArgs): string => {
         luxon: "^3.7.2",
         mongodb: MONGODB_VERSION,
         mongoose: MONGOOSE_VERSION,
-        "passport-local-mongoose": "^9.0.1",
       },
       devDependencies: {
         "@biomejs/biome": "^2.3.6",
@@ -513,7 +512,6 @@ const generateBackendAccess = (): string => {
   return `import {
   createAccess,
   terrenoStatements,
-  type UserModel as TerrenoAuthUserModel,
 } from "@terreno/api";
 import mongoose from "mongoose";
 
@@ -523,7 +521,7 @@ export const access = createAccess({
   connection: mongoose.connection,
   organizations: true,
   statements: terrenoStatements,
-  userModel: User as unknown as TerrenoAuthUserModel,
+  userModel: User,
 });
 `;
 };
@@ -542,7 +540,6 @@ import {
   RealtimeApp,
   SyncApp,
   TerrenoApp,
-  type UserModel as TerrenoAuthUserModel,
 } from "@terreno/api";
 import type express from "express";
 import mongoose from "mongoose";
@@ -582,17 +579,16 @@ export const start = async (skipListen = false): Promise<express.Application> =>
       settingsSchema: organizationSettingsSchema,
     },
     rateLimit: isDeployed ? {trustProxy: 1} : false,
+    legacyAuth: false,
     skipListen,
-    // noExplicitAny: User model type mismatch
-    // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-    userModel: User as any,
+    userModel: User,
   }).configure(AppConfiguration);
 
   if (betterAuthConfig) {
     terraApp.register(
       new BetterAuthApp({
         config: betterAuthConfig,
-        userModel: User as unknown as TerrenoAuthUserModel,
+        userModel: User,
       })
     );
   }
@@ -623,9 +619,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
           {
             displayName: "Users",
             listFields: ["email", "name", "admin", "created"],
-            // noExplicitAny: User model type mismatch
-            // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-            model: User as any,
+            model: User,
             routePath: "/users",
           },
         ],
@@ -642,9 +636,7 @@ export const start = async (skipListen = false): Promise<express.Application> =>
     )
     .register(
       new RealtimeApp({
-        // noExplicitAny: User model type mismatch
-        // biome-ignore lint/suspicious/noExplicitAny: User model type mismatch
-        userModel: User as any,
+        userModel: User,
       })
     )
     .start();
@@ -702,7 +694,6 @@ const generateBackendSeed = (args: BootstrapArgs): string => {
   runSeedCli,
   seedBetterAuthUser,
   type SeedStep,
-  type UserModel as TerrenoAuthUserModel,
 } from "@terreno/api";
 import mongoose from "mongoose";
 
@@ -755,24 +746,20 @@ const seedSteps: SeedStep[] = [
       const auth = createBetterAuth({
         config: {...config, signUp: undefined},
         mongoClient: getMongoClientFromMongoose(),
-        userModel: User as unknown as TerrenoAuthUserModel,
+        userModel: User,
       });
       for (const definition of SEED_USERS) {
         const user = await seedBetterAuthUser({
           auth,
           user: definition,
-          userModel: User as unknown as TerrenoAuthUserModel,
+          userModel: User,
         });
-        const appUser = user as unknown as {
-          admin: boolean;
-          save: () => Promise<unknown>;
-        };
-        appUser.admin = definition.admin;
-        const roles = (appUser as unknown as {roles?: string[]}).roles ?? [];
+        user.admin = definition.admin;
+        const roles = user.roles ?? [];
         if (definition.admin && !roles.includes("operator")) {
-          (appUser as unknown as {roles: string[]}).roles = [...roles, "operator"];
+          user.roles = [...roles, "operator"];
         }
-        await appUser.save();
+        await user.save();
       }
     },
   },
@@ -1046,7 +1033,6 @@ export function addDefaultPlugins(schema: mongoose.Schema<any, any, any, any>): 
 const generateBackendUserModel = (): string => {
   return `import {rbacUserPlugin} from "@terreno/api";
 import mongoose from "mongoose";
-import passportLocalMongoose from "passport-local-mongoose";
 import type {UserDocument, UserModel} from "../types";
 import {addDefaultPlugins} from "./modelPlugins";
 
@@ -1081,9 +1067,6 @@ const userSchema = new mongoose.Schema<UserDocument, UserModel>(
   {strict: "throw", toJSON: {virtuals: true}, toObject: {virtuals: true}}
 );
 
-userSchema.plugin(passportLocalMongoose, {
-  usernameField: "email",
-});
 // \`roles\` holds the user's RBAC role names (access.ts). New users get Terreno's \`member\` role;
 // the seed adds \`operator\` to the admin, which grants the /users/:id/security recovery routes.
 userSchema.plugin(rbacUserPlugin, {defaultRoles: ["member"]});
@@ -1200,11 +1183,9 @@ export * from "./user";
 
 const generateBackendUserRoutes = (): string => {
   return `import {Permissions, modelRouter} from "@terreno/api";
-import type {Model} from "mongoose";
 import {User} from "../models/user";
-import type {UserDocument} from "../types";
 
-export const userRouter = modelRouter("/users", User as unknown as Model<UserDocument>, {
+export const userRouter = modelRouter("/users", User, {
   permissions: {
     create: [Permissions.IsAdmin],
     delete: [Permissions.IsAdmin],
@@ -1233,10 +1214,6 @@ const generateBackendUserTypes = (): string => {
   return `import type {APIErrorConstructor} from "@terreno/api";
 import type mongoose from "mongoose";
 import type {Document, Model} from "mongoose";
-import type {
-  PassportLocalMongooseDocument,
-  PassportLocalMongooseModel,
-} from "passport-local-mongoose";
 
 type ModelQuery<T> = Partial<Record<keyof T, unknown>> & Record<string, unknown>;
 
@@ -1269,15 +1246,13 @@ export type UserStatics = DefaultStatics<UserDocument> & {
   findByEmail: (this: UserModel, email: string) => Promise<UserDocument | null>;
 };
 
-export type UserModel = DefaultModel<UserDocument> &
-  UserStatics &
-  PassportLocalMongooseModel<UserDocument>;
+export type UserModel = DefaultModel<UserDocument> & UserStatics;
 
 export type UserSchema = mongoose.Schema<UserDocument, UserModel, UserMethods>;
 
 export type UserDocument = DefaultDoc &
-  UserMethods &
-  PassportLocalMongooseDocument & {
+  UserMethods & {
+    __v: number;
     admin: boolean;
     betterAuthId?: string;
     email: string;
@@ -1285,6 +1260,19 @@ export type UserDocument = DefaultDoc &
     /** RBAC role names, from rbacUserPlugin. */
     roles: string[];
   };
+`;
+};
+
+const generateBackendTerrenoRegister = (): string => {
+  return `import type {UserDocument} from "./models/userTypes";
+
+// Tells @terreno/api the app's user type, so \`user\` in actions, permissions and query
+// filters is a UserDocument without a cast.
+declare module "@terreno/api" {
+  interface TerrenoRegister {
+    user: UserDocument;
+  }
+}
 `;
 };
 
@@ -2332,10 +2320,6 @@ PASSKEY_RP_ID=
 AUTH_ACCOUNT_LINKING=verified-email
 # open (default) or closed.
 AUTH_SIGN_UP=open
-TOKEN_SECRET=
-TOKEN_ISSUER=
-REFRESH_TOKEN_SECRET=
-SESSION_SECRET=
 PORT=8080
 NODE_ENV=production
 `;
@@ -2357,10 +2341,6 @@ AUTH_PROVIDER=better-auth
 BETTER_AUTH_SECRET=${appName}-better-auth-secret-dev-only-32chars
 BETTER_AUTH_URL=http://localhost:4000
 FRONTEND_URL=http://localhost:8082
-TOKEN_SECRET=dev-token-secret
-TOKEN_ISSUER=${appName}-dev
-REFRESH_TOKEN_SECRET=dev-refresh-secret
-SESSION_SECRET=dev-session-secret
 PORT=4000
 # TerrenoApp registers POST /__terreno/browser-logs (terreno-mcp-local read_logs) only in development.
 NODE_ENV=development
@@ -2649,6 +2629,7 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     {content: generateBackendModelsIndex(), path: `${backendDir}/src/models/index.ts`},
     {content: generateBackendUserRoutes(), path: `${backendDir}/src/api/users.ts`},
     {content: generateBackendTypes(), path: `${backendDir}/src/types/index.ts`},
+    {content: generateBackendTerrenoRegister(), path: `${backendDir}/src/types/terrenoRegister.ts`},
     {content: generateBackendTypesModels(), path: `${backendDir}/src/types/models/index.ts`},
     {content: generateBackendUserTypes(), path: `${backendDir}/src/types/models/userTypes.ts`},
     {

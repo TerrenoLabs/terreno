@@ -3,7 +3,7 @@ import * as Sentry from "@sentry/bun";
 import type express from "express";
 import {Server, type Socket} from "socket.io";
 
-import type {UserModel} from "../auth";
+import type {TerrenoUserModel} from "../auth";
 import {findBetterAuthProvider, getProvidedBetterAuth} from "../betterAuthApp";
 import {APIError} from "../errors";
 import {logger} from "../logger";
@@ -146,8 +146,8 @@ export class RealtimeApp implements TerrenoPlugin {
    * This RealtimeApp's `userModel`, else the TerrenoApp's, matching what `TerrenoApp({realtime})`
    * passes to the RealtimeApp it registers.
    */
-  private resolveUserModel(): UserModel | undefined {
-    return this.config.userModel ?? (this.terrenoApp?.getUserModel() as UserModel | undefined);
+  private resolveUserModel(): TerrenoUserModel | undefined {
+    return this.config.userModel ?? this.terrenoApp?.getUserModel();
   }
 
   /**
@@ -196,7 +196,13 @@ export class RealtimeApp implements TerrenoPlugin {
       });
 
       // Authentication middleware: legacy JWT first when configured, optionally Better Auth sessions.
-      const tokenSecret = this.config.tokenSecret ?? process.env.TOKEN_SECRET;
+      const legacyAuthOff = this.terrenoApp?.isLegacyAuthEnabled?.() === false;
+      if (legacyAuthOff && this.config.tokenSecret) {
+        throw new APIError({status: 500, title: "RealtimeApp tokenSecret requires legacyAuth"});
+      }
+      const tokenSecret = legacyAuthOff
+        ? undefined
+        : (this.config.tokenSecret ?? process.env.TOKEN_SECRET);
       const userModel = this.resolveUserModel();
       const betterAuth = this.resolveBetterAuth();
       if (!tokenSecret && !betterAuth) {

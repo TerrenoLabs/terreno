@@ -1,6 +1,6 @@
 import isEqual from "lodash/isEqual";
 
-import type {UserModel} from "./auth";
+import type {TerrenoUserModel} from "./auth";
 import type {BetterAuthUser} from "./betterAuth";
 import {type BetterAuthInstance, syncBetterAuthUser} from "./betterAuthSetup";
 import {APIError, errorMessage} from "./errors";
@@ -152,7 +152,7 @@ export const seedBetterAuthUser = async ({
 }: {
   auth: BetterAuthInstance;
   user: BetterAuthSeedUser;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): Promise<Awaited<ReturnType<typeof syncBetterAuthUser>>> => {
   let authUser: BetterAuthUser | undefined;
   try {

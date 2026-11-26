@@ -1,10 +1,4 @@
-import {
-  APIError,
-  BetterAuthApp,
-  logger,
-  syncBetterAuthUser,
-  type UserModel as TerrenoAuthUserModel,
-} from "@terreno/api";
+import {APIError, BetterAuthApp, logger, syncBetterAuthUser} from "@terreno/api";
 import express from "express";
 import {DateTime} from "luxon";
 import supertest from "supertest";
@@ -66,7 +60,7 @@ export const seedBetterAuthUserInProcess = async (
       disableRateLimit: true,
       signUp: {mode: "open"},
     },
-    userModel: User as unknown as TerrenoAuthUserModel,
+    userModel: User,
   });
   betterAuthApp.register(app);
   const agent = supertest(app);
@@ -115,7 +109,7 @@ export const seedBetterAuthUserInProcess = async (
     await context.internalAdapter.updateUser(body.user.id, {emailVerified: true});
     // The seed owns this Better Auth account, so its email is trusted for linking a legacy user.
     await syncBetterAuthUser(
-      User as unknown as TerrenoAuthUserModel,
+      User,
       {
         createdAt: DateTime.now().toJSDate(),
         email: body.user.email,

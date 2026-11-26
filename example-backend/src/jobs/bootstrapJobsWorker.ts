@@ -1,5 +1,5 @@
 import type {AnyTerrenoAccess} from "@terreno/api";
-import {logger, TerrenoApp, type UserModel as TerrenoAuthUserModel} from "@terreno/api";
+import {logger, TerrenoApp, type TerrenoUserModel} from "@terreno/api";
 import type {JobsApp} from "@terreno/jobs";
 import mongoose from "mongoose";
 import {access} from "../access";
@@ -18,7 +18,7 @@ export interface BootstrapJobsWorkerDeps {
   registerProcessShutdown: (jobsApp: JobsApp, onShutdown: () => Promise<void>) => void;
   seedRoles: () => Promise<void>;
   shutdownConfiguration: () => Promise<void>;
-  userModel: TerrenoAuthUserModel;
+  userModel: TerrenoUserModel;
 }
 
 export interface BootstrapJobsWorkerResult {
@@ -47,7 +47,7 @@ const defaultDeps: BootstrapJobsWorkerDeps = {
   },
   seedRoles: () => access.roles.seedDefaults(),
   shutdownConfiguration: () => Configuration.shutdown(),
-  userModel: User as unknown as TerrenoAuthUserModel,
+  userModel: User,
 };
 
 export const bootstrapJobsWorker = async (

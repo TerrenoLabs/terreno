@@ -1,7 +1,7 @@
 import {authorize, UnauthorizedError} from "@thream/socketio-jwt";
 import type {Socket} from "socket.io";
 
-import {isUserDisabled, type UserModel} from "../auth";
+import {isUserDisabled, type TerrenoUserModel} from "../auth";
 import type {BetterAuthUser} from "../betterAuth";
 import {type BetterAuthInstance, resolveBetterAuthAppUser} from "../betterAuthSetup";
 import {APIError} from "../errors";
@@ -51,7 +51,7 @@ export interface BetterAuthSocketOptions {
    * Better Auth user id is used and `admin` is false. `RealtimeApp` fills this in from its own
    * `userModel`, else the TerrenoApp's, when it is omitted.
    */
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
 }
 
 /**
@@ -84,7 +84,7 @@ export interface BetterAuthSocketOptions {
 export const createLegacyJwtValidator = (
   tokenSecret: string,
   issuer?: string | (() => string | undefined),
-  userModel?: UserModel
+  userModel?: TerrenoUserModel
 ): SocketAuthValidator => {
   const resolveIssuer = (): string | undefined =>
     typeof issuer === "function" ? issuer() : issuer;
@@ -133,7 +133,7 @@ export const createLegacyJwtValidator = (
  */
 const rejectUnusableJwtUser = async (
   socket: AuthenticatableSocket,
-  userModel?: UserModel
+  userModel?: TerrenoUserModel
 ): Promise<void> => {
   const userId = socket.decodedToken?.id;
   if (!userModel || !userId) {
@@ -269,7 +269,7 @@ export const createSocketAuthMiddleware = ({
    * Application user model. When set, the legacy JWT validator refuses tokens whose user is
    * missing or disabled.
    */
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
   /** Additional validators appended to the chain (after JWT and Better Auth). */
   extraValidators?: SocketAuthValidator[];
 }): ((socket: Socket, next: (error?: Error) => void) => void) => {

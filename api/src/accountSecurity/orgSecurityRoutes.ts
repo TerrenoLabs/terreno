@@ -15,7 +15,7 @@ import type {Request, Router} from "express";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import {APIError, ForbiddenError, NotFoundError} from "../errors";
 import {Membership, Organization} from "../orgs/organizationModel";
 import {
@@ -88,7 +88,7 @@ const assertNotPlatformTarget = async ({
   userModel,
 }: {
   targetUserId: string;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): Promise<void> => {
   const target = await findOneOrNoneFor(
     userModel as unknown as mongoose.Model<User>,
@@ -146,7 +146,7 @@ export const createOrgSecurityAuthorizer = ({
 }: {
   access: AnyTerrenoAccess;
   orgRecovery?: OrgRecoveryOptions;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): SecurityAuthorizer => {
   const minMembershipDays = orgRecovery.minMembershipDays ?? 0;
   return async ({req, targetUserId}) => {
@@ -220,7 +220,7 @@ export const mountOrgSecurityRoutes = ({
   accountSecurity: AccountSecurityApp;
   orgRecovery?: OrgRecoveryOptions;
   router: Router;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): void => {
   // Leaf routes carry the full `/:orgId/members/:userId/security/...` path so OpenAPI documents
   // `orgId` as a path parameter.

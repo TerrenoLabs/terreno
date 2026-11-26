@@ -1,11 +1,14 @@
-import type {User} from "../auth";
 import {BadRequestError} from "../errors";
 import type {PermissionMethod} from "../permissions";
 import {Membership} from "./organizationModel";
 import {getOrgContext, isPlatformOrgActor} from "./orgContext";
 
+/**
+ * Scopes list queries to the organization in the request context. It never reads the user, so the
+ * parameter accepts any registered user type (`TerrenoRegister`).
+ */
 export const OrgQueryFilter = (
-  _user?: User,
+  _user?: unknown,
   _query?: Record<string, unknown>
 ): Record<string, unknown> => {
   const context = getOrgContext();

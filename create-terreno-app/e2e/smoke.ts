@@ -134,6 +134,23 @@ const run = async (): Promise<void> => {
     }
     console.info("✅ Every package the generated backend imports is in its dependencies");
 
+    const legacyHits = Array.from(new Glob("**/*.{ts,tsx,json}").scanSync({cwd: appDir}))
+      .filter((file) => !file.includes("node_modules"))
+      .filter((file) => {
+        const text = readFileSync(join(appDir, file), "utf8");
+        return /as\s+unknown\s+as/.test(text) || text.includes("passport-local-mongoose");
+      });
+    if (legacyHits.length > 0) {
+      throw new Error(
+        `Generated tree has \`as unknown as\` or passport-local-mongoose in: ${legacyHits.join(", ")}`
+      );
+    }
+    const envText = readFileSync(join(backendDir, ".env"), "utf8");
+    if (/^(TOKEN_SECRET|TOKEN_ISSUER|REFRESH_TOKEN_SECRET|SESSION_SECRET)=/m.test(envText)) {
+      throw new Error("Generated backend/.env sets legacy JWT or session secrets");
+    }
+    console.info("✅ The generated tree has no user casts, no passport, and no legacy secrets");
+
     symlinkSync(join(REPO_ROOT, "node_modules"), join(backendDir, "node_modules"), "dir");
     const workspaceDeps = Object.keys(dependencies)
       .filter((name) => name.startsWith("@terreno/"))

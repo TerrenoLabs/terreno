@@ -75,8 +75,8 @@ const buildTodoSeed = (ownerId: unknown): Record<string, unknown> => ({
   title: randomTitle(),
 });
 
-const requireOwnerId = (user: unknown): UserDocument["_id"] => {
-  const ownerId = (user as unknown as UserDocument)?._id;
+const requireOwnerId = (user: UserDocument | undefined): UserDocument["_id"] => {
+  const ownerId = user?._id;
   if (!ownerId) {
     throw new APIError({status: 401, title: "Authentication required"});
   }

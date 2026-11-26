@@ -14,7 +14,7 @@ import {type NextFunction, type Request, type Response, Router} from "express";
 import {asyncHandler, type OpenApiMiddleware} from "../api";
 import {AuditApp} from "../audit/auditApp";
 import {isAuditRecorderInstalled} from "../audit/record";
-import {authenticateMiddleware, type User, type UserModel} from "../auth";
+import {authenticateMiddleware, type TerrenoUserModel, type User} from "../auth";
 import {findBetterAuthProvider, getProvidedBetterAuth} from "../betterAuthApp";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {APIError, ForbiddenError, NotFoundError} from "../errors";
@@ -226,7 +226,7 @@ export interface AccountSecurityAppOptions {
    */
   publicAppUrl?: string;
   /** App User model. Defaults to the TerrenoApp's `userModel`. */
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
 }
 
 /** The credentials that prove the caller is the person at the keyboard. */
@@ -706,7 +706,7 @@ export class AccountSecurityApp implements TerrenoPlugin {
     return auth;
   };
 
-  private resolveUserModel = (): UserModel => {
+  private resolveUserModel = (): TerrenoUserModel => {
     const userModel = this.options.userModel ?? this.terrenoApp?.getUserModel();
     if (!userModel) {
       throw new APIError({

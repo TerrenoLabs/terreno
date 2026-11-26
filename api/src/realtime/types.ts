@@ -1,5 +1,5 @@
 import type {Server as SocketIoServer} from "socket.io";
-import type {UserModel} from "../auth";
+import type {TerrenoUserModel} from "../auth";
 import type {SyncAppOptions} from "../sync/routes";
 import type {startChangeStreamWatcher} from "./changeStreamWatcher";
 import type {BetterAuthSocketOptions} from "./socketAuth";
@@ -75,7 +75,7 @@ export interface RealtimeAppOptions {
    * the TerrenoApp this RealtimeApp is registered on is used; without either, socket-side
    * authorization falls back to the synthetic shape (pre-D2 behavior).
    */
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
   /**
    * Interval in ms for the periodic socket session re-validation sweep (D1): re-checks
    * JWT expiry / Better Auth session validity and the user's `disabled` flag for every

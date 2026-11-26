@@ -8,7 +8,7 @@ import {generateRandomString} from "better-auth/crypto";
 import {DateTime} from "luxon";
 import mongoose from "mongoose";
 
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import {readBetterAuthMethods} from "../betterAuthMethods";
 import {type BetterAuthInstance, betterAuthResetPasswordUrl} from "../betterAuthSetup";
 import {NotFoundError} from "../errors";
@@ -317,7 +317,7 @@ export interface AccountSecurityServiceOptions {
   getAuth: () => BetterAuthInstance | undefined;
   /** The app page base for set-password links (`BetterAuthConfig.publicAppUrl`). */
   getPublicAppUrl?: () => string | undefined;
-  getUserModel: () => UserModel;
+  getUserModel: () => TerrenoUserModel;
 }
 
 export interface AccountSecurityService {

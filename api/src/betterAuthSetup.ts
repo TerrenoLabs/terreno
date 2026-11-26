@@ -18,7 +18,7 @@ import {
   createSecurityEventsPlugin,
   recordSelfSecurityAction,
 } from "./accountSecurity/securityEventHooks";
-import {type HasSetPassword, setPasswordForUser, type UserModel} from "./auth";
+import {type HasSetPassword, setPasswordForUser, type TerrenoUserModel} from "./auth";
 import type {BetterAuthConfig, BetterAuthSessionData, BetterAuthUser} from "./betterAuth";
 import {
   buildFeatureOptions,
@@ -36,6 +36,7 @@ import type {AuthRecoveryMail, BetterAuthPasswordCheck} from "./expressServer";
 import {logger} from "./logger";
 import {findOneOrNoneFor} from "./plugins";
 import {updateRequestContextFromRequest} from "./requestContext";
+import type {RegisteredUser} from "./types/register";
 
 /**
  * The Better Auth instance type.
@@ -62,7 +63,7 @@ interface SocialProviderConfig {
 export interface CreateBetterAuthOptions {
   config: BetterAuthConfig;
   mongoClient: MongoClientLike;
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
 }
 
 const FALLBACK_AUTH_MAIL = {
@@ -253,7 +254,7 @@ export const createBetterAuth = (options: CreateBetterAuthOptions): BetterAuthIn
       : undefined,
     basePath,
     baseURL,
-    database: mongodbAdapter(mongoClient.db()),
+    database: mongodbAdapter(mongoClient.db() as unknown as Parameters<typeof mongodbAdapter>[0]),
     emailAndPassword: {
       enabled: true,
       revokeSessionsOnPasswordReset: true,
@@ -489,7 +490,7 @@ interface CredentialHookContext {
  * legacy refresh tokens issued before it stop working.
  */
 const applyBetterAuthCredentialChangeToJwt = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   ctx: CredentialHookContext
 ): Promise<void> => {
   if (ctx.context.returned instanceof Error) {
@@ -522,7 +523,7 @@ const applyBetterAuthCredentialChangeToJwt = async (
   await appUser.save();
 };
 
-const createCredentialSyncPlugin = (userModel: UserModel): BetterAuthPlugin => ({
+const createCredentialSyncPlugin = (userModel: TerrenoUserModel): BetterAuthPlugin => ({
   hooks: {
     after: [
       {
@@ -629,7 +630,7 @@ export const readPasswordFromBetterAuthResetRequest = async (
  * password is read from `request`, which works only while the request body is unread.
  */
 export const applyBetterAuthPasswordResetToJwt = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   betterAuthUser: {email?: string; id?: string},
   request: PasswordResetRequestLike | undefined,
   capturedPassword?: string
@@ -765,7 +766,7 @@ const isUntrustedCookieWrite = async (
  */
 export const createBetterAuthSessionMiddleware = (
   auth: BetterAuthInstance,
-  userModel?: UserModel
+  userModel?: TerrenoUserModel
 ) => {
   return async (req: Request, _res: Response, next: NextFunction): Promise<void> => {
     try {
@@ -852,6 +853,9 @@ interface MutableUserDoc {
   save: () => Promise<unknown>;
 }
 
+/** The app user document `syncBetterAuthUser` returns: the registered user plus the fields it writes. */
+export type SyncedBetterAuthUser = RegisteredUser & MutableUserDoc;
+
 export interface SyncBetterAuthUserOptions {
   /**
    * The plaintext password from the sign-up or sign-in request being served. When an app User
@@ -873,7 +877,7 @@ type PassportAuthenticate = (
   password: string
 ) => Promise<{error?: unknown; user?: unknown}> | undefined;
 
-// The parts of a Mongoose model the legacy password check needs beyond `UserModel`.
+// The parts of a Mongoose model the legacy password check needs beyond `TerrenoUserModel`.
 interface HydratingUserModel {
   collection?: {
     find: (filter: Record<string, unknown>) => {
@@ -892,7 +896,7 @@ interface HydratingUserModel {
  * JWT login: a stranger signing up with the victim's email cannot lock the victim out.
  */
 const legacyPasswordMatches = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   user: MutableUserDoc,
   password?: string
 ): Promise<boolean> => {
@@ -933,7 +937,7 @@ interface AppUserClaim {
  * else's email, so nothing weaker counts.
  */
 const mayClaimAppUser = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   user: MutableUserDoc,
   claim: AppUserClaim
 ): Promise<boolean> =>
@@ -957,7 +961,7 @@ const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\
  * skip the claim guard, and insert a second User.
  */
 const findAppUserByEmail = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   email: string
 ): Promise<MutableUserDoc | null> =>
   (await findOneOrNoneFor(userModel, {
@@ -997,7 +1001,7 @@ const assertNotBoundToAnotherAccount = (
  * refresh tokens issued from it stop working.
  */
 const revokeUnprovenLegacyPassword = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   userByEmail: MutableUserDoc
 ): Promise<void> => {
   if (userByEmail.emailVerified === true || userModel.schema.path("hash") === undefined) {
@@ -1023,8 +1027,8 @@ const revokeUnprovenLegacyPassword = async (
   );
 };
 
-export const syncBetterAuthUser = async (
-  userModel: UserModel,
+const syncBetterAuthUserDoc = async (
+  userModel: TerrenoUserModel,
   betterAuthUser: BetterAuthUser,
   oauthProvider?: string,
   options: SyncBetterAuthUserOptions = {}
@@ -1108,6 +1112,24 @@ export const syncBetterAuthUser = async (
   }
 };
 
+/**
+ * Create or link the app user for a Better Auth user. Resolves to the registered user document
+ * (`TerrenoRegister`), so a caller reads and writes app fields and calls `save()` without a cast.
+ */
+export const syncBetterAuthUser = async (
+  userModel: TerrenoUserModel,
+  betterAuthUser: BetterAuthUser,
+  oauthProvider?: string,
+  options: SyncBetterAuthUserOptions = {}
+): Promise<SyncedBetterAuthUser> =>
+  // The document is hydrated from the app's own model, so it has the registered shape.
+  (await syncBetterAuthUserDoc(
+    userModel,
+    betterAuthUser,
+    oauthProvider,
+    options
+  )) as unknown as SyncedBetterAuthUser;
+
 const isVerifyEmailRefusal = (error: unknown): boolean =>
   isAPIError(error) && error.status === 409 && error.message === VERIFY_EMAIL_TO_USE_ACCOUNT;
 
@@ -1167,7 +1189,7 @@ const boundToAnotherAccountConflict = (): BetterAuthAPIError =>
 
 // The app User with this email that no Better Auth user has claimed yet (or another one has).
 const findUnclaimedAppUser = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   email: string,
   betterAuthId?: string
 ): Promise<MutableUserDoc | null> => {
@@ -1198,7 +1220,7 @@ const findUnclaimedAppUser = async (
  *   no session exists that would be refused on every request. Any other sync failure is logged
  *   and the session proceeds; the session middleware retries the sync on the next request.
  */
-export const createAppUserSyncPlugin = (userModel: UserModel): BetterAuthPlugin => {
+export const createAppUserSyncPlugin = (userModel: TerrenoUserModel): BetterAuthPlugin => {
   return {
     id: "terreno-app-user-sync",
     init: (authContext) => {
@@ -1283,7 +1305,7 @@ export const createAppUserSyncPlugin = (userModel: UserModel): BetterAuthPlugin 
 };
 
 export interface ResolveBetterAuthAppUserOptions {
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
   betterAuthUser: BetterAuthUser;
 }
 
@@ -1368,7 +1390,10 @@ export const getMongoClientFromMongoose = (): MongoClientLike => {
  * and syncs the app User as each session is created (see `createAppUserSyncPlugin`), and
  * `createBetterAuthSessionMiddleware` retries the sync on later requests.
  */
-export const setupBetterAuthUserSync = (_auth: BetterAuthInstance, _userModel: UserModel): void => {
+export const setupBetterAuthUserSync = (
+  _auth: BetterAuthInstance,
+  _userModel: TerrenoUserModel
+): void => {
   logger.debug("Better Auth user sync configured (via the terreno-app-user-sync plugin)");
 };
 

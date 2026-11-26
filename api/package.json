@@ -13,7 +13,6 @@
     "@modelcontextprotocol/node": "catalog:",
     "@modelcontextprotocol/server": "catalog:",
     "@sentry/bun": "catalog:",
-    "@terreno/test": "workspace:*",
     "@thream/socketio-jwt": "catalog:",
     "@types/qs": "catalog:",
     "ajv": "8.20.0",
@@ -52,6 +51,7 @@
     "@biomejs/biome": "catalog:",
     "@modelcontextprotocol/client": "catalog:",
     "@terreno/syncdb": "workspace:*",
+    "@terreno/test": "workspace:*",
     "@types/bun": "catalog:",
     "@types/cors": "^2.8.17",
     "@types/express": "catalog:",
@@ -81,6 +81,9 @@
       "default": "./dist/sentryV10DataCollection.js",
       "types": "./dist/sentryV10DataCollection.d.ts"
     },
+    "./expressUser": {
+      "types": "./types/expressUser.d.ts"
+    },
     "./testing": {
       "default": "./dist/tests.js",
       "types": "./dist/tests.d.ts"
@@ -95,7 +98,11 @@
     "CHANGELOG.md",
     "dist/**/*",
     "src/**/*",
-    ".ai/**/*"
+    "types/**/*",
+    ".ai/**/*",
+    "!src/**/*.test.ts",
+    "!src/**/__snapshots__/**",
+    "!src/tests/fixtures/**"
   ],
   "homepage": "https://github.com/TerrenoLabs/terreno#readme",
   "keywords": [
@@ -108,12 +115,16 @@
   "main": "dist/index.js",
   "name": "@terreno/api",
   "peerDependencies": {
+    "@terreno/test": "workspace:*",
     "ioredis": "^5.11.0",
     "mongoose": "^8.0.0 || ^9.0.0",
     "passport-local-mongoose": "catalog:",
     "zod": "^4.3.6"
   },
   "peerDependenciesMeta": {
+    "@terreno/test": {
+      "optional": true
+    },
     "ioredis": {
       "optional": true
     },

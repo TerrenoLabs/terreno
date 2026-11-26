@@ -122,7 +122,7 @@ const getBaseServer = () => {
     loggingOptions: {
       level: "debug",
     },
-    userModel: UserModel as unknown as UserMongooseModel,
+    userModel: UserModel,
   }).build();
 };
 getBaseServer();

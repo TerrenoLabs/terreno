@@ -9,7 +9,6 @@ import {
 } from "@terreno/api";
 import {Todo} from "../models/todo";
 import type {TodoDocument} from "../types/models/todoTypes";
-import type {UserDocument} from "../types/models/userTypes";
 import {todoLoadTestCollectionActions} from "./loadtest";
 
 const bulkCompleteBodySchema = z
@@ -93,7 +92,7 @@ export const todoRouter = modelRouter("/todos", Todo, {
       access: {action: "update", resource: "todo"},
       body: bulkCompleteBodySchema,
       handler: async ({body, user}) => {
-        const ownerId = (user as unknown as UserDocument)?._id;
+        const ownerId = user?._id;
         if (!ownerId) {
           throw new APIError({status: 401, title: "Authentication required"});
         }
@@ -175,7 +174,7 @@ export const todoRouter = modelRouter("/todos", Todo, {
   preCreate: (body, req) => {
     return {
       ...body,
-      ownerId: (req.user as unknown as UserDocument)?._id,
+      ownerId: req.user?._id,
     } as TodoDocument;
   },
   queryFields: ["completed", "created", "ownerId"],

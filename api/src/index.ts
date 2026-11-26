@@ -355,6 +355,7 @@ export type {
   McpOAuthTokenDocument,
   McpOAuthTokenEndpointAuthMethod,
 } from "./types/mcpOAuth";
+export type {RegisteredUser, TerrenoRegister} from "./types/register";
 export * from "./utils";
 export * from "./versionCheckPlugin";
 export type {

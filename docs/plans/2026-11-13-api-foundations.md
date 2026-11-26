@@ -80,7 +80,7 @@ None — no canvas.
 
 ## Tasks
 
-- [ ] **T1** — Add the TerrenoRegister user registry and prove it with a consumer type fixture
+- [x] **T1** — Add the TerrenoRegister user registry and prove it with a consumer type fixture
   - Depends on: none
   - Files: api/src/types/register.ts, api/src/index.ts, api/typeFixtures/registeredUser/tsconfig.json, api/typeFixtures/registeredUser/augmented.ts, api/typeFixtures/unregisteredUser/tsconfig.json, api/typeFixtures/unregisteredUser/plain.ts, api/src/types/register.test.ts
   - Criteria:
@@ -102,7 +102,7 @@ None — no canvas.
   - Docs: none in this task; the reference section is written in T12
   - Skills: terreno-backend-api
 
-- [ ] **T2** — Derive `user` from the registry in actions, query filters and permissions, and add the opt-in `req.user` typing entry
+- [x] **T2** — Derive `user` from the registry in actions, query filters and permissions, and add the opt-in `req.user` typing entry
   - Depends on: T1
   - Files: api/src/actions.ts, api/src/api.ts, api/src/permissions.ts, api/types/expressUser.d.ts, api/package.json, api/typeFixtures/registeredUser/callbacks.ts, api/typeFixtures/unregisteredUser/callbacks.ts, docs/explanation/model-router-actions.md
   - Criteria:
@@ -125,7 +125,7 @@ None — no canvas.
   - Docs: docs/explanation/model-router-actions.md (handler `user`); callback signatures in the reference are written in T12
   - Skills: terreno-backend-api, model-router-actions, update-docs
 
-- [ ] **T3** — Accept any app user model on `userModel` options with `TerrenoUserModel`
+- [x] **T3** — Accept any app user model on `userModel` options with `TerrenoUserModel`
   - Depends on: T1
   - Files: api/src/auth.ts, api/src/terrenoApp.ts, api/src/betterAuthApp.ts, api/src/betterAuthSetup.ts, api/src/betterAuthSetPassword.ts, api/src/accountSecurity/accountSecurityApp.ts, api/src/accountSecurity/orgSecurityRoutes.ts, api/src/accountSecurity/securityEventHooks.ts, api/src/rbac/access.ts, api/src/rbac/routes.ts, api/src/rbac/backfillAdmins.ts, api/src/seedRunner.ts, api/src/realtime/types.ts, api/src/realtime/socketAuth.ts, api/src/sync/syncApp.ts, api/src/index.ts, api/typeFixtures/registeredUser/userModel.ts, docs/explanation/authentication.md
   - Criteria:
@@ -148,7 +148,7 @@ None — no canvas.
   - Docs: docs/explanation/authentication.md (which type each auth path needs); the reference entries are written in T12
   - Skills: terreno-backend-api, mongoose-schema-safety, update-docs
 
-- [ ] **T4** — Pass and receive the registered user document without a cast
+- [x] **T4** — Pass and receive the registered user document without a cast
   - Depends on: T2, T3
   - Files: api/src/api.ts, api/src/authRecovery.ts, api/src/seedRunner.ts, api/src/betterAuthSetup.ts, api/typeFixtures/registeredUser/userDocument.ts
   - Criteria:
@@ -171,7 +171,7 @@ None — no canvas.
   - Docs: none in this task (signatures are documented in T12)
   - Skills: terreno-backend-api, mongoose-schema-safety
 
-- [ ] **T5** — Delete the user casts from example-backend
+- [x] **T5** — Delete the user casts from example-backend
   - Depends on: T4
   - Files: example-backend/src/access.ts, example-backend/src/server.ts, example-backend/src/api/users.ts, example-backend/src/api/todos.ts, example-backend/src/api/projects.ts, example-backend/src/api/loadtest.ts, example-backend/src/jobs/bootstrapJobsWorker.ts, example-backend/src/utils/betterAuthUserSeed.ts, example-backend/src/types/express.d.ts, example-backend/src/types/terrenoRegister.d.ts, example-backend/src/noUserCasts.test.ts, docs/reference/syncdb.md
   - Criteria:
@@ -190,7 +190,7 @@ None — no canvas.
   - Docs: docs/reference/syncdb.md
   - Skills: terreno-backend-api, update-docs
 
-- [ ] **T6** — Delete the user casts from the scaffold
+- [x] **T6** — Delete the user casts from the scaffold
   - Depends on: T4
   - Files: create-terreno-app/src/generate.ts, create-terreno-app/src/__tests__/generate.test.ts, create-terreno-app/src/__tests__/generatedApp.compile.test.ts, docs/reference/create-terreno-app.md
   - Criteria:
@@ -209,7 +209,7 @@ None — no canvas.
   - Docs: docs/reference/create-terreno-app.md (generated files list)
   - Skills: terreno-backend-api, update-docs
 
-- [ ] **T7** — Add the `legacyAuth` option so a Better Auth app mounts no Passport or legacy routes
+- [x] **T7** — Add the `legacyAuth` option so a Better Auth app mounts no Passport or legacy routes
   - Depends on: T3
   - Files: api/src/terrenoApp.ts, api/src/auth.ts, api/src/terrenoApp.legacyAuth.test.ts, api/e2e/smoke.ts, docs/explanation/authentication.md, docs/reference/environment-variables.md
   - Criteria:
@@ -245,7 +245,7 @@ None — no canvas.
   - Docs: docs/explanation/authentication.md (opt-in section, route table, the 60 default), docs/reference/environment-variables.md (which secrets each mode needs); the `legacyAuth` reference entry is written in T12
   - Skills: terreno-backend-api, terreno-backend-tests, update-docs
 
-- [ ] **T8** — Refuse legacy JWTs on sockets and MCP when `legacyAuth` is `false`
+- [x] **T8** — Refuse legacy JWTs on sockets and MCP when `legacyAuth` is `false`
   - Depends on: T7
   - Files: api/src/realtime/realtimeApp.ts, api/src/realtime/socketAuth.ts, api/src/mcp/auth.ts, api/src/terrenoApp.ts, api/src/realtime/socketAuth.legacyAuth.test.ts, api/src/mcp/auth.legacyAuth.test.ts, docs/explanation/authentication.md
   - Criteria:
@@ -267,7 +267,7 @@ None — no canvas.
   - Docs: docs/explanation/authentication.md (what `legacyAuth: false` turns off, per transport)
   - Skills: terreno-backend-api, terreno-backend-tests, update-docs
 
-- [ ] **T9** — Scaffold a Better Auth-only backend
+- [x] **T9** — Scaffold a Better Auth-only backend
   - Depends on: T6, T7
   - Files: create-terreno-app/src/generate.ts, create-terreno-app/src/__tests__/generate.test.ts, create-terreno-app/src/__tests__/generatedBetterAuthConfig.test.ts, create-terreno-app/e2e/smoke.ts, docs/reference/create-terreno-app.md, docs/how-to/deploy-backend-to-cloud-run.md
   - Criteria:
@@ -293,7 +293,7 @@ None — no canvas.
   - Docs: docs/reference/create-terreno-app.md, docs/how-to/deploy-backend-to-cloud-run.md
   - Skills: building-terreno-apps, update-docs
 
-- [ ] **T10** — Make `@terreno/test` an optional peer of `@terreno/api` and drop test files from the tarball
+- [x] **T10** — Make `@terreno/test` an optional peer of `@terreno/api` and drop test files from the tarball
   - Depends on: T2
   - Files: api/package.json, api/src/packageManifest.test.ts, package.json files of workspace packages that import `@terreno/api/testing` or `@terreno/test` without declaring `@terreno/test`, bun.lock, docs/reference/test.md
   - Criteria:
@@ -316,7 +316,7 @@ None — no canvas.
   - Docs: docs/reference/test.md (install line); the `@terreno/api/testing` note in the api reference is written in T12
   - Skills: update-dependencies, update-docs
 
-- [ ] **T11** — Deprecate `createRouterWithAuth`, `setupEnvironment` and the `gooseRest*` aliases
+- [x] **T11** — Deprecate `createRouterWithAuth`, `setupEnvironment` and the `gooseRest*` aliases
   - Depends on: T4
   - Files: api/src/expressServer.ts, api/src/api.ts, api/src/publicExports.test.ts
   - Criteria:
@@ -336,7 +336,7 @@ None — no canvas.
   - Docs: the deprecations are listed in the api reference in T12
   - Skills: terreno-backend-api
 
-- [ ] **T12** — Write the API reference, upgrade note, changelog fragments and agent rule updates
+- [x] **T12** — Write the API reference, upgrade note, changelog fragments and agent rule updates
   - Depends on: T5, T8, T9, T10, T11
   - Files: docs/reference/api.md, mcp-server/src/docs/upgrades/58.1.0.md, changelog/unreleased/typed-user-registry.md, changelog/unreleased/legacy-auth-opt-in.md, changelog/unreleased/api-test-optional-peer.md, changelog/unreleased/deprecate-legacy-api-exports.md, docs/how-to/upgrade-terreno.md, .rulesync/rules/api/00-api.md, .rulesync/rules/example-backend/00-example-backend.md, .rulesync/rules/00-root.md, generated rule copies (regenerated, not hand-edited)
   - Criteria:

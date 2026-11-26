@@ -7,7 +7,7 @@
 import type {Application, Request, Response} from "express";
 import {DateTime} from "luxon";
 
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import {type BetterAuthInstance, verifyBetterAuthCredentialPassword} from "../betterAuthSetup";
 import {
   BETTER_AUTH_TOTP_PERIOD_SECONDS,
@@ -49,7 +49,7 @@ const LOCKED = "Too many failed attempts. Try again in 15 minutes.";
 export interface McpOAuthConsentPageOptions {
   betterAuth: BetterAuthInstance;
   oauth: ResolvedMcpOAuthOptions;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }
 
 const escapeHtml = (value: string): string =>

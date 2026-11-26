@@ -1,4 +1,4 @@
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import {APIError, isAPIError} from "../errors";
 import {logger} from "../logger";
 import {createRbacAuditModel, type RbacAuditWrite, recordRbacAudit} from "./auditModel";
@@ -118,7 +118,7 @@ export const createRoleManager = (args: {
    */
   getTargetPermissions?: (user: User) => Promise<PermissionSet>;
   invalidateCache: (invalidateArgs?: {userId?: string}) => void;
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
   persistAudit?: boolean;
   auditSinks?: RbacAuditSink[];
 }): {roleManager: RoleManager} => {

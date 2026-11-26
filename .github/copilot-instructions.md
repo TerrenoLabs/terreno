@@ -354,8 +354,8 @@ auth/health/version plugins, SSE.
 - Do not use `Model.findOne` - use `Model.findExactlyOne` or `Model.findOneOrThrow`
 - Define statics/methods by direct assignment: `schema.methods = {bar() {}}`
 - All model types live in `src/modelInterfaces.ts`
-- In routes: `req.user` is `UserDocument | undefined`
-- In @terreno/api callbacks: cast with `const user = u as unknown as UserDocument`
+- User type: register the app user once (`declare module "@terreno/api" {interface TerrenoRegister {user: UserDocument}}`) and `user` in callbacks is typed; never cast
+- In routes: import `@terreno/api/expressUser` once so `req.user` is typed as the registered user
 
 ### @terreno/ui
 

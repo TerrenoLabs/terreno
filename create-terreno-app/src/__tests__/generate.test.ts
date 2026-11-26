@@ -79,7 +79,57 @@ describe("generateAllFiles", () => {
     });
     const paths = files.map((file) => file.path);
 
-    assert.deepEqual(paths.toSorted(), EXPECTED_PATHS);
+    // The TerrenoRegister augmentation file is the one extra file; its path is the
+    // implementation's choice, so it is located by content below.
+    const augmentation = files.filter((file) => file.content.includes("interface TerrenoRegister"));
+    assert.lengthOf(augmentation, 1);
+    assert.deepEqual(
+      paths.filter((path) => path !== augmentation[0].path).toSorted(),
+      EXPECTED_PATHS
+    );
+  });
+
+  test("generated backend has no `as unknown as` cast", () => {
+    const files = generateAllFiles({appDisplayName: "My App", appName: "my-app"});
+    const offenders = files
+      .filter((file) => file.path.startsWith("backend/"))
+      .filter((file) => /as\s+unknown\s+as/.test(file.content))
+      .map((file) => file.path);
+
+    assert.deepEqual(offenders, []);
+  });
+
+  test("generated app has no `as unknown as` cast in any source file", () => {
+    const files = generateAllFiles({appDisplayName: "My App", appName: "my-app"});
+    const offenders = files
+      .filter((file) => /\.(ts|tsx)$/.test(file.path))
+      .filter((file) => /as\s+unknown\s+as/.test(file.content))
+      .map((file) => file.path);
+
+    assert.deepEqual(offenders, []);
+  });
+
+  test("generated backend passes the user model with no `as any` cast", () => {
+    const files = generateAllFiles({appDisplayName: "My App", appName: "my-app"});
+    const offenders = files
+      .filter((file) => file.path.startsWith("backend/"))
+      .filter((file) => /\bUser\s+as\s+any\b/.test(file.content))
+      .map((file) => file.path);
+
+    assert.deepEqual(offenders, []);
+  });
+
+  test("one backend file augments TerrenoRegister with user: UserDocument", () => {
+    const files = generateAllFiles({appDisplayName: "My App", appName: "my-app"});
+    const matches = files.filter(
+      (file) =>
+        file.path.startsWith("backend/") &&
+        file.content.includes('declare module "@terreno/api"') &&
+        file.content.includes("interface TerrenoRegister")
+    );
+
+    assert.lengthOf(matches, 1);
+    assert.match(matches[0].content, /user:\s*UserDocument/);
   });
 
   test("pins every generated @terreno/* dependency to ^PACKAGE_VERSION", () => {
@@ -379,13 +429,14 @@ describe("generateAllFiles", () => {
     assert.notInclude(server, "betterAuth:", "RealtimeApp finds the registered BetterAuthApp");
   });
 
-  test("generated users router casts User for modelRouter compatibility", () => {
+  test("generated users router passes User to modelRouter without a cast", () => {
     const users = generateAllFiles({
       appDisplayName: "Users App",
       appName: "users-app",
     }).find((file) => file.path === "backend/src/api/users.ts")?.content;
 
-    assert.include(users, "User as unknown as Model<UserDocument>");
+    assert.include(users, 'modelRouter("/users", User,');
+    assert.notInclude(users, "as unknown as");
     assert.include(users, "list: [Permissions.IsAdmin]");
     assert.include(users, "read: [Permissions.IsAdmin]");
     assert.notInclude(users, "list: [Permissions.IsAuthenticated]");
@@ -403,15 +454,15 @@ describe("generateAllFiles", () => {
     assert.notInclude(config, "secret-app-better-auth-secret-dev-only-32chars");
   });
 
-  test("generated userTypes import passport-local-mongoose model types", () => {
+  test("generated userTypes carry no passport-local-mongoose model types", () => {
     const userTypes = generateAllFiles({
       appDisplayName: "Types App",
       appName: "types-app",
     }).find((file) => file.path === "backend/src/types/models/userTypes.ts")?.content;
 
-    assert.include(userTypes, 'from "passport-local-mongoose"');
-    assert.include(userTypes, "PassportLocalMongooseModel<UserDocument>");
-    assert.include(userTypes, "PassportLocalMongooseDocument");
+    assert.notInclude(userTypes, "passport-local-mongoose");
+    assert.notInclude(userTypes, "PassportLocalMongooseModel");
+    assert.notInclude(userTypes, "PassportLocalMongooseDocument");
     assert.notInclude(userTypes, "mongoose.PassportLocalModel");
     assert.notInclude(userTypes, "mongoose.PassportLocalDocument");
   });

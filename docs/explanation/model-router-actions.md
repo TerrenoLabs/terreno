@@ -84,6 +84,13 @@ Handlers receive a single context object:
 | `body` | parsed body (see below) | parsed body |
 | `query` | parsed query | parsed query |
 
+`user` is typed as your app's user. Register it once with
+`declare module "@terreno/api" { interface TerrenoRegister { user: AppUser } }` and `user` in
+action handlers, `queryFilter`, and permission functions is `AppUser | undefined`, with no cast.
+Without a registration it is the framework `User`. To type `req.user` the same way, add
+`import type {} from "@terreno/api/expressUser";` once in a `.ts` file; it is opt-in, so an app
+that already declares `Express.Request.user` is unaffected.
+
 Return a plain value from the handler; the framework responds with `{data: <value>}` and status `200` (or `action.status` if set). If the handler writes the response itself (`res.json`, streaming), return without relying on auto-wrap — the framework skips wrapping when `res.headersSent` is true.
 
 Set `unwrapResponse: true` to send the return value itself as the body, with `action.status`, instead of `{data: <value>}`. An `undefined` return sends an empty body (useful with `status: 204`). Use it when converting an existing `router.post` route whose clients expect the bare shape. OpenAPI documents the `response` schema without the `data` wrapper for these actions. `unwrapResponse` affects REST only; MCP always returns the value as the tool's JSON text.

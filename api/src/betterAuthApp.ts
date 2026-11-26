@@ -6,7 +6,7 @@
  */
 
 import type express from "express";
-import type {UserModel} from "./auth";
+import type {TerrenoUserModel} from "./auth";
 import type {BetterAuthConfig} from "./betterAuth";
 import {
   type BetterAuthInstance,
@@ -32,7 +32,7 @@ export interface BetterAuthProvider {
    * Hands the provider the host app's user model when it was given none of its own. TerrenoApp
    * calls it before anything creates the Better Auth instance.
    */
-  adoptUserModel?: (userModel: UserModel) => void;
+  adoptUserModel?: (userModel: TerrenoUserModel) => void;
   markSessionMiddlewareMounted?: () => void;
   getBetterAuthBasePath?: () => string;
   /** The Terreno config the instance was built from (for `publicAppUrl` and similar). */
@@ -57,7 +57,7 @@ export const getProvidedBetterAuth = (
 
 export interface BetterAuthAppOptions {
   config: BetterAuthConfig;
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
 }
 
 export class BetterAuthApp implements TerrenoPlugin {
@@ -91,7 +91,7 @@ export class BetterAuthApp implements TerrenoPlugin {
    * created, so a user model that arrives after that would leave sign-ups unguarded while the
    * session middleware still links app Users: that is refused at boot instead.
    */
-  adoptUserModel(userModel: UserModel): void {
+  adoptUserModel(userModel: TerrenoUserModel): void {
     if (this.options.userModel) {
       return;
     }

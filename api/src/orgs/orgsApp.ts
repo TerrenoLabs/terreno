@@ -8,7 +8,7 @@ import {
   type OrgRecoveryOptions,
 } from "../accountSecurity/orgSecurityRoutes";
 import {asyncHandler, type OpenApiMiddleware} from "../api";
-import {authenticateMiddleware, type User, type UserModel} from "../auth";
+import {authenticateMiddleware, type TerrenoUserModel, type User} from "../auth";
 import {APIError, ConflictError, ForbiddenError, NotFoundError} from "../errors";
 import {logger} from "../logger";
 import {createOpenApiBuilder, type OpenApiSchemaProperty} from "../openApiBuilder";
@@ -33,7 +33,7 @@ const escapeRegularExpression = (value: string): string => {
 };
 
 const findUserForAttach = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   args: {email: string; userId: string}
 ): Promise<User | null> => {
   if (args.email) {
@@ -74,7 +74,7 @@ export interface OrgsAppOptions {
   orgRecovery?: OrgRecoveryOptions;
   /** Nested schema for `Organization.settings`. Same as `registerOrganizationSettings`. */
   settingsSchema?: mongoose.Schema;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }
 
 const pathParam = (value: string | string[] | undefined, title: string): string => {
@@ -175,7 +175,7 @@ export class OrgsApp implements TerrenoPlugin {
   private readonly basePath: string;
   private readonly onOrgAudit?: OrgsAppOptions["onOrgAudit"];
   private readonly orgRecovery?: OrgRecoveryOptions;
-  private readonly userModel: UserModel;
+  private readonly userModel: TerrenoUserModel;
 
   constructor(options: OrgsAppOptions) {
     this.access = options.access;

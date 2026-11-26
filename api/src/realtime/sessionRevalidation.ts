@@ -1,7 +1,7 @@
 import {DateTime} from "luxon";
 import type {Server, Socket} from "socket.io";
 
-import type {UserModel} from "../auth";
+import type {TerrenoUserModel} from "../auth";
 import {logger} from "../logger";
 import {findOneOrNoneFor} from "../plugins";
 import {findSyncEntryByCollectionTag} from "../sync/registry";
@@ -32,7 +32,7 @@ export interface RevalidatableSocket extends SocketWithDecodedToken {
 
 export interface SessionRevalidationOptions {
   /** Application user model, for reloading the full user and its `disabled` flag. */
-  userModel?: UserModel;
+  userModel?: TerrenoUserModel;
   /** Enables re-validating Better Auth-authenticated sockets. */
   betterAuth?: BetterAuthSocketOptions;
   /** Active SyncAppOptions (for `getUserScopes`), used by D4's room re-resolution. */
@@ -238,7 +238,7 @@ export const startSessionRevalidationSweep = (
  */
 export const loadFullUserForSocket = (
   socket: Socket & {data: SocketDataBag},
-  userModel?: UserModel
+  userModel?: TerrenoUserModel
 ): Promise<void> => {
   const load = loadFullUserIntoSocketData(socket, userModel);
   // Task 9.21: publish the in-flight load so the sync handlers can await it. An event that
@@ -254,7 +254,7 @@ export const loadFullUserForSocket = (
 /** The actual load; separated so {@link loadFullUserForSocket} can publish the promise. */
 const loadFullUserIntoSocketData = async (
   socket: Socket & {data: SocketDataBag},
-  userModel?: UserModel
+  userModel?: TerrenoUserModel
 ): Promise<void> => {
   const userId = (socket as unknown as SocketWithDecodedToken).decodedToken?.id;
   if (!userModel || !userId) {

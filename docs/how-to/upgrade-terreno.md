@@ -58,6 +58,17 @@ If the range includes the release that removes Langfuse, move off it before or w
 4. Remove imports of the deleted exports (`LangfuseApp`, `getPrompt`, `compilePrompt`, `initTracing`, and the rest listed in the release notes) and of the `@terreno/ai/langfuseApp` and `@terreno/ai/langfuseClient` subpaths. `ControlPrimary` is now only `"local"`.
 5. Drop the `LANGFUSE_*` environment variables. Deploy a backend revision that no longer mounts the Langfuse secrets **before** deleting those secrets (for example with `terraform apply`), or the running revision fails to start.
 
+## 6. Set `legacyAuth` before Terreno 60
+
+`TerrenoApp` keeps Passport and JWT auth on when `legacyAuth` is omitted, and logs one warning at boot. The default becomes `false` in Terreno 60. Before crossing 60:
+
+1. Decide per app: does any client still use `POST /auth/login`, `POST /auth/refresh_token`, or a `TOKEN_SECRET` JWT on sockets or `/mcp`?
+2. If yes, set `legacyAuth: true` in `new TerrenoApp({...})`. Nothing changes at 60.
+3. If no, set `legacyAuth: false` and register `BetterAuthApp`. Confirm `POST /auth/login` returns 404 and a protected route without a session returns 401.
+4. Drop `TOKEN_SECRET` and `REFRESH_TOKEN_SECRET` from `legacyAuth: false` environments.
+
+See [authentication](../explanation/authentication.md#turning-legacy-auth-off-legacyauth-false).
+
 ## 6. Manual steps
 
 1. Branch from a clean tree. Confirm tests pass on HEAD so later failures are from the upgrade.

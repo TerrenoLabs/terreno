@@ -11,14 +11,14 @@
 import type {BetterAuthPlugin} from "better-auth";
 import {createAuthMiddleware} from "better-auth/api";
 
-import type {UserModel} from "../auth";
+import type {TerrenoUserModel} from "../auth";
 import {logger} from "../logger";
 import {findOneOrNoneFor} from "../plugins";
 import {recordSecurityAction, type SecurityActionId} from "./securityEvents";
 
 /** The app User linked to a Better Auth user, as a security principal id. */
 const appUserIdFor = async (
-  userModel: UserModel,
+  userModel: TerrenoUserModel,
   betterAuthUserId: string
 ): Promise<string | undefined> => {
   const user = await findOneOrNoneFor(userModel, {betterAuthId: betterAuthUserId} as never);
@@ -38,7 +38,7 @@ export const recordSelfSecurityAction = async ({
   action: SecurityActionId;
   betterAuthUserId: string | undefined;
   details?: Record<string, unknown>;
-  userModel: UserModel;
+  userModel: TerrenoUserModel;
 }): Promise<void> => {
   if (!betterAuthUserId) {
     return;
@@ -188,7 +188,7 @@ const RECORDED_PATHS = new Set([
  * A completed `/reset-password` is recorded from `onPasswordReset` in `createBetterAuth`
  * (password-reset), which knows the user the token belonged to.
  */
-export const createSecurityEventsPlugin = (userModel: UserModel): BetterAuthPlugin => {
+export const createSecurityEventsPlugin = (userModel: TerrenoUserModel): BetterAuthPlugin => {
   const twoFactorChanges: TwoFactorChanges = new Map();
   return {
     hooks: {

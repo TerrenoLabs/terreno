@@ -24,6 +24,8 @@
     // Generated syncdb API SDK covers every non-synced route; screens adopt hooks over time.
     "**/apiSdk.ts": ["exports", "types"],
     "api/src/migrations/fixtures/**": ["files", "exports", "types"],
+    // Consumer type fixtures are compiled by api/src/types/register.test.ts, imported by nothing.
+    "api/typeFixtures/**": ["files", "exports", "types"],
     // In-memory flag server shared by the syncdb flags hook tests.
     "syncdb/src/flags/flagTestServer.ts": ["files"],
     "example-backend/migrations/**": ["files", "exports", "types"],

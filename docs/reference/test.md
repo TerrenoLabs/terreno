@@ -8,7 +8,10 @@ Shared Bun test helpers for Terreno packages: in-memory MongoDB lifecycle, auth 
 bun add -d @terreno/test mongoose
 ```
 
-`mongoose` is a peer dependency (>= 8.0.0). The Expo/React Native setup under
+`mongoose` is a peer dependency (>= 8.0.0). `@terreno/api` lists `@terreno/test` as an optional peer, so
+a package that imports `@terreno/api/testing` installs `@terreno/test` itself (as above) instead of
+receiving it transitively. `mongodb-memory-server` and `mongodb-memory-server-global` declare a
+`postinstall` script that downloads the MongoDB binary, so installing `@terreno/test` triggers that download. The Expo/React Native setup under
 `@terreno/test/expo/*` adds optional peers; see [Expo / React Native](#expo--react-native).
 
 ## Commands

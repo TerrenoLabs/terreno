@@ -3,7 +3,7 @@ import {toNodeHandler} from "@modelcontextprotocol/node";
 import {createMcpHandler, McpServer} from "@modelcontextprotocol/server";
 import type {Application, NextFunction, Request, Response} from "express";
 
-import type {User, UserModel} from "../auth";
+import type {TerrenoUserModel, User} from "../auth";
 import type {BetterAuthInstance} from "../betterAuthSetup";
 import {logger} from "../logger";
 import {setRequestContext} from "../requestContext";
@@ -20,7 +20,9 @@ import {type ResolvedMcpOAuthOptions, sendMcpOAuthChallenge} from "./oauthMetada
 import {getAllMCPTools, type MCPToolDefinition} from "./toolGenerator";
 
 export interface MCPServerOptions {
-  userModel: UserModel;
+  /** When false, MCP refuses `TOKEN_SECRET` JWTs. */
+  legacyAuth?: boolean;
+  userModel: TerrenoUserModel;
   betterAuth?: BetterAuthInstance;
   mcpServiceTokens?: boolean;
   /**
@@ -48,6 +50,7 @@ export const mountMCPServer = (app: Application, options: MCPServerOptions): voi
   }
   const authContext: MCPAuthContext = {
     betterAuth: options.betterAuth,
+    legacyAuth: options.legacyAuth,
     mcpOAuth: Boolean(options.mcpOAuth),
     mcpServiceTokens: options.mcpServiceTokens,
     userModel: options.userModel,

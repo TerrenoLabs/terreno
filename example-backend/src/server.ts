@@ -30,7 +30,6 @@ import {
   SyncApp,
   syncConsents,
   TerrenoApp,
-  type UserModel as TerrenoAuthUserModel,
   VersionCheckPlugin,
 } from "@terreno/api";
 import {HealthApp} from "@terreno/api-health";
@@ -152,7 +151,7 @@ export const start = async (
   await access.roles.seedDefaults();
   await backfillAdmins({
     access,
-    userModel: User as unknown as TerrenoAuthUserModel,
+    userModel: User,
     wetRun: process.env.RBAC_BACKFILL_ADMINS === "true",
   });
 
@@ -254,7 +253,7 @@ export const start = async (
       // Maestro log in many times from one IP, so the limiter is off there.
       rateLimit: isDeployed ? {trustProxy: 1} : false,
       skipListen,
-      userModel: User as unknown as TerrenoAuthUserModel,
+      userModel: User,
     }).configure(AppConfiguration);
 
     registerUsersTodoStatusTool();
@@ -270,13 +269,13 @@ export const start = async (
       terraApp.register(
         new BetterAuthApp({
           config: betterAuthConfig,
-          userModel: User as unknown as TerrenoAuthUserModel,
+          userModel: User,
         })
       );
     }
 
     terraApp
-      .register(rbacRouter({access, userModel: User as unknown as TerrenoAuthUserModel}))
+      .register(rbacRouter({access, userModel: User}))
       .register(createOpenApiAwareRouteRegistration(addAiRoutes))
       .register(aiModelsRouter)
       .register(settingsRouter)
@@ -328,7 +327,7 @@ export const start = async (
         debug: websocketsDebug,
         // Required by the tenant-scoped `projects` sync stream: socket authorization
         // must load the persisted user id before Membership-based tenant streams resolve.
-        userModel: User as unknown as TerrenoAuthUserModel,
+        userModel: User,
       });
       terraApp.register(realtimeApp);
     } else {

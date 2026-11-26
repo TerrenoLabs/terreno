@@ -8,7 +8,13 @@ import qs from "qs";
 import {AccountSecurityApp} from "./accountSecurity/accountSecurityApp";
 import type {AdminChangeEvent, TerrenoAppAdminEvent} from "./adminTypes";
 import type {ModelRouterRegistration} from "./api";
-import {addAuthRoutes, addMeRoutes, setupAuth, type UserModel as UserMongooseModel} from "./auth";
+import {
+  addAuthRoutes,
+  addMeRoutes,
+  type PassportUserModel,
+  setupAuth,
+  type TerrenoUserModel,
+} from "./auth";
 import {findBetterAuthProvider, getProvidedBetterAuth} from "./betterAuthApp";
 import {
   applyJwtPasswordResetToBetterAuth,
@@ -74,12 +80,24 @@ type CorsOrigin =
       ) => void
     ) => void);
 
+// The legacy Passport setup is the only caller that needs the Passport statics, so the one
+// narrowing from the app's model happens here, with the same failure `setupAuth` raises.
+const isPassportUserModel = (userModel: TerrenoUserModel): userModel is PassportUserModel =>
+  typeof (userModel as {createStrategy?: unknown}).createStrategy === "function";
+
+const passportUserModel = (userModel: TerrenoUserModel): PassportUserModel => {
+  if (!isPassportUserModel(userModel)) {
+    throw new APIError({status: 500, title: "setupAuth userModel must have .createStrategy()"});
+  }
+  return userModel;
+};
+
 /**
  * Configuration options for TerrenoApp.
  */
 export interface TerrenoAppOptions {
-  /** Mongoose User model with passport-local-mongoose plugin */
-  userModel: UserMongooseModel;
+  /** Mongoose model of the app user document; any model with `admin` and optional `email` works */
+  userModel: TerrenoUserModel;
   /** CORS origin configuration (default: "*") */
   corsOrigin?: CorsOrigin;
   /** Logging configuration options */
@@ -88,6 +106,13 @@ export interface TerrenoAppOptions {
   authOptions?: AuthOptions;
   /** GitHub OAuth configuration (enables GitHub authentication if provided) */
   githubAuth?: GitHubAuthOptions;
+  /**
+   * Legacy Passport/JWT auth. `false` mounts no Passport strategies and none of `/auth/login`,
+   * `/auth/signup`, `/auth/refresh_token`, `/auth/forgotPassword`, `/auth/resetPassword`,
+   * `/auth/sendVerification`, `/auth/verifyEmail`, `/resetPassword`; use Better Auth.
+   * Omitted behaves as `true` and logs a warning; the default becomes `false` in Terreno 60.
+   */
+  legacyAuth?: boolean;
   /** Skip calling app.listen() in start() method (useful for testing) */
   skipListen?: boolean;
   /**
@@ -291,6 +316,14 @@ export class TerrenoApp {
   }
 
   /**
+   * Whether legacy Passport/JWT auth is on. False only when `legacyAuth: false` was set;
+   * sockets and MCP use it to refuse `TOKEN_SECRET` JWTs.
+   */
+  isLegacyAuthEnabled(): boolean {
+    return this.options.legacyAuth !== false;
+  }
+
+  /**
    * The application user model this app authenticates against.
    */
   getUserModel(): TerrenoAppOptions["userModel"] {
@@ -399,6 +432,20 @@ export class TerrenoApp {
 
     const app = express();
     const options = this.options;
+    const legacyAuth = options.legacyAuth !== false;
+    if (options.legacyAuth === undefined) {
+      logger.warn(
+        "TerrenoApp `legacyAuth` is not set: legacy Passport/JWT auth stays on. Set `legacyAuth: true` to keep it or `false` to use Better Auth only; the default becomes false in Terreno 60."
+      );
+    }
+    if (!legacyAuth && options.githubAuth) {
+      throw new APIError({status: 500, title: "githubAuth requires legacyAuth"});
+    }
+    if (!legacyAuth && !findBetterAuthProvider(this.registrations)) {
+      logger.warn(
+        "TerrenoApp `legacyAuth` is false and no BetterAuthApp is registered: no auth provider will populate req.user."
+      );
+    }
     // A BetterAuthApp registered without its own userModel uses the app's, before its Better Auth
     // instance exists, so the app User guard and sync are installed with it.
     const betterAuthProvider = findBetterAuthProvider(this.registrations);
@@ -439,7 +486,9 @@ export class TerrenoApp {
 
     // JWT decode before rate limiting so authenticated keys use userId.
     // Auth routes mount after the limiter so login is in the auth bucket.
-    setupAuth(app, options.userModel);
+    if (legacyAuth) {
+      setupAuth(app, passportUserModel(options.userModel));
+    }
     app.use((req, res, next) => {
       updateRequestContextFromRequest(req, res);
       next();
@@ -482,7 +531,9 @@ export class TerrenoApp {
       },
       openapi: "3.0.0",
     });
-    addAuthRoutes(app, options.userModel, authOptions, oapi);
+    if (legacyAuth) {
+      addAuthRoutes(app, passportUserModel(options.userModel), authOptions, oapi);
+    }
 
     if (options.logRequests !== false && options.loggingOptions?.logRequests !== false) {
       app.use(logRequests);
@@ -526,8 +577,13 @@ export class TerrenoApp {
 
     // GitHub OAuth
     if (options.githubAuth) {
-      setupGitHubAuth(app, options.userModel, options.githubAuth);
-      addGitHubAuthRoutes(app, options.userModel, options.githubAuth, options.authOptions);
+      setupGitHubAuth(app, passportUserModel(options.userModel), options.githubAuth);
+      addGitHubAuthRoutes(
+        app,
+        passportUserModel(options.userModel),
+        options.githubAuth,
+        options.authOptions
+      );
     }
 
     // Mount configuration app if configured
@@ -594,6 +650,7 @@ export class TerrenoApp {
     }
     mountMCPServer(app, {
       betterAuth,
+      legacyAuth,
       mcpOAuth,
       mcpServiceTokens: mcpServiceTokens.enabled,
       requestLog: resolveMcpRequestLogOption(options.mcpRequestLog),

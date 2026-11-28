@@ -1,13 +1,17 @@
 #!/usr/bin/env node
 
 import {realpathSync} from "node:fs";
+import {join} from "node:path";
 import {fileURLToPath} from "node:url";
 
+import {formatExpoSteps, type SetupExpoArgs, setupExpo} from "./expoSetup.js";
 import {parseCliArgs, writeScaffold} from "./writeScaffold.js";
 
 export interface RunCliOptions {
   argv?: string[];
   cwd?: string;
+  /** Overrides for the `--expo` setup; tests use them to avoid running eas-cli. */
+  expoOptions?: Pick<SetupExpoArgs, "hasToken" | "isInteractive" | "run">;
   write?: (line: string) => void;
   writeError?: (line: string) => void;
 }
@@ -50,6 +54,7 @@ export const runCli = (options: RunCliOptions = {}): RunCliResult => {
   const scaffoldResult = writeScaffold({
     appDisplayName: parsed.displayName as string,
     appName: parsed.appName as string,
+    bundleId: parsed.bundleId,
     description: parsed.description,
     mcpServerUrl: parsed.mcpServerUrl,
     parentDir: cwd,
@@ -70,9 +75,40 @@ export const runCli = (options: RunCliOptions = {}): RunCliResult => {
 
   write(`Created ${scaffoldResult.targetPath}`);
   write("");
+
+  let expoError: string | undefined;
+  if (parsed.expo) {
+    const expoResult = setupExpo({
+      ...options.expoOptions,
+      account: parsed.expoAccount,
+      frontendPath: join(scaffoldResult.targetPath, "frontend"),
+      platforms: parsed.expoPlatforms,
+      write,
+    });
+    write("Expo setup:");
+    for (const line of formatExpoSteps(expoResult.steps)) {
+      write(line);
+    }
+    write("");
+    if (!expoResult.success) {
+      expoError = "Expo setup did not finish; the app files were written";
+      writeError(expoError);
+    }
+  }
+
   write("Next steps:");
   for (const step of scaffoldResult.nextSteps) {
     write(step);
+  }
+
+  if (expoError) {
+    return {
+      error: expoError,
+      exitCode: 1,
+      nextSteps: scaffoldResult.nextSteps,
+      success: false,
+      targetPath: scaffoldResult.targetPath,
+    };
   }
 
   return {

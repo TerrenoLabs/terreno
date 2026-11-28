@@ -101,6 +101,10 @@ Options:
   --description <text>
   --mcp-url <url>
   --terreno-path <checkout>    Pack compiled checkout packages for unpublished Terreno versions (app only)
+  --bundle-id <id>             iOS bundle identifier and Android package (app only)
+  --expo                       Sign in to Expo, create the EAS project, set up build credentials (app only)
+  --expo-account <name>        Expo account that owns the EAS project
+  --expo-platform <platform>   ios, android, or all (default) for build credentials
   --packages api,ui,syncdb     Guideline packages for rules
 `,
     browser: `Usage: terreno browser <action> [url] [options]

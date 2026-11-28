@@ -25,6 +25,8 @@ export const API_SDK_SCRIPT =
 export interface BootstrapArgs {
   appName: string;
   appDisplayName: string;
+  /** Reverse-DNS id written as the iOS bundle identifier and the Android package. */
+  bundleId?: string;
   description?: string;
   mcpServerUrl?: string;
 }
@@ -1350,7 +1352,7 @@ const generateFrontendPackageJson = (args: BootstrapArgs): string => {
 };
 
 const generateFrontendAppJson = (args: BootstrapArgs): string => {
-  const {appDisplayName, appName} = args;
+  const {appDisplayName, appName, bundleId} = args;
   return JSON.stringify(
     {
       // No icon/splash/favicon keys: Expo falls back to its built-in defaults, so a freshly
@@ -1360,7 +1362,9 @@ const generateFrontendAppJson = (args: BootstrapArgs): string => {
         experiments: {
           typedRoutes: true,
         },
+        ...(bundleId ? {android: {package: bundleId}} : {}),
         ios: {
+          ...(bundleId ? {bundleIdentifier: bundleId} : {}),
           supportsTablet: true,
         },
         name: appDisplayName,
@@ -1374,6 +1378,36 @@ const generateFrontendAppJson = (args: BootstrapArgs): string => {
           bundler: "metro",
           output: "static",
         },
+      },
+    },
+    null,
+    2
+  );
+};
+
+const generateFrontendEasJson = (): string => {
+  // Build profiles for EAS Build. `appVersionSource: remote` lets EAS own the build number,
+  // which `autoIncrement` then bumps on every production build.
+  return JSON.stringify(
+    {
+      build: {
+        development: {
+          developmentClient: true,
+          distribution: "internal",
+        },
+        preview: {
+          distribution: "internal",
+        },
+        production: {
+          autoIncrement: true,
+        },
+      },
+      cli: {
+        appVersionSource: "remote",
+        version: ">= 16.0.0",
+      },
+      submit: {
+        production: {},
       },
     },
     null,
@@ -2659,6 +2693,7 @@ export const generateAllFiles = (args: BootstrapArgs): GeneratedFile[] => {
     // Frontend files
     {content: generateFrontendPackageJson(args), path: `${frontendDir}/package.json`},
     {content: generateFrontendAppJson(args), path: `${frontendDir}/app.json`},
+    {content: generateFrontendEasJson(), path: `${frontendDir}/eas.json`},
     {content: generateFrontendTsConfig(), path: `${frontendDir}/tsconfig.json`},
     {content: generateFrontendMetroConfig(), path: `${frontendDir}/metro.config.js`},
     {content: generateFrontendBiomeJsonc(), path: `${frontendDir}/biome.jsonc`},

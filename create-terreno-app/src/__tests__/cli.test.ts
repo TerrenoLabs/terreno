@@ -80,6 +80,41 @@ describe("parseCliArgs", () => {
   });
 });
 
+describe("parseCliArgs Expo flags", () => {
+  test("accepts --expo with its account, platform, and bundle id", () => {
+    const parsed = parseCliArgs([
+      "my-app",
+      "--yes",
+      "--expo",
+      "--expo-account",
+      "acme",
+      "--expo-platform",
+      "ios",
+      "--bundle-id",
+      "com.acme.myapp",
+    ]);
+    assert.deepEqual(parsed.errors, []);
+    assert.isTrue(parsed.expo);
+    assert.equal(parsed.expoAccount, "acme");
+    assert.deepEqual(parsed.expoPlatforms, ["ios"]);
+    assert.equal(parsed.bundleId, "com.acme.myapp");
+  });
+
+  test("leaves Expo setup off by default", () => {
+    assert.isFalse(parseCliArgs(["my-app", "--yes"]).expo);
+  });
+
+  test("rejects bad bundle ids, bad platforms, and Expo flags without --expo", () => {
+    const errors = (argv: string[]): string => parseCliArgs(argv).errors.join("; ");
+    assert.include(errors(["my-app", "--yes", "--bundle-id", "my-app"]), "--bundle-id must be");
+    assert.include(
+      errors(["my-app", "--yes", "--expo", "--expo-platform", "windows"]),
+      "--expo-platform must be"
+    );
+    assert.include(errors(["my-app", "--yes", "--expo-account", "acme"]), "require --expo");
+  });
+});
+
 describe("writeScaffold", () => {
   test("writes backend and frontend package.json in an empty temp dir", () => {
     const parentDir = mkdtempSync(join(tmpdir(), "create-terreno-app-"));
@@ -235,6 +270,65 @@ describe("runCli", () => {
       assert.isTrue(result.success);
       assert.equal(result.exitCode, 0);
       assert.isTrue(existsSync(join(parentDir, "runcli-app/backend/package.json")));
+    } finally {
+      rmSync(parentDir, {force: true, recursive: true});
+    }
+  });
+
+  test("--expo runs the Expo setup in the generated frontend", () => {
+    const parentDir = mkdtempSync(join(tmpdir(), "create-terreno-app-runcli-expo-"));
+    const calls: string[] = [];
+    const lines: string[] = [];
+    try {
+      const result = runCli({
+        argv: ["expo-app", "--yes", "--expo", "--bundle-id", "com.example.expoapp"],
+        cwd: parentDir,
+        expoOptions: {
+          hasToken: true,
+          isInteractive: false,
+          run: (command) => {
+            calls.push(`${command.cwd}: ${command.command} ${command.args.join(" ")}`);
+            return {exitCode: 0, stdout: ""};
+          },
+        },
+        write: (line) => lines.push(line),
+      });
+      const frontendPath = join(parentDir, "expo-app/frontend");
+      assert.isTrue(result.success);
+      assert.deepEqual(calls, [
+        `${frontendPath}: bun install`,
+        `${frontendPath}: bunx eas-cli init --non-interactive --force`,
+      ]);
+      assert.include(lines.join("\n"), "project: done");
+      const appJson = JSON.parse(readFileSync(join(frontendPath, "app.json"), "utf8"));
+      assert.equal(appJson.expo.ios.bundleIdentifier, "com.example.expoapp");
+      assert.equal(appJson.expo.android.package, "com.example.expoapp");
+      assert.isTrue(existsSync(join(frontendPath, "eas.json")));
+    } finally {
+      rmSync(parentDir, {force: true, recursive: true});
+    }
+  });
+
+  test("a failed Expo setup exits non-zero but keeps the written app", () => {
+    const parentDir = mkdtempSync(join(tmpdir(), "create-terreno-app-runcli-expo-fail-"));
+    const errors: string[] = [];
+    try {
+      const result = runCli({
+        argv: ["expo-app", "--yes", "--expo"],
+        cwd: parentDir,
+        expoOptions: {
+          hasToken: true,
+          isInteractive: false,
+          run: () => ({exitCode: 1, stdout: ""}),
+        },
+        write: () => {},
+        writeError: (line) => errors.push(line),
+      });
+      assert.isFalse(result.success);
+      assert.equal(result.exitCode, 1);
+      assert.isAbove(result.nextSteps.length, 0);
+      assert.include(errors.join("\n"), "Expo setup did not finish");
+      assert.isTrue(existsSync(join(parentDir, "expo-app/frontend/app.json")));
     } finally {
       rmSync(parentDir, {force: true, recursive: true});
     }

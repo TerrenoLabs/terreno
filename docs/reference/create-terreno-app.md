@@ -23,6 +23,7 @@ dependencies pin `^<create-terreno-app version>`.
 
 ```bash
 bunx create-terreno-app <appName> --display-name <string> [--description <string>] [--mcp-server-url <url>] [--yes]
+  [--bundle-id <id>] [--expo [--expo-account <name>] [--expo-platform <ios|android|all>]]
 ```
 
 | Flag | Required | Default |
@@ -32,8 +33,29 @@ bunx create-terreno-app <appName> --display-name <string> [--description <string
 | `--description` | no | empty |
 | `--mcp-server-url` | no | hosted Terreno MCP URL |
 | `--yes` | no | off |
+| `--bundle-id` | no | unset. Written as `ios.bundleIdentifier` and `android.package` in `frontend/app.json`. Dot-separated letters and digits, each part starting with a letter |
+| `--expo` | no | off. Runs the [Expo setup](#expo-setup) after writing files |
+| `--expo-account` | no (needs `--expo`) | the signed-in Expo account |
+| `--expo-platform` | no (needs `--expo`) | `all`. Platforms that get build credentials: `ios`, `android`, or `all` |
 
-Writes `<cwd>/<appName>/`. Refuses a non-empty target except `.git` / `.gitignore`. Does not run `bun install`, Mongo, or seed.
+Writes `<cwd>/<appName>/`. Refuses a non-empty target except `.git` / `.gitignore`. Without `--expo` it does not run `bun install`, Mongo, or seed, and it never prompts.
+
+`frontend/eas.json` is always written, with `development`, `preview`, and `production` build profiles.
+
+## Expo setup
+
+`--expo` connects the new frontend to Expo Application Services with `bunx eas-cli`, run in `frontend/`. Steps run in this order, and the CLI prints the status of each:
+
+| Step | Command | Notes |
+| --- | --- | --- |
+| `dependencies` | `bun install` | Skipped when `node_modules/expo` exists. eas-cli reads the app config through the installed `expo` package |
+| `login` | `eas whoami`, then `eas login` | With `EXPO_TOKEN` set, no command runs. Without a terminal and without `EXPO_TOKEN`, the step fails |
+| `project` | `eas init` | Creates or links the EAS project `@<account>/<appName>` and writes `extra.eas.projectId` to `app.json`. Without a terminal it adds `--non-interactive --force` |
+| `credentials:android`, `credentials:ios` | `eas credentials:configure-build --platform <platform> --profile production` | Needs a terminal (the iOS step signs in to an Apple Developer account). Without one, the step is `skipped` and the command to run later is printed |
+
+A failed `dependencies`, `login`, or `project` step stops the setup and the CLI exits `1`; the app files stay on disk, and the summary prints the command to rerun. A failed credentials step is reported and does not change the exit code.
+
+`--expo` creates a real project on the Expo account. Leave it off in tests and CI smoke runs.
 
 Printed next steps install, seed, then start the backend. SDK and web run in a second terminal while the backend is up.
 

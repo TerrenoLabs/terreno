@@ -34,7 +34,7 @@ terreno generate rest-cli --schema http://localhost:4000/openapi.json --out ./to
 | `generate screen` | UI screen (`--name`, `--type list\|detail\|form\|empty`) |
 | `generate form` | Form fields (`--field name:type:required:label=Label`) |
 | `generate admin` | Admin install snippets (`--model Model:/path:Display:field,field`) |
-| `bootstrap app` | Full-stack app files (`--name`, `--display-name`, `--dir`, `--description`, `--mcp-url`, `--terreno-path <checkout>`) |
+| `bootstrap app` | Full-stack app files (`--name`, `--display-name`, `--dir`, `--description`, `--mcp-url`, `--terreno-path <checkout>`, `--bundle-id`, `--expo`, `--expo-account`, `--expo-platform`) |
 | `bootstrap rules` | Editor AI rules only (`--packages api,ui`) |
 | `validate schema --file` | Check a Mongoose schema against conventions |
 | `validate blocks --file` | Check a whole-reply YAML or JSON agent UI block document; same report and exit code as `terreno-blocks validate` (exit 1 when invalid; `--json` gives `ok: false`) |
@@ -73,6 +73,11 @@ and their transitive Terreno dependencies into `vendor/terreno`, then sets relat
 dependencies and overrides in both app manifests. JSON and text output list the linked packages;
 the generated files do not record the checkout path. The generated Dockerfile copies only
 `backend/`, so it cannot install `file:` dependencies from `vendor/` without being changed.
+
+`bootstrap app --expo` runs the same Expo setup as `create-terreno-app --expo` after the files
+are written: `bun install` in `frontend/`, Expo sign-in (or `EXPO_TOKEN`), `eas init`, and
+build credentials when a terminal is attached. `--json` adds an `expo` array with each step's
+status. Steps and exit codes: [create-terreno-app](create-terreno-app.md#expo-setup).
 
 ## Any MCP tool by name
 

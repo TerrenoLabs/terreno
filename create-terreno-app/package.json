@@ -19,6 +19,10 @@
       "default": "./dist/generate.js",
       "types": "./dist/generate.d.ts"
     },
+    "./expoSetup": {
+      "default": "./dist/expoSetup.js",
+      "types": "./dist/expoSetup.d.ts"
+    },
     "./writeScaffold": {
       "default": "./dist/writeScaffold.js",
       "types": "./dist/writeScaffold.d.ts"

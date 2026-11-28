@@ -1,6 +1,7 @@
 import {existsSync, mkdirSync, readdirSync, statSync, writeFileSync} from "node:fs";
 import {dirname, relative, resolve} from "node:path";
 
+import {type ExpoPlatform, isValidBundleId, parseExpoPlatforms} from "./expoSetup.js";
 import {type BootstrapArgs, generateAllFiles} from "./generate.js";
 
 const ALLOWED_EXISTING_ENTRIES = new Set([".git", ".gitignore"]);
@@ -21,9 +22,14 @@ export interface WriteScaffoldResult {
 
 export interface ParsedCliArgs {
   appName?: string;
+  bundleId?: string;
   description?: string;
   displayName?: string;
   errors: string[];
+  /** Run the Expo setup (sign in, EAS project, build credentials) after writing files. */
+  expo: boolean;
+  expoAccount?: string;
+  expoPlatforms?: ExpoPlatform[];
   mcpServerUrl?: string;
   yes: boolean;
 }
@@ -103,12 +109,20 @@ export const formatNextSteps = (targetPath: string): string[] => {
   ];
 };
 
+const VALUE_FLAGS = [
+  "--bundle-id",
+  "--description",
+  "--display-name",
+  "--expo-account",
+  "--expo-platform",
+  "--mcp-server-url",
+];
+
 export const parseCliArgs = (argv: string[]): ParsedCliArgs => {
   const errors: string[] = [];
+  const values = new Map<string, string>();
   let appName: string | undefined;
-  let displayName: string | undefined;
-  let description: string | undefined;
-  let mcpServerUrl: string | undefined;
+  let expo = false;
   let yes = false;
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -119,35 +133,18 @@ export const parseCliArgs = (argv: string[]): ParsedCliArgs => {
       continue;
     }
 
-    if (token === "--display-name") {
-      const value = argv[index + 1];
-      if (!value || value.startsWith("-")) {
-        errors.push("--display-name requires a value");
-        continue;
-      }
-      displayName = value;
-      index += 1;
+    if (token === "--expo") {
+      expo = true;
       continue;
     }
 
-    if (token === "--description") {
+    if (VALUE_FLAGS.includes(token)) {
       const value = argv[index + 1];
       if (!value || value.startsWith("-")) {
-        errors.push("--description requires a value");
+        errors.push(`${token} requires a value`);
         continue;
       }
-      description = value;
-      index += 1;
-      continue;
-    }
-
-    if (token === "--mcp-server-url") {
-      const value = argv[index + 1];
-      if (!value || value.startsWith("-")) {
-        errors.push("--mcp-server-url requires a value");
-        continue;
-      }
-      mcpServerUrl = value;
+      values.set(token, value);
       index += 1;
       continue;
     }
@@ -165,6 +162,12 @@ export const parseCliArgs = (argv: string[]): ParsedCliArgs => {
     appName = token;
   }
 
+  let displayName = values.get("--display-name");
+  const bundleId = values.get("--bundle-id");
+  const expoAccount = values.get("--expo-account");
+  const expoPlatform = values.get("--expo-platform");
+  const expoPlatforms = expoPlatform ? parseExpoPlatforms(expoPlatform) : undefined;
+
   if (!appName) {
     errors.push("Missing required appName argument");
   }
@@ -177,12 +180,30 @@ export const parseCliArgs = (argv: string[]): ParsedCliArgs => {
     errors.push("Missing required --display-name (or pass --yes to derive it from appName)");
   }
 
+  if (bundleId && !isValidBundleId(bundleId)) {
+    errors.push(
+      "--bundle-id must be dot-separated letters and digits, each part starting with a letter (com.example.myapp)"
+    );
+  }
+
+  if (expoPlatform && !expoPlatforms) {
+    errors.push("--expo-platform must be ios, android, or all");
+  }
+
+  if (!expo && (expoAccount || expoPlatform)) {
+    errors.push("--expo-account and --expo-platform require --expo");
+  }
+
   return {
     appName,
-    description,
+    bundleId,
+    description: values.get("--description"),
     displayName,
     errors,
-    mcpServerUrl,
+    expo,
+    expoAccount,
+    expoPlatforms,
+    mcpServerUrl: values.get("--mcp-server-url"),
     yes,
   };
 };
@@ -216,6 +237,7 @@ export const writeScaffold = (args: WriteScaffoldArgs): WriteScaffoldResult => {
   const files = generateAllFiles({
     appDisplayName: args.appDisplayName,
     appName: args.appName,
+    bundleId: args.bundleId,
     description: args.description,
     mcpServerUrl: args.mcpServerUrl,
   });

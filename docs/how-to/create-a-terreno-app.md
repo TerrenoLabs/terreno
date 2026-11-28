@@ -2,7 +2,7 @@
 
 Scaffold a deployable full-stack Terreno app (backend, Expo frontend, seed script, consumer `Dockerfile`, CI, MCP config) with one non-interactive command.
 
-The CLI writes files only — it does not run `bun install`, start MongoDB, or seed data.
+The CLI writes files only — it does not run `bun install`, start MongoDB, or seed data. The one exception is the opt-in `--expo` flag ([Set up Expo](#set-up-expo-optional)).
 
 ## Prerequisites
 
@@ -39,8 +39,33 @@ Optional flags:
 | `--description` | no | empty |
 | `--mcp-server-url` | no | `https://mcp.terreno.app` (base URL; the CLI appends `/mcp`) |
 | `--yes` | no | off |
+| `--bundle-id` | no | unset — iOS bundle identifier and Android package (`com.example.myapp`) |
+| `--expo` | no | off — sign in to Expo, create the EAS project, set up build credentials |
+| `--expo-account` | no | the signed-in Expo account (needs `--expo`) |
+| `--expo-platform` | no | `all` — `ios`, `android`, or `all` (needs `--expo`) |
 
 The CLI creates `<cwd>/<appName>/`. Package source: [`create-terreno-app/`](https://github.com/TerrenoLabs/terreno/tree/master/create-terreno-app) in the Terreno monorepo.
+
+## Set up Expo (optional)
+
+Add `--expo` to connect the app to Expo Application Services in the same command. Run it from a terminal so it can prompt:
+
+```bash
+bunx create-terreno-app my-app --display-name "My App" --expo --bundle-id com.example.myapp
+```
+
+After writing the files it runs, in `frontend/`:
+
+1. `bun install`, so eas-cli can read the app config.
+2. `eas login`, unless you are already signed in or `EXPO_TOKEN` is set.
+3. `eas init`, which creates the EAS project and writes its id into `app.json`. Pass `--expo-account <name>` to create it under an organization.
+4. `eas credentials:configure-build` for Android (keystore) and iOS (Apple Developer sign-in, distribution certificate, provisioning profile). Limit it with `--expo-platform ios` or `android`.
+
+The CLI prints each step's status and, for any step that was skipped or failed, the command to run later. Commit the changed `frontend/app.json`.
+
+In CI or an agent session with no terminal, set `EXPO_TOKEN` (and `--expo-account` when the token can reach more than one account). The project is created without prompts and the credentials steps are skipped. Step details: [create-terreno-app reference](../reference/create-terreno-app.md#expo-setup).
+
+To set up Expo on an app that already exists, run the same eas-cli commands by hand from `frontend/`.
 
 ## Non-empty targets
 
@@ -58,6 +83,7 @@ cd .. && bunx create-terreno-app my-app --yes
 | Path | Purpose |
 | --- | --- |
 | `backend/` | Express/Mongoose API (`@terreno/api`, Better Auth, admin, sync) |
+| `frontend/eas.json` | EAS Build profiles: `development` (dev client), `preview`, `production` |
 | `frontend/` | Expo universal app (`@terreno/ui`, `@terreno/syncdb`). No Redux: session from `@terreno/syncdb/auth`, requests through `store/apiClient.ts`, generated hooks in `store/apiSdk.ts` |
 | `Dockerfile` | Consumer backend image (`backend/` only — not the Terreno monorepo) |
 | `.dockerignore` | Excludes local env secrets, dependencies, and build output from the image context |

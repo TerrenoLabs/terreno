@@ -60,6 +60,7 @@ const EXPECTED_PATHS = [
   "frontend/app/signup.tsx",
   "frontend/biome.jsonc",
   "frontend/constants/theme.ts",
+  "frontend/eas.json",
   "frontend/lib/betterAuth.ts",
   "frontend/metro.config.js",
   "frontend/package.json",
